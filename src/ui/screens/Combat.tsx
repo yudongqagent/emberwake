@@ -7,7 +7,8 @@ import { RANGE_MODIFIERS, resolveAttack, type RangeBand } from "../../engine/com
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat } from "../../state/store";
 import { crewDefById } from "../../data/crew";
 import { playSfx } from "../../audio/engine";
-import type { CrewRole } from "../../data/types";
+import type { CrewRole, ResourceType } from "../../data/types";
+import { randomId } from "../../engine/rng";
 
 interface EnemyState {
   name: string;
@@ -17,7 +18,23 @@ interface EnemyState {
   block: number;
   evasion: number;
   debuffed?: boolean;
+  regen?: number;
 }
+
+interface Popup {
+  id: string;
+  target: "player" | number;
+  text: string;
+  color: string;
+}
+
+const RESOURCE_LABEL: Record<ResourceType, string> = {
+  salvage: "Salvage",
+  sourcePoints: "Source Points",
+  alloy: "Alloy",
+  originEssence: "Origin Essence",
+  insight: "Insight",
+};
 
 interface Props {
   encounterId: string;
@@ -52,6 +69,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [targetIdx, setTargetIdx] = useState(0);
   const [log, setLog] = useState<string[]>([`Contact: ${encounter.name}.`]);
   const [status, setStatus] = useState<"active" | "resolving" | "victory" | "defeat">("active");
+  const [popups, setPopups] = useState<Popup[]>([]);
+  const [playerShakeToken, setPlayerShakeToken] = useState(0);
+  const [rewardsEarned, setRewardsEarned] = useState<Partial<Record<ResourceType, number>> | null>(null);
 
   const maxHull = computeMaxHull(ship);
   const capacity = computePowerCapacity(ship);
@@ -67,6 +87,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setLog((l) => [...l.slice(-5), line]);
   }
 
+  function addPopup(target: "player" | number, text: string, color: string) {
+    const id = randomId("popup");
+    setPopups((p) => [...p, { id, target, text, color }]);
+    setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), 900);
+  }
+
   function endPlayerAction(nextEnemies: EnemyState[]) {
     if (nextEnemies.every((e) => e.hull <= 0)) {
       finishCombat("victory", nextEnemies);
@@ -77,10 +103,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   }
 
   function enemyTurn(currentEnemies: EnemyState[]) {
+    const regenerated = currentEnemies.map((e) => {
+      if (e.hull <= 0 || !e.regen) return e;
+      const healed = Math.min(e.maxHull, e.hull + e.regen);
+      if (healed > e.hull) {
+        pushLog(`${e.name} regenerates ${healed - e.hull} hull.`);
+      }
+      return { ...e, hull: healed };
+    });
+    regenerated.forEach((e, i) => {
+      if (e.regen && e.hull > currentEnemies[i].hull) addPopup(i, `+${e.hull - currentEnemies[i].hull}`, "#5dffb0");
+    });
+
     let totalDamage = 0;
     const incomingMult = RANGE_MODIFIERS[range].incoming;
     const evasion = Math.min(0.6, 0.05 + evasionTraitCount * 0.05);
-    for (const enemy of currentEnemies) {
+    for (const enemy of regenerated) {
       if (enemy.hull <= 0) continue;
       const result = resolveAttack(enemy.damage, armorBlock, evasion, incomingMult);
       if (result.hit) {
@@ -91,13 +129,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         pushLog(`${enemy.name} misses.`);
       }
     }
+    if (totalDamage > 0) {
+      addPopup("player", `-${totalDamage}`, "#ff5c5c");
+      setPlayerShakeToken((t) => t + 1);
+    }
+    setEnemies(regenerated);
     setCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
     setCrewCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
 
     setPlayerHull((prev) => {
       const nextHull = Math.max(0, prev - totalDamage);
       if (nextHull <= 0) {
-        finishCombat("defeat", currentEnemies);
+        finishCombat("defeat", regenerated);
       } else {
         setStatus("active");
       }
@@ -110,6 +153,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setEnemies(finalEnemies);
     if (result === "victory") {
       playSfx("victory");
+      setRewardsEarned(encounter.rewards);
       resolveCombatVictory(encounterId, poiId, victoryFlag);
     } else {
       playSfx("defeat");
@@ -133,6 +177,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (result.hit) {
         nextEnemies[targetIdx] = { ...target, hull: Math.max(0, target.hull - result.damageDealt) };
         pushLog(`${def.name} hits ${target.name} for ${result.damageDealt}.`);
+        addPopup(targetIdx, `-${result.damageDealt}`, "#ffe25d");
         playSfx("laser");
       } else {
         pushLog(`${def.name} missed ${target.name}.`);
@@ -151,12 +196,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     if (role === "engineer") {
       const heal = Math.round(maxHull * 0.15);
       setPlayerHull((h) => Math.min(maxHull, h + heal));
+      addPopup("player", `+${heal}`, "#5dffb0");
       pushLog(`Field Patch restores ${heal} hull.`);
+      playSfx("dock");
     } else if (role === "gunner") {
       const target = enemies[targetIdx];
       if (target && target.hull > 0) {
         nextEnemies = enemies.map((e, i) => (i === targetIdx ? { ...e, hull: Math.max(0, e.hull - 20) } : e));
         pushLog(`Focus Fire deals 20 direct damage to ${target.name}.`);
+        addPopup(targetIdx, "-20", "#ff9f4d");
         playSfx("laser");
       }
     } else if (role === "helm") {
@@ -182,6 +230,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const nextIdx = dir === "in" ? Math.max(0, idx - 1) : Math.min(order.length - 1, idx + 1);
     setRange(order[nextIdx]);
     pushLog(`Shifted to ${order[nextIdx]} range.`);
+    playSfx("click");
     endPlayerAction(enemies);
   }
 
@@ -194,27 +243,33 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           <div
             key={i}
             className="panel"
-            style={{ padding: "0.6rem 0.9rem", cursor: e.hull > 0 ? "pointer" : "default", opacity: e.hull > 0 ? 1 : 0.35, border: i === targetIdx ? "1px solid var(--cyan)" : undefined }}
+            style={{ padding: "0.6rem 0.9rem", position: "relative", overflow: "hidden", cursor: e.hull > 0 ? "pointer" : "default", opacity: e.hull > 0 ? 1 : 0.35, border: i === targetIdx ? "1px solid var(--cyan)" : undefined }}
             onClick={() => e.hull > 0 && setTargetIdx(i)}
           >
+            {popups.filter((p) => p.target === i).map((p) => (
+              <div key={p.id} className="combat-popup" style={{ color: p.color }}>{p.text}</div>
+            ))}
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
-              <span>{e.name}{e.debuffed ? " (debuffed)" : ""}</span>
+              <span>{e.name}{e.debuffed ? " (debuffed)" : ""}{e.regen ? " ⟳" : ""}</span>
               <span>{e.hull}/{e.maxHull}</span>
             </div>
             <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden", marginTop: "0.3rem" }}>
-              <div style={{ height: "100%", width: `${(e.hull / e.maxHull) * 100}%`, background: "var(--red)" }} />
+              <div style={{ height: "100%", width: `${(e.hull / e.maxHull) * 100}%`, background: "var(--red)", transition: "width 200ms ease" }} />
             </div>
           </div>
         ))}
       </div>
 
-      <div className="panel" style={{ padding: "0.6rem 0.9rem" }}>
+      <div key={playerShakeToken} className={`panel ${playerShakeToken > 0 ? "shake" : ""}`} style={{ padding: "0.6rem 0.9rem", position: "relative", overflow: "hidden" }}>
+        {popups.filter((p) => p.target === "player").map((p) => (
+          <div key={p.id} className="combat-popup" style={{ color: p.color }}>{p.text}</div>
+        ))}
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
           <span>{ship.name}</span>
           <span>{playerHull}/{maxHull}</span>
         </div>
         <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden", marginTop: "0.3rem" }}>
-          <div style={{ height: "100%", width: `${(playerHull / maxHull) * 100}%`, background: "var(--cyan)" }} />
+          <div style={{ height: "100%", width: `${(playerHull / maxHull) * 100}%`, background: "var(--cyan)", transition: "width 200ms ease" }} />
         </div>
         <div style={{ marginTop: "0.4rem", fontSize: "0.75rem", color: "var(--text-dim)" }}>
           Range: {(["close", "mid", "long"] as RangeBand[]).map((r) => (
@@ -252,16 +307,23 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       </div>
 
       {status === "victory" && (
-        <div className="panel" style={{ padding: "1rem", textAlign: "center" }}>
+        <div className="panel pop-in" style={{ padding: "1rem", textAlign: "center" }}>
           <div className="title" style={{ marginBottom: "0.5rem" }}>Victory</div>
+          {rewardsEarned && (
+            <div style={{ display: "flex", justifyContent: "center", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.75rem", fontSize: "0.8rem", color: "var(--text-mid)" }}>
+              {Object.entries(rewardsEarned).map(([k, v]) => (
+                <span key={k} className="resource-chip">+{v} {RESOURCE_LABEL[k as ResourceType]}</span>
+              ))}
+            </div>
+          )}
           <button className="btn primary" onClick={() => onResolve("victory")}>Continue</button>
         </div>
       )}
       {status === "defeat" && (
-        <div className="panel" style={{ padding: "1rem", textAlign: "center" }}>
+        <div className="panel pop-in" style={{ padding: "1rem", textAlign: "center" }}>
           <div className="title" style={{ marginBottom: "0.5rem", color: "var(--red)" }}>Fleet Limps Home</div>
           <div style={{ fontSize: "0.85rem", color: "var(--text-mid)", marginBottom: "0.5rem" }}>
-            Whisper is repaired and returned to Bauhinia Prime.
+            Whisper's hull is patched enough to fly. The fight isn't over — try again when ready.
           </div>
           <button className="btn primary" onClick={() => onResolve("defeat")}>Continue</button>
         </div>

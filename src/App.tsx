@@ -41,16 +41,17 @@ export function App() {
   }
 
   const navBar = (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.6rem 1rem", borderBottom: "1px solid var(--line)" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--line)" }}>
       <ResourceBar />
       <button
         className="btn"
+        style={{ flex: "none", padding: "0.5em 0.8em" }}
         onClick={() => {
           setMuted(!muted);
           setMutedState(!muted);
         }}
       >
-        {muted ? "Sound: Off" : "Sound: On"}
+        {muted ? "Unmute" : "Mute"}
       </button>
     </div>
   );

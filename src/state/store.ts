@@ -1,9 +1,12 @@
 import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
-import type { ResourceType, StoryScene } from "../data/types";
+import type { ResourceType, StoryScene, GalaxyDef, SystemDef } from "../data/types";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
+import { LIONSHEART_EXPANSE } from "../data/galaxies/lionsheartExpanse";
+import { SWANREACH_COMBINE } from "../data/galaxies/swanreachCombine";
 import { ACT1_SCENES } from "../data/story/act1";
+import { ACT2_SCENES } from "../data/story/act2";
 import { encounterById } from "../data/encounters";
 import { CREW_DEFS } from "../data/crew";
 import { drawShip, applyXp, computeMaxHull } from "../engine/ships";
@@ -11,7 +14,8 @@ import { drawModule } from "../engine/modules";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
-export const GALAXY = BAUHINIA_REACH;
+export const GALAXIES: GalaxyDef[] = [BAUHINIA_REACH, LIONSHEART_EXPANSE, SWANREACH_COMBINE];
+export const STORY_SCENES: StoryScene[] = [...ACT1_SCENES, ...ACT2_SCENES];
 
 export const state = signal<GameState>(loadGame() ?? createInitialState());
 
@@ -21,7 +25,22 @@ export function persist() {
 
 export const flagship = computed(() => state.value.ships.find((s) => s.id === state.value.flagshipId) ?? null);
 
-export const currentSystem = computed(() => GALAXY.systems.find((s) => s.id === state.value.currentSystemId)!);
+function findSystem(systemId: string): { system: SystemDef; galaxy: GalaxyDef } {
+  for (const galaxy of GALAXIES) {
+    const system = galaxy.systems.find((s) => s.id === systemId);
+    if (system) return { system, galaxy };
+  }
+  throw new Error(`Unknown system: ${systemId}`);
+}
+
+export const currentSystem = computed(() => findSystem(state.value.currentSystemId).system);
+export const currentGalaxy = computed(() => findSystem(state.value.currentSystemId).galaxy);
+
+export function isGalaxyUnlocked(galaxy: GalaxyDef): boolean {
+  return galaxy.unlockFlag === null || hasFlag(galaxy.unlockFlag);
+}
+
+export const unlockedGalaxies = computed(() => GALAXIES.filter(isGalaxyUnlocked));
 
 export function hasFlag(flag: string): boolean {
   return !!state.value.flags[flag];
@@ -85,7 +104,6 @@ export function mineResource(poiId: string, yieldType: ResourceType, amount: num
   grant({ [yieldType]: amount } as Partial<Record<ResourceType, number>>);
   const current = poiRuntime(poiId).remaining ?? 0;
   setPoiRuntime(poiId, { remaining: Math.max(0, current - 1) });
-  playSfx("mine");
   persist();
 }
 
@@ -162,7 +180,7 @@ export function assignCrew(crewId: string, shipId: string | null) {
 
 export function availableScene(systemId: string): StoryScene | null {
   return (
-    ACT1_SCENES.find(
+    STORY_SCENES.find(
       (sc) =>
         sc.systemId === systemId &&
         (sc.requiredFlag === null || hasFlag(sc.requiredFlag)) &&
@@ -174,6 +192,46 @@ export function availableScene(systemId: string): StoryScene | null {
 export function completeScene(scene: StoryScene) {
   setFlags(scene.onCompleteFlags);
   persist();
+}
+
+// --- Next objective (drives the "what do I do next" waypoint UI) ---
+
+export interface Objective {
+  label: string;
+  systemId: string;
+  systemName: string;
+  poiId?: string;
+}
+
+function findPoiByVictoryFlag(flag: string): { system: SystemDef; poiId: string; poiName: string } | null {
+  for (const galaxy of GALAXIES) {
+    for (const system of galaxy.systems) {
+      for (const poi of system.pois) {
+        if (poi.data?.victoryFlag === flag) return { system, poiId: poi.id, poiName: poi.name };
+      }
+    }
+  }
+  return null;
+}
+
+export function getNextObjective(): Objective | null {
+  for (const scene of STORY_SCENES) {
+    if (hasFlag(scene.hiddenAfterFlag)) continue;
+    const { system } = findSystem(scene.systemId);
+    if (scene.requiredFlag === null || hasFlag(scene.requiredFlag)) {
+      return { label: `${scene.chapterTitle}`, systemId: scene.systemId, systemName: system.name };
+    }
+    const gate = findPoiByVictoryFlag(scene.requiredFlag);
+    if (gate) {
+      return {
+        label: `Engage ${gate.poiName}`,
+        systemId: gate.system.id,
+        systemName: gate.system.name,
+        poiId: gate.poiId,
+      };
+    }
+  }
+  return null;
 }
 
 // --- Combat ---
@@ -197,7 +255,6 @@ export function resolveCombatDefeat() {
     );
     state.value = { ...state.value, ships };
   }
-  state.value = { ...state.value, currentSystemId: "bauhiniaPrime" };
   persist();
 }
 

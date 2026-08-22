@@ -27,18 +27,27 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
         padding: "1rem",
       }}
     >
-      <div className="panel" style={{ width: "min(560px, 100%)", maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+      <div className="panel" style={{ width: "min(560px, 100%)", maxWidth: "100%", boxSizing: "border-box", maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1rem 0" }}>
           <div className="title">Station</div>
           <button className="btn" onClick={onClose}>Close</button>
         </div>
-        <div style={{ display: "flex", gap: "0.4rem", padding: "0.75rem 1rem" }}>
+        <div style={{ display: "flex", gap: "0.3rem", padding: "0.75rem 1rem" }}>
           {(["trade", "shipwright", "fabricator", "recruit"] as Tab[]).map((t) => (
             <button
               key={t}
               className={`btn ${tab === t ? "primary" : ""}`}
               onClick={() => setTab(t)}
-              style={{ flex: 1, textTransform: "capitalize" }}
+              style={{
+                flex: "1 1 0",
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                textTransform: "capitalize",
+                padding: "0.5em 0.2em",
+                fontSize: "0.72rem",
+              }}
             >
               {t}
             </button>

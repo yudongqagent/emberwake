@@ -1,17 +1,28 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { GALAXY, state, mineResource, hasFlag, poiRuntime } from "../../state/store";
+import { GALAXIES, state, mineResource, hasFlag, poiRuntime, getNextObjective } from "../../state/store";
 import type { Poi, ResourceType } from "../../data/types";
 import { playSfx } from "../../audio/engine";
 
-const W = 1000;
-const H = 600;
-const PLAYER_SPEED = 220; // px/sec
-const ACCEL = 480;
+const REF_W = 1000;
+const REF_H = 600;
+const PLAYER_SPEED = 260; // world units/sec
+const ACCEL = 620;
 
 interface Props {
   onNavigate: (screen: string) => void;
   onDock: (poiId: string) => void;
   onEngage: (encounterId: string, poiId: string, victoryFlag?: string) => void;
+}
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  size: number;
 }
 
 function visiblePois(systemPois: Poi[]): Poi[] {
@@ -29,32 +40,63 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   const [miningPct, setMiningPct] = useState(0);
   const engagedRef = useRef(false);
 
-  const system = GALAXY.systems.find((s) => s.id === state.value.currentSystemId)!;
+  const system = GALAXIES.flatMap((g) => g.systems).find((s) => s.id === state.value.currentSystemId)!;
+  const objective = getNextObjective();
+  const objectivePoiId = objective?.systemId === system.id ? objective.poiId : undefined;
+  const objectiveElsewhere = objective && objective.systemId !== system.id ? objective : null;
 
   useEffect(() => {
     engagedRef.current = false;
     const canvas = canvasRef.current!;
+    const container = canvas.parentElement as HTMLElement;
     const ctx2d = canvas.getContext("2d")!;
-    const player = { x: 120, y: H / 2, vx: 0, vy: 0, angle: 0 };
+    const player = { x: 120, y: REF_H / 2, vx: 0, vy: 0, angle: 0 };
     let target: { x: number; y: number } | null = null;
     const keys = new Set<string>();
     let miningPoi: Poi | null = null;
     let miningAccum = 0;
     let last = performance.now();
-    const stars = Array.from({ length: 90 }, () => ({
-      x: Math.random() * W,
-      y: Math.random() * H,
+    let particles: Particle[] = [];
+    let displayW = 0;
+    let displayH = 0;
+    let dpr = 1;
+
+    const stars = Array.from({ length: 140 }, () => ({
+      x: Math.random(),
+      y: Math.random(),
       r: Math.random() * 1.4 + 0.3,
       a: Math.random() * 0.6 + 0.2,
     }));
 
-    function toCanvasCoords(clientX: number, clientY: number) {
+    function resize() {
+      const rect = container.getBoundingClientRect();
+      dpr = window.devicePixelRatio || 1;
+      displayW = rect.width;
+      displayH = rect.height;
+      canvas.width = Math.max(1, Math.round(displayW * dpr));
+      canvas.height = Math.max(1, Math.round(displayH * dpr));
+      canvas.style.width = `${displayW}px`;
+      canvas.style.height = `${displayH}px`;
+    }
+    resize();
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(container);
+
+    // Uniform scale (world stays undistorted — circles stay circles) with the
+    // world content centered; the starfield separately fills the full screen.
+    function transform() {
+      const scale = Math.min(displayW / REF_W, displayH / REF_H);
+      return { scale, offsetX: (displayW - REF_W * scale) / 2, offsetY: (displayH - REF_H * scale) / 2 };
+    }
+
+    function toWorldCoords(clientX: number, clientY: number) {
       const rect = canvas.getBoundingClientRect();
-      return { x: ((clientX - rect.left) / rect.width) * W, y: ((clientY - rect.top) / rect.height) * H };
+      const { scale, offsetX, offsetY } = transform();
+      return { x: (clientX - rect.left - offsetX) / scale, y: (clientY - rect.top - offsetY) / scale };
     }
 
     function onPointer(e: PointerEvent) {
-      target = toCanvasCoords(e.clientX, e.clientY);
+      target = toWorldCoords(e.clientX, e.clientY);
     }
     function onKeyDown(e: KeyboardEvent) {
       keys.add(e.key.toLowerCase());
@@ -69,6 +111,11 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
     });
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+
+    function spawnParticle(p: Particle) {
+      particles.push(p);
+      if (particles.length > 240) particles.splice(0, particles.length - 240);
+    }
 
     function step(now: number) {
       const dt = Math.min(0.25, Math.max(0, (now - last) / 1000));
@@ -96,6 +143,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
         }
       }
       const mag = Math.hypot(ax, ay) || 1;
+      const thrusting = mag > 0 && (ax !== 0 || ay !== 0);
       player.vx += (ax / mag) * ACCEL * dt;
       player.vy += (ay / mag) * ACCEL * dt;
       const speed = Math.hypot(player.vx, player.vy);
@@ -107,10 +155,24 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       const dragFactor = Math.pow(0.02, dt);
       player.vx *= dragFactor;
       player.vy *= dragFactor;
-      player.x = Math.max(20, Math.min(W - 20, player.x + player.vx * dt));
-      player.y = Math.max(20, Math.min(H - 20, player.y + player.vy * dt));
+      player.x = Math.max(20, Math.min(REF_W - 20, player.x + player.vx * dt));
+      player.y = Math.max(20, Math.min(REF_H - 20, player.y + player.vy * dt));
       if (Math.hypot(player.vx, player.vy) > 8) {
         player.angle = Math.atan2(player.vy, player.vx);
+      }
+
+      if (thrusting && Math.random() < 0.6) {
+        const back = player.angle + Math.PI;
+        spawnParticle({
+          x: player.x + Math.cos(back) * 10,
+          y: player.y + Math.sin(back) * 10,
+          vx: Math.cos(back) * 40 + (Math.random() - 0.5) * 30,
+          vy: Math.sin(back) * 40 + (Math.random() - 0.5) * 30,
+          life: 0.35,
+          maxLife: 0.35,
+          color: "75,220,255",
+          size: 2 + Math.random() * 1.5,
+        });
       }
 
       // POI proximity
@@ -135,9 +197,35 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
             miningAccum = 0;
           }
           miningAccum += dt;
+          if (Math.random() < 0.5) {
+            spawnParticle({
+              x: nearest.x + (Math.random() - 0.5) * 40,
+              y: nearest.y + (Math.random() - 0.5) * 40,
+              vx: (Math.random() - 0.5) * 20,
+              vy: (Math.random() - 0.5) * 20,
+              life: 0.5,
+              maxLife: 0.5,
+              color: "255,210,120",
+              size: 1.5,
+            });
+          }
           if (miningAccum >= 0.9) {
             miningAccum = 0;
             mineResource(nearest.id, (nearest.data?.yieldType as ResourceType) ?? "salvage", 6);
+            playSfx("mine");
+            for (let i = 0; i < 10; i++) {
+              const ang = Math.random() * Math.PI * 2;
+              spawnParticle({
+                x: nearest.x,
+                y: nearest.y,
+                vx: Math.cos(ang) * 60,
+                vy: Math.sin(ang) * 60,
+                life: 0.4,
+                maxLife: 0.4,
+                color: "255,230,150",
+                size: 2,
+              });
+            }
           }
           setMiningPct(Math.min(1, miningAccum / 0.9));
         } else {
@@ -160,27 +248,56 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
 
       setNearPoi((prev: Poi | null) => (prev?.id !== nearest?.id ? nearest : prev));
 
-      // draw
-      ctx2d.clearRect(0, 0, W, H);
-      const grad = ctx2d.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.7);
-      grad.addColorStop(0, "#0c1a2e");
-      grad.addColorStop(1, "#03050a");
-      ctx2d.fillStyle = grad;
-      ctx2d.fillRect(0, 0, W, H);
+      // update particles
+      particles = particles.filter((p) => p.life > 0);
+      for (const p of particles) {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+      }
+
+      // --- draw ---
+      const { scale, offsetX, offsetY } = transform();
+      ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx2d.clearRect(0, 0, displayW, displayH);
+
+      // starfield fills the whole screen, independent of the world transform
+      const bgGrad = ctx2d.createRadialGradient(
+        displayW / 2, displayH / 2, 0,
+        displayW / 2, displayH / 2, Math.max(displayW, displayH) * 0.75,
+      );
+      bgGrad.addColorStop(0, "#0c1a2e");
+      bgGrad.addColorStop(1, "#03050a");
+      ctx2d.fillStyle = bgGrad;
+      ctx2d.fillRect(0, 0, displayW, displayH);
       for (const s of stars) {
         ctx2d.globalAlpha = s.a;
         ctx2d.fillStyle = "#bfe6ff";
         ctx2d.beginPath();
-        ctx2d.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx2d.arc(s.x * displayW, s.y * displayH, s.r, 0, Math.PI * 2);
         ctx2d.fill();
       }
       ctx2d.globalAlpha = 1;
 
+      ctx2d.save();
+      ctx2d.translate(offsetX, offsetY);
+      ctx2d.scale(scale, scale);
+
       for (const poi of pois) {
-        drawPoi(ctx2d, poi, now);
+        drawPoi(ctx2d, poi, now, poi.id === objectivePoiId);
       }
 
+      for (const p of particles) {
+        ctx2d.globalAlpha = Math.max(0, p.life / p.maxLife);
+        ctx2d.fillStyle = `rgb(${p.color})`;
+        ctx2d.beginPath();
+        ctx2d.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx2d.fill();
+      }
+      ctx2d.globalAlpha = 1;
+
       drawPlayer(ctx2d, player);
+      ctx2d.restore();
     }
     // A fixed-interval tick (rather than requestAnimationFrame) keeps the loop running
     // at a steady rate across embedding contexts that throttle rAF for backgrounded/
@@ -189,6 +306,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
 
     return () => {
       clearInterval(intervalId);
+      resizeObserver.disconnect();
       canvas.removeEventListener("pointerdown", onPointer);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
@@ -202,11 +320,18 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
         <div className="title">{system.name}</div>
         <button className="btn" onClick={() => onNavigate("galaxy")}>Jump Out</button>
       </div>
+      {objectiveElsewhere && (
+        <button
+          className="btn primary"
+          style={{ margin: "0 1rem 0.5rem", textAlign: "left" }}
+          onClick={() => onNavigate("galaxy")}
+        >
+          ▸ Next: {objectiveElsewhere.label} — jump to {objectiveElsewhere.systemName}
+        </button>
+      )}
       <div style={{ flex: 1, position: "relative" }}>
         <canvas
           ref={canvasRef}
-          width={W}
-          height={H}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", touchAction: "none", cursor: "crosshair" }}
         />
         {nearPoi && nearPoi.kind === "station" && (
@@ -225,7 +350,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
         )}
       </div>
       <div style={{ padding: "0.5rem 1rem", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-        Drag/click to fly, or WASD / arrow keys. Approach stations, asteroid fields, and contacts to interact.
+        Drag/tap to fly, or WASD / arrow keys. Approach stations, asteroid fields, and contacts to interact.
       </div>
     </div>
   );
@@ -248,7 +373,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, p: { x: number; y: number; an
   ctx.restore();
 }
 
-function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, now: number) {
+function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, now: number, isObjective: boolean) {
   ctx.save();
   ctx.translate(poi.x, poi.y);
   if (poi.kind === "station") {
@@ -295,8 +420,24 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, now: number) {
   }
   ctx.restore();
 
+  if (isObjective) {
+    const bob = Math.sin(now / 260) * 4;
+    ctx.save();
+    ctx.translate(poi.x, poi.y - poi.radius - 22 + bob);
+    ctx.fillStyle = "#ffe25d";
+    ctx.shadowColor = "#ffe25d";
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-7, -12);
+    ctx.lineTo(7, -12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
   ctx.save();
-  ctx.fillStyle = "rgba(234,246,255,0.75)";
+  ctx.fillStyle = isObjective ? "#ffe25d" : "rgba(234,246,255,0.75)";
   ctx.font = "12px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText(poi.name, poi.x, poi.y + poi.radius + 16);

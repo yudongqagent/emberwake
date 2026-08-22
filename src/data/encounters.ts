@@ -47,6 +47,55 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     rewards: { salvage: 200, sourcePoints: 100, alloy: 90, originEssence: 90 },
     xp: 150,
   },
+  {
+    id: "ferrousGateDuel",
+    name: "Duelist Kaan Ferrous",
+    faction: "lionsheart",
+    isBoss: false,
+    enemies: [{ name: "Kaan's Dueling Skiff", hull: 90, damage: 11, block: 6, evasion: 0.25 }],
+    rewards: { salvage: 50, sourcePoints: 30, insight: 5 },
+    xp: 45,
+  },
+  {
+    id: "hollowFleetYard",
+    name: "Hawke, Reaver Lieutenant",
+    faction: "reavers",
+    isBoss: true,
+    enemies: [
+      { name: "Hawke's Warcutter", hull: 320, damage: 20, block: 12, evasion: 0.22 },
+      { name: "Reaver Skiff", hull: 55, damage: 8, block: 3, evasion: 0.18 },
+      { name: "Reaver Skiff", hull: 55, damage: 8, block: 3, evasion: 0.18 },
+    ],
+    rewards: { salvage: 220, sourcePoints: 120, alloy: 110, originEssence: 60 },
+    xp: 170,
+  },
+  {
+    id: "firstContactSwarm",
+    name: "Chitin Swarm Scouts",
+    faction: "swarm",
+    isBoss: false,
+    enemies: [
+      { name: "Swarm Drone", hull: 40, damage: 6, block: 0, evasion: 0.1, regen: 4 },
+      { name: "Swarm Drone", hull: 40, damage: 6, block: 0, evasion: 0.1, regen: 4 },
+      { name: "Swarm Drone", hull: 40, damage: 6, block: 0, evasion: 0.1, regen: 4 },
+    ],
+    rewards: { salvage: 70, sourcePoints: 40, alloy: 20 },
+    xp: 60,
+  },
+  {
+    id: "reachOpensFinale",
+    name: "Swarm Incursion at the Border",
+    faction: "swarm",
+    isBoss: true,
+    enemies: [
+      { name: "Swarm Drone", hull: 60, damage: 9, block: 0, evasion: 0.12, regen: 6 },
+      { name: "Swarm Drone", hull: 60, damage: 9, block: 0, evasion: 0.12, regen: 6 },
+      { name: "Swarm Drone", hull: 60, damage: 9, block: 0, evasion: 0.12, regen: 6 },
+      { name: "Swarm Broodling", hull: 240, damage: 17, block: 8, evasion: 0.1, regen: 10 },
+    ],
+    rewards: { salvage: 260, sourcePoints: 150, alloy: 130, originEssence: 130 },
+    xp: 210,
+  },
 ];
 
 export function encounterById(id: string): EncounterDef {

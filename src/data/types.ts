@@ -151,6 +151,8 @@ export interface EnemyShipDef {
   damage: number;
   block: number;
   evasion: number;
+  /** Hull regenerated at the start of each of this enemy's turns (Swarm doctrine). */
+  regen?: number;
 }
 
 export interface EncounterDef {
