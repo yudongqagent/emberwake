@@ -49,9 +49,12 @@ export function isPlayerDefeated(playerHull: number): boolean {
   return playerHull <= 0;
 }
 
-export function shiftRangeBand(current: RangeBand, direction: "in" | "out"): RangeBand {
-  const order: RangeBand[] = ["close", "mid", "long"];
-  const idx = order.indexOf(current);
-  const nextIdx = direction === "in" ? Math.max(0, idx - 1) : Math.min(order.length - 1, idx + 1);
-  return order[nextIdx];
+export const RANGE_BAND_DISTANCE = { close: 160, mid: 340 };
+
+/** Combat arenas use free-flight positioning, not discrete range steps — the band is
+ * just read off live distance between two ships. */
+export function rangeBandFromDistance(distance: number): RangeBand {
+  if (distance < RANGE_BAND_DISTANCE.close) return "close";
+  if (distance < RANGE_BAND_DISTANCE.mid) return "mid";
+  return "long";
 }

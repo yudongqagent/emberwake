@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAttack, shiftRangeBand, isEncounterCleared, isPlayerDefeated } from "./combat";
+import { resolveAttack, rangeBandFromDistance, isEncounterCleared, isPlayerDefeated } from "./combat";
 
 describe("resolveAttack", () => {
   it("misses when the roll is below evasion", () => {
@@ -26,15 +26,14 @@ describe("resolveAttack", () => {
   });
 });
 
-describe("shiftRangeBand", () => {
-  it("moves toward close range without going past the end", () => {
-    expect(shiftRangeBand("mid", "in")).toBe("close");
-    expect(shiftRangeBand("close", "in")).toBe("close");
-  });
-
-  it("moves toward long range without going past the end", () => {
-    expect(shiftRangeBand("mid", "out")).toBe("long");
-    expect(shiftRangeBand("long", "out")).toBe("long");
+describe("rangeBandFromDistance", () => {
+  it("reads close/mid/long off live distance between ships", () => {
+    expect(rangeBandFromDistance(0)).toBe("close");
+    expect(rangeBandFromDistance(159)).toBe("close");
+    expect(rangeBandFromDistance(160)).toBe("mid");
+    expect(rangeBandFromDistance(339)).toBe("mid");
+    expect(rangeBandFromDistance(340)).toBe("long");
+    expect(rangeBandFromDistance(1000)).toBe("long");
   });
 });
 

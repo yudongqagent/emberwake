@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { GALAXIES, state, mineResource, hasFlag, poiRuntime, getNextObjective } from "../../state/store";
+import {
+  GALAXIES,
+  state,
+  mineResource,
+  collectWreck,
+  isPoiAvailable,
+  effectiveRemaining,
+  getNextObjective,
+} from "../../state/store";
 import type { Poi, ResourceType } from "../../data/types";
 import { playSfx } from "../../audio/engine";
+import { attachResponsiveCanvas } from "../../engine/viewport";
 
 const REF_W = 1000;
 const REF_H = 600;
@@ -25,19 +34,24 @@ interface Particle {
   size: number;
 }
 
-function visiblePois(systemPois: Poi[]): Poi[] {
-  return systemPois.filter((p) => {
-    if (p.requiresFlag && !hasFlag(p.requiresFlag)) return false;
-    if (p.hiddenAfterFlag && hasFlag(p.hiddenAfterFlag)) return false;
-    if (poiRuntime(p.id).cleared) return false;
-    return true;
-  });
+function hashSeed(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return (h % 1000) / 1000;
+}
+
+/** Slow elliptical wander for patrol contacts, so the map feels alive rather than a grid of static dots. */
+function wanderOffset(poi: Poi, now: number): { x: number; y: number } {
+  if (poi.kind !== "patrol") return { x: 0, y: 0 };
+  const seed = hashSeed(poi.id) * Math.PI * 2;
+  const t = now / 1000;
+  return { x: Math.cos(t * 0.18 + seed) * 46, y: Math.sin(t * 0.14 + seed * 1.7) * 30 };
 }
 
 export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [nearPoi, setNearPoi] = useState<Poi | null>(null);
-  const [miningPct, setMiningPct] = useState(0);
+  const [progressPct, setProgressPct] = useState(0);
   const engagedRef = useRef(false);
 
   const system = GALAXIES.flatMap((g) => g.systems).find((s) => s.id === state.value.currentSystemId)!;
@@ -50,53 +64,33 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
     const canvas = canvasRef.current!;
     const container = canvas.parentElement as HTMLElement;
     const ctx2d = canvas.getContext("2d")!;
+    const vp = attachResponsiveCanvas(canvas, container, REF_W, REF_H);
     const player = { x: 120, y: REF_H / 2, vx: 0, vy: 0, angle: 0 };
     let target: { x: number; y: number } | null = null;
     const keys = new Set<string>();
-    let miningPoi: Poi | null = null;
-    let miningAccum = 0;
+    let workingPoi: Poi | null = null;
+    let workingAccum = 0;
     let last = performance.now();
     let particles: Particle[] = [];
-    let displayW = 0;
-    let displayH = 0;
-    let dpr = 1;
 
-    const stars = Array.from({ length: 140 }, () => ({
+    const stars = Array.from({ length: 160 }, () => ({
       x: Math.random(),
       y: Math.random(),
-      r: Math.random() * 1.4 + 0.3,
+      r: Math.random() * 1.5 + 0.3,
       a: Math.random() * 0.6 + 0.2,
+      hue: Math.random() < 0.15 ? "255,214,170" : Math.random() < 0.3 ? "180,210,255" : "220,236,255",
+    }));
+    // A couple of soft nebula blobs per system, seeded from the system id so each place looks distinct.
+    const nebulaSeed = hashSeed(system.id);
+    const nebulae = Array.from({ length: 3 }, (_, i) => ({
+      x: (Math.sin(nebulaSeed * 40 + i * 13.1) * 0.5 + 0.5),
+      y: (Math.cos(nebulaSeed * 27 + i * 7.3) * 0.5 + 0.5),
+      r: 220 + (i * 60),
+      hue: i === 0 ? "80,60,160" : i === 1 ? "40,90,140" : "120,50,110",
     }));
 
-    function resize() {
-      const rect = container.getBoundingClientRect();
-      dpr = window.devicePixelRatio || 1;
-      displayW = rect.width;
-      displayH = rect.height;
-      canvas.width = Math.max(1, Math.round(displayW * dpr));
-      canvas.height = Math.max(1, Math.round(displayH * dpr));
-      canvas.style.width = `${displayW}px`;
-      canvas.style.height = `${displayH}px`;
-    }
-    resize();
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(container);
-
-    // Uniform scale (world stays undistorted — circles stay circles) with the
-    // world content centered; the starfield separately fills the full screen.
-    function transform() {
-      const scale = Math.min(displayW / REF_W, displayH / REF_H);
-      return { scale, offsetX: (displayW - REF_W * scale) / 2, offsetY: (displayH - REF_H * scale) / 2 };
-    }
-
-    function toWorldCoords(clientX: number, clientY: number) {
-      const rect = canvas.getBoundingClientRect();
-      const { scale, offsetX, offsetY } = transform();
-      return { x: (clientX - rect.left - offsetX) / scale, y: (clientY - rect.top - offsetY) / scale };
-    }
-
     function onPointer(e: PointerEvent) {
-      target = toWorldCoords(e.clientX, e.clientY);
+      target = vp.toWorld(e.clientX, e.clientY);
     }
     function onKeyDown(e: KeyboardEvent) {
       keys.add(e.key.toLowerCase());
@@ -175,32 +169,36 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
         });
       }
 
-      // POI proximity
-      const pois = visiblePois(system.pois);
+      // POI proximity (using wander-adjusted effective positions so hit-testing matches rendering)
+      const pois = system.pois.filter(isPoiAvailable);
       let closest: Poi | null = null;
       let closestDist = Infinity;
+      let closestEff = { x: 0, y: 0 };
       for (const poi of pois) {
-        const d = Math.hypot(poi.x - player.x, poi.y - player.y);
+        const off = wanderOffset(poi, now);
+        const ex = poi.x + off.x;
+        const ey = poi.y + off.y;
+        const d = Math.hypot(ex - player.x, ey - player.y);
         if (d < poi.radius && d < closestDist) {
           closest = poi;
           closestDist = d;
+          closestEff = { x: ex, y: ey };
         }
       }
-
       const nearest: Poi | null = closest;
 
       if (nearest && nearest.kind === "asteroidField") {
-        const remaining = poiRuntime(nearest.id).remaining ?? (nearest.data?.remaining as number) ?? 0;
+        const remaining = effectiveRemaining(nearest);
         if (remaining > 0) {
-          if (miningPoi?.id !== nearest.id) {
-            miningPoi = nearest;
-            miningAccum = 0;
+          if (workingPoi?.id !== nearest.id) {
+            workingPoi = nearest;
+            workingAccum = 0;
           }
-          miningAccum += dt;
+          workingAccum += dt;
           if (Math.random() < 0.5) {
             spawnParticle({
-              x: nearest.x + (Math.random() - 0.5) * 40,
-              y: nearest.y + (Math.random() - 0.5) * 40,
+              x: closestEff.x + (Math.random() - 0.5) * 40,
+              y: closestEff.y + (Math.random() - 0.5) * 40,
               vx: (Math.random() - 0.5) * 20,
               vy: (Math.random() - 0.5) * 20,
               life: 0.5,
@@ -209,15 +207,15 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
               size: 1.5,
             });
           }
-          if (miningAccum >= 0.9) {
-            miningAccum = 0;
+          if (workingAccum >= 0.9) {
+            workingAccum = 0;
             mineResource(nearest.id, (nearest.data?.yieldType as ResourceType) ?? "salvage", 6);
             playSfx("mine");
             for (let i = 0; i < 10; i++) {
               const ang = Math.random() * Math.PI * 2;
               spawnParticle({
-                x: nearest.x,
-                y: nearest.y,
+                x: closestEff.x,
+                y: closestEff.y,
                 vx: Math.cos(ang) * 60,
                 vy: Math.sin(ang) * 60,
                 life: 0.4,
@@ -227,14 +225,52 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
               });
             }
           }
-          setMiningPct(Math.min(1, miningAccum / 0.9));
+          setProgressPct(Math.min(1, workingAccum / 0.9));
         } else {
-          miningPoi = null;
-          setMiningPct(0);
+          workingPoi = null;
+          setProgressPct(0);
         }
+      } else if (nearest && nearest.kind === "wreck") {
+        if (workingPoi?.id !== nearest.id) {
+          workingPoi = nearest;
+          workingAccum = 0;
+        }
+        workingAccum += dt;
+        if (Math.random() < 0.4) {
+          spawnParticle({
+            x: closestEff.x + (Math.random() - 0.5) * 30,
+            y: closestEff.y + (Math.random() - 0.5) * 30,
+            vx: (Math.random() - 0.5) * 15,
+            vy: (Math.random() - 0.5) * 15,
+            life: 0.6,
+            maxLife: 0.6,
+            color: "180,220,255",
+            size: 1.6,
+          });
+        }
+        if (workingAccum >= 1.4) {
+          workingAccum = 0;
+          const rewards = (nearest.data?.rewards as Partial<Record<ResourceType, number>>) ?? {};
+          collectWreck(nearest.id, rewards);
+          playSfx("draw");
+          for (let i = 0; i < 14; i++) {
+            const ang = Math.random() * Math.PI * 2;
+            spawnParticle({
+              x: closestEff.x,
+              y: closestEff.y,
+              vx: Math.cos(ang) * 80,
+              vy: Math.sin(ang) * 80,
+              life: 0.5,
+              maxLife: 0.5,
+              color: "160,210,255",
+              size: 2.2,
+            });
+          }
+        }
+        setProgressPct(Math.min(1, workingAccum / 1.4));
       } else {
-        miningPoi = null;
-        setMiningPct(0);
+        workingPoi = null;
+        setProgressPct(0);
       }
 
       if (nearest && nearest.kind === "patrol" && !engagedRef.current) {
@@ -257,24 +293,32 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       }
 
       // --- draw ---
-      const { scale, offsetX, offsetY } = transform();
-      ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx2d.clearRect(0, 0, displayW, displayH);
+      vp.beginFrame(ctx2d);
+      const { scale, offsetX, offsetY } = vp.transform();
 
-      // starfield fills the whole screen, independent of the world transform
+      // starfield + nebulae fill the whole screen, independent of the world transform
       const bgGrad = ctx2d.createRadialGradient(
-        displayW / 2, displayH / 2, 0,
-        displayW / 2, displayH / 2, Math.max(displayW, displayH) * 0.75,
+        vp.displayW / 2, vp.displayH / 2, 0,
+        vp.displayW / 2, vp.displayH / 2, Math.max(vp.displayW, vp.displayH) * 0.75,
       );
       bgGrad.addColorStop(0, "#0c1a2e");
       bgGrad.addColorStop(1, "#03050a");
       ctx2d.fillStyle = bgGrad;
-      ctx2d.fillRect(0, 0, displayW, displayH);
+      ctx2d.fillRect(0, 0, vp.displayW, vp.displayH);
+
+      for (const n of nebulae) {
+        const g = ctx2d.createRadialGradient(n.x * vp.displayW, n.y * vp.displayH, 0, n.x * vp.displayW, n.y * vp.displayH, n.r);
+        g.addColorStop(0, `rgba(${n.hue},0.16)`);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx2d.fillStyle = g;
+        ctx2d.fillRect(0, 0, vp.displayW, vp.displayH);
+      }
+
       for (const s of stars) {
         ctx2d.globalAlpha = s.a;
-        ctx2d.fillStyle = "#bfe6ff";
+        ctx2d.fillStyle = `rgb(${s.hue})`;
         ctx2d.beginPath();
-        ctx2d.arc(s.x * displayW, s.y * displayH, s.r, 0, Math.PI * 2);
+        ctx2d.arc(s.x * vp.displayW, s.y * vp.displayH, s.r, 0, Math.PI * 2);
         ctx2d.fill();
       }
       ctx2d.globalAlpha = 1;
@@ -284,7 +328,8 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       ctx2d.scale(scale, scale);
 
       for (const poi of pois) {
-        drawPoi(ctx2d, poi, now, poi.id === objectivePoiId);
+        const off = wanderOffset(poi, now);
+        drawPoi(ctx2d, poi, poi.x + off.x, poi.y + off.y, now, poi.id === objectivePoiId);
       }
 
       for (const p of particles) {
@@ -306,13 +351,15 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
 
     return () => {
       clearInterval(intervalId);
-      resizeObserver.disconnect();
+      vp.destroy();
       canvas.removeEventListener("pointerdown", onPointer);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [system.id]);
+
+  const isBounty = !!nearPoi?.data?.bounty;
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -344,13 +391,26 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
           <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", minWidth: 220 }}>
             <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>Mining {nearPoi.name}...</div>
             <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${miningPct * 100}%`, background: "var(--cyan)" }} />
+              <div style={{ height: "100%", width: `${progressPct * 100}%`, background: "var(--cyan)" }} />
             </div>
+          </div>
+        )}
+        {nearPoi && nearPoi.kind === "wreck" && (
+          <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", minWidth: 220 }}>
+            <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>Salvaging {nearPoi.name}...</div>
+            <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${progressPct * 100}%`, background: "var(--violet)" }} />
+            </div>
+          </div>
+        )}
+        {isBounty && nearPoi && (
+          <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", fontSize: "0.72rem", color: "var(--amber)", background: "rgba(3,5,9,0.7)", padding: "0.3rem 0.7rem", borderRadius: 999, border: "1px solid var(--amber)" }}>
+            Bounty contact — repeatable
           </div>
         )}
       </div>
       <div style={{ padding: "0.5rem 1rem", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-        Drag/tap to fly, or WASD / arrow keys. Approach stations, asteroid fields, and contacts to interact.
+        Drag/tap to fly, or WASD / arrow keys. Approach stations, fields, wrecks, and contacts to interact.
       </div>
     </div>
   );
@@ -361,30 +421,44 @@ function drawPlayer(ctx: CanvasRenderingContext2D, p: { x: number; y: number; an
   ctx.translate(p.x, p.y);
   ctx.rotate(p.angle);
   ctx.shadowColor = "#4be8ff";
-  ctx.shadowBlur = 12;
-  ctx.fillStyle = "#4be8ff";
+  ctx.shadowBlur = 14;
+  const grad = ctx.createLinearGradient(-10, 0, 14, 0);
+  grad.addColorStop(0, "#1c7d94");
+  grad.addColorStop(1, "#8ff3ff");
+  ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.moveTo(14, 0);
-  ctx.lineTo(-10, -8);
-  ctx.lineTo(-5, 0);
-  ctx.lineTo(-10, 8);
+  ctx.moveTo(15, 0);
+  ctx.lineTo(-10, -9);
+  ctx.lineTo(-4, 0);
+  ctx.lineTo(-10, 9);
   ctx.closePath();
   ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.6)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
   ctx.restore();
 }
 
-function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, now: number, isObjective: boolean) {
+function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, ex: number, ey: number, now: number, isObjective: boolean) {
   ctx.save();
-  ctx.translate(poi.x, poi.y);
+  ctx.translate(ex, ey);
   if (poi.kind === "station") {
+    const pulse = 0.85 + 0.15 * Math.sin(now / 500);
+    ctx.shadowColor = "#ffb84d";
+    ctx.shadowBlur = 10 * pulse;
     ctx.strokeStyle = "#ffb84d";
-    ctx.fillStyle = "rgba(255,184,77,0.12)";
+    ctx.fillStyle = "rgba(255,184,77,0.14)";
     ctx.lineWidth = 2;
     drawHex(ctx, 26);
     ctx.fill();
     ctx.stroke();
+    ctx.beginPath();
+    drawHex(ctx, 14);
+    ctx.strokeStyle = "rgba(255,220,160,0.8)";
+    ctx.stroke();
   } else if (poi.kind === "asteroidField") {
-    const remaining = poiRuntime(poi.id).remaining ?? (poi.data?.remaining as number) ?? 0;
+    const remaining = effectiveRemaining(poi);
+    ctx.shadowBlur = 0;
     ctx.fillStyle = remaining > 0 ? "#9fb8cc" : "#3a4553";
     for (let i = 0; i < 7; i++) {
       const ang = (i / 7) * Math.PI * 2;
@@ -393,14 +467,39 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, now: number, isObjecti
       ctx.arc(Math.cos(ang) * r, Math.sin(ang) * r, 5, 0, Math.PI * 2);
       ctx.fill();
     }
+    if (remaining <= 0) {
+      ctx.fillStyle = "rgba(160,180,200,0.55)";
+      ctx.font = "10px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("recharging…", 0, 40);
+    }
+  } else if (poi.kind === "wreck") {
+    const pulse = 0.5 + 0.5 * Math.sin(now / 340);
+    ctx.shadowColor = "#b98cff";
+    ctx.shadowBlur = 8 + pulse * 6;
+    ctx.strokeStyle = "#b98cff";
+    ctx.fillStyle = "rgba(185,140,255,0.12)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -20);
+    ctx.lineTo(18, 0);
+    ctx.lineTo(0, 20);
+    ctx.lineTo(-18, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   } else if (poi.kind === "patrol") {
+    const bounty = !!poi.data?.bounty;
+    const baseColor = bounty ? "255,159,77" : "255,92,92";
     const pulse = 0.5 + 0.5 * Math.sin(now / 220);
-    ctx.strokeStyle = `rgba(255,92,92,${0.3 + pulse * 0.4})`;
+    ctx.strokeStyle = `rgba(${baseColor},${0.3 + pulse * 0.4})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(0, 0, poi.radius, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = "#ff5c5c";
+    ctx.shadowColor = `rgb(${baseColor})`;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = `rgb(${baseColor})`;
     ctx.beginPath();
     ctx.moveTo(0, -12);
     ctx.lineTo(10, 0);
@@ -409,6 +508,7 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, now: number, isObjecti
     ctx.closePath();
     ctx.fill();
   } else if (poi.kind === "derelict") {
+    ctx.shadowBlur = 0;
     ctx.strokeStyle = "#5d7285";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -423,7 +523,7 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, now: number, isObjecti
   if (isObjective) {
     const bob = Math.sin(now / 260) * 4;
     ctx.save();
-    ctx.translate(poi.x, poi.y - poi.radius - 22 + bob);
+    ctx.translate(ex, ey - poi.radius - 22 + bob);
     ctx.fillStyle = "#ffe25d";
     ctx.shadowColor = "#ffe25d";
     ctx.shadowBlur = 10;
@@ -440,7 +540,7 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, now: number, isObjecti
   ctx.fillStyle = isObjective ? "#ffe25d" : "rgba(234,246,255,0.75)";
   ctx.font = "12px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(poi.name, poi.x, poi.y + poi.radius + 16);
+  ctx.fillText(poi.name, ex, ey + poi.radius + 16);
   ctx.restore();
 }
 

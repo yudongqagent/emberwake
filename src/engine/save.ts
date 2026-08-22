@@ -7,7 +7,11 @@ const SAVE_KEY = "emberwake.save";
 
 export interface PoiRuntimeState {
   remaining?: number;
+  /** Wall-clock ms timestamp `remaining` was last written — regen is derived from this. */
+  updatedAt?: number;
   cleared?: boolean;
+  /** Wall-clock ms timestamp of the last clear — respawnable POIs use this to reopen. */
+  clearedAt?: number;
 }
 
 export interface GameState {

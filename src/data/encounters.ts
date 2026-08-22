@@ -98,7 +98,76 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
   },
 ];
 
+// --- Bounties: repeatable, always-farmable encounters that respawn after a cooldown.
+// Rewards are deliberately capped to Salvage/Source Points/Alloy/Insight — Origin
+// Essence stays story-only so grinding can never replace the campaign (see
+// docs/systems-design.md's pacing model).
+export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
+  {
+    id: "bountyReaverScavengers",
+    name: "Reaver Scavenger Skiff",
+    faction: "reavers",
+    isBoss: false,
+    enemies: [{ name: "Scavenger Skiff", hull: 35, damage: 6, block: 1, evasion: 0.12 }],
+    rewards: { salvage: 25, sourcePoints: 8 },
+    xp: 12,
+  },
+  {
+    id: "bountyArthaineSmugglers",
+    name: "Arthaine Smuggler Cutter",
+    faction: "bauhinia",
+    isBoss: false,
+    enemies: [{ name: "Smuggler Cutter", hull: 55, damage: 8, block: 4, evasion: 0.15 }],
+    rewards: { salvage: 35, alloy: 10 },
+    xp: 18,
+  },
+  {
+    id: "bountyReaverRemnants",
+    name: "Reaver Remnant Patrol",
+    faction: "reavers",
+    isBoss: false,
+    enemies: [
+      { name: "Remnant Skiff", hull: 40, damage: 7, block: 2, evasion: 0.15 },
+      { name: "Remnant Skiff", hull: 40, damage: 7, block: 2, evasion: 0.15 },
+    ],
+    rewards: { salvage: 40, sourcePoints: 15, alloy: 10 },
+    xp: 20,
+  },
+  {
+    id: "bountyConcordSparringPartner",
+    name: "Concord Sparring Partner",
+    faction: "lionsheart",
+    isBoss: false,
+    enemies: [{ name: "Sparring Skiff", hull: 70, damage: 9, block: 5, evasion: 0.2 }],
+    rewards: { salvage: 45, sourcePoints: 20 },
+    xp: 25,
+  },
+  {
+    id: "bountyShipyardSalvagers",
+    name: "Reaver Shipyard Salvagers",
+    faction: "reavers",
+    isBoss: false,
+    enemies: [
+      { name: "Salvager Skiff", hull: 45, damage: 8, block: 3, evasion: 0.16 },
+      { name: "Salvager Skiff", hull: 45, damage: 8, block: 3, evasion: 0.16 },
+    ],
+    rewards: { salvage: 50, alloy: 25 },
+    xp: 28,
+  },
+  {
+    id: "bountyCombineSmuggler",
+    name: "Combine Smuggler Interceptor",
+    faction: "swanreach",
+    isBoss: false,
+    enemies: [{ name: "Smuggler Interceptor", hull: 50, damage: 7, block: 3, evasion: 0.18 }],
+    rewards: { salvage: 40, alloy: 15 },
+    xp: 20,
+  },
+];
+
 export function encounterById(id: string): EncounterDef {
+  const bounty = BOUNTY_ENCOUNTER_DEFS.find((e) => e.id === id);
+  if (bounty) return bounty;
   const def = ENCOUNTER_DEFS.find((e) => e.id === id);
   if (!def) throw new Error(`Unknown encounter: ${id}`);
   return def;

@@ -108,7 +108,7 @@ export interface CrewInstance {
   assignedShipId: string | null;
 }
 
-export type PoiKind = "station" | "asteroidField" | "derelict" | "patrol" | "storyMarker";
+export type PoiKind = "station" | "asteroidField" | "derelict" | "patrol" | "storyMarker" | "wreck";
 
 export interface Poi {
   id: string;

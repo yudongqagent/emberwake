@@ -1,7 +1,7 @@
 import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
-import type { ResourceType, StoryScene, GalaxyDef, SystemDef } from "../data/types";
+import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi } from "../data/types";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
 import { LIONSHEART_EXPANSE } from "../data/galaxies/lionsheartExpanse";
 import { SWANREACH_COMBINE } from "../data/galaxies/swanreachCombine";
@@ -95,15 +95,47 @@ export function poiRuntime(poiId: string) {
   return state.value.poiState[poiId] ?? {};
 }
 
-export function setPoiRuntime(poiId: string, patch: Partial<{ remaining: number; cleared: boolean }>) {
+export function setPoiRuntime(
+  poiId: string,
+  patch: Partial<{ remaining: number; updatedAt: number; cleared: boolean; clearedAt: number }>,
+) {
   const poiState = { ...state.value.poiState, [poiId]: { ...state.value.poiState[poiId], ...patch } };
   state.value = { ...state.value, poiState };
 }
 
+/** Current mineable charge, accounting for regen since the field was last worked. */
+export function effectiveRemaining(poi: Poi): number {
+  const max = (poi.data?.remaining as number) ?? 0;
+  const regenSeconds = (poi.data?.regenSeconds as number) ?? 24;
+  const rt = poiRuntime(poi.id);
+  const base = rt.remaining ?? max;
+  if (base >= max) return max;
+  const elapsedSec = (Date.now() - (rt.updatedAt ?? Date.now())) / 1000;
+  return Math.min(max, base + Math.floor(elapsedSec / regenSeconds));
+}
+
+/** Whether a respawnable patrol/wreck has come back since it was last cleared. */
+export function isPoiAvailable(poi: Poi): boolean {
+  if (poi.requiresFlag && !hasFlag(poi.requiresFlag)) return false;
+  if (poi.hiddenAfterFlag && hasFlag(poi.hiddenAfterFlag)) return false;
+  const rt = poiRuntime(poi.id);
+  if (!rt.cleared) return true;
+  const respawnSeconds = poi.data?.respawnSeconds as number | undefined;
+  if (!respawnSeconds) return false; // permanently cleared (story-gated one-off)
+  return Date.now() - (rt.clearedAt ?? 0) >= respawnSeconds * 1000;
+}
+
 export function mineResource(poiId: string, yieldType: ResourceType, amount: number) {
   grant({ [yieldType]: amount } as Partial<Record<ResourceType, number>>);
-  const current = poiRuntime(poiId).remaining ?? 0;
-  setPoiRuntime(poiId, { remaining: Math.max(0, current - 1) });
+  const poi = GALAXIES.flatMap((g) => g.systems).flatMap((s) => s.pois).find((p) => p.id === poiId);
+  const current = poi ? effectiveRemaining(poi) : 0;
+  setPoiRuntime(poiId, { remaining: Math.max(0, current - 1), updatedAt: Date.now() });
+  persist();
+}
+
+export function collectWreck(poiId: string, rewards: Partial<Record<ResourceType, number>>) {
+  grant(rewards);
+  setPoiRuntime(poiId, { cleared: true, clearedAt: Date.now() });
   persist();
 }
 
@@ -236,16 +268,26 @@ export function getNextObjective(): Objective | null {
 
 // --- Combat ---
 
-export function resolveCombatVictory(encounterId: string, poiId: string | null, victoryFlag?: string) {
+export function resolveCombatVictory(
+  encounterId: string,
+  poiId: string | null,
+  victoryFlag?: string,
+): { leveledUp: boolean; newLevel: number } {
   const enc = encounterById(encounterId);
   grant(enc.rewards);
+  let leveledUp = false;
+  let newLevel = flagship.value?.level ?? 1;
   if (flagship.value) {
+    const before = flagship.value.level;
     const ships = state.value.ships.map((s) => (s.id === flagship.value!.id ? applyXp(s, enc.xp) : s));
     state.value = { ...state.value, ships };
+    newLevel = ships.find((s) => s.id === flagship.value!.id)?.level ?? before;
+    leveledUp = newLevel > before;
   }
-  if (poiId) setPoiRuntime(poiId, { cleared: true });
+  if (poiId) setPoiRuntime(poiId, { cleared: true, clearedAt: Date.now() });
   if (victoryFlag) setFlags([victoryFlag]);
   persist();
+  return { leveledUp, newLevel };
 }
 
 export function resolveCombatDefeat() {
