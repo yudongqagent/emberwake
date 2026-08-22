@@ -23,7 +23,7 @@ export function StoryOverlay({ scene, onComplete }: { scene: StoryScene; onCompl
       style={{
         position: "fixed",
         inset: 0,
-        background: "linear-gradient(180deg, rgba(3,5,9,0.4), rgba(3,5,9,0.92) 60%)",
+        background: "linear-gradient(180deg, rgba(3,5,9,0.35), rgba(3,5,9,0.94) 65%)",
         display: "flex",
         flexDirection: "column",
         justifyContent: "flex-end",
@@ -31,27 +31,58 @@ export function StoryOverlay({ scene, onComplete }: { scene: StoryScene; onCompl
       }}
       onClick={() => !showChoices && advance()}
     >
-      <div style={{ padding: "0.5rem 1.25rem", color: "var(--cyan)", fontFamily: "var(--font-display)", fontSize: "0.75rem", letterSpacing: "0.08em" }}>
-        {scene.chapter} — {scene.chapterTitle}
+      <div style={{ padding: "0 1.25rem 0.6rem", display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--cyan)", boxShadow: "0 0 8px var(--cyan)", flex: "none" }} />
+        <span className="eyebrow" style={{ color: "var(--cyan)" }}>{scene.chapter} — {scene.chapterTitle}</span>
       </div>
-      <div className="panel scanline" style={{ margin: "0 1rem 1.25rem", padding: "1.25rem", minHeight: 140 }}>
+      <div className="panel scanline pop-in" key={lineIdx} style={{ margin: "0 1rem 1.25rem", padding: "1.35rem", minHeight: 150 }}>
         {!showChoices ? (
           <>
-            {line.speaker && <div style={{ color: "var(--amber)", fontFamily: "var(--font-display)", fontSize: "0.85rem", marginBottom: "0.5rem" }}>{line.speaker}</div>}
-            <div style={{ fontSize: "1.05rem", lineHeight: 1.5 }}>{line.text}</div>
-            <div style={{ marginTop: "1rem", textAlign: "right", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-              Tap to continue ({lineIdx + 1}/{scene.lines.length})
+            {line.speaker && (
+              <div
+                style={{
+                  display: "inline-block",
+                  color: "var(--amber)",
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: "0.8rem",
+                  letterSpacing: "0.04em",
+                  marginBottom: "0.6rem",
+                  paddingBottom: "0.2rem",
+                  borderBottom: "2px solid var(--amber)",
+                }}
+              >
+                {line.speaker}
+              </div>
+            )}
+            <div style={{ fontSize: "1.08rem", lineHeight: 1.55 }}>{line.text}</div>
+            <div style={{ marginTop: "1.1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: "0.3rem" }}>
+                {scene.lines.map((_, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      width: i === lineIdx ? 14 : 5,
+                      height: 5,
+                      borderRadius: 3,
+                      background: i <= lineIdx ? "var(--cyan)" : "rgba(255,255,255,0.15)",
+                      transition: "width 150ms ease",
+                    }}
+                  />
+                ))}
+              </div>
+              <span className="eyebrow" style={{ color: "var(--text-dim)" }}>Tap to continue</span>
             </div>
           </>
         ) : (
           <div onClick={(e) => e.stopPropagation()}>
-            <div style={{ color: "var(--text-mid)", marginBottom: "0.75rem" }}>Choose your approach:</div>
+            <div className="eyebrow" style={{ color: "var(--text-mid)", marginBottom: "0.85rem" }}>Choose your approach</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {scene.choices!.map((choice, i) => (
                 <button
                   key={i}
-                  className="btn"
-                  style={{ textAlign: "left" }}
+                  className="btn ghost"
+                  style={{ textAlign: "left", justifyContent: "flex-start", textTransform: "none", letterSpacing: "normal", fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "0.92rem" }}
                   onClick={() => {
                     playSfx("click");
                     onComplete({ ...scene, onCompleteFlags: [...scene.onCompleteFlags, ...(choice.setFlags ?? [])] });

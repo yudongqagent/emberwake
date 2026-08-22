@@ -1,4 +1,5 @@
 import type { ShipRarity, ModuleRarity } from "../../data/types";
+import { RarityPips } from "./Icons";
 
 const SHIP_RARITY_LABEL: Record<ShipRarity, string> = {
   salvage: "Salvage",
@@ -9,35 +10,60 @@ const SHIP_RARITY_LABEL: Record<ShipRarity, string> = {
   ascendant: "Ascendant",
 };
 
-export function ShipRarityTag({ rarity }: { rarity: ShipRarity }) {
+export function ShipRarityTag({ rarity, showPips = true }: { rarity: ShipRarity; showPips?: boolean }) {
   return (
     <span
       style={{
-        color: `var(--rarity-${rarity})`,
-        border: `1px solid var(--rarity-${rarity})`,
-        borderRadius: 4,
-        padding: "0.1em 0.5em",
-        fontSize: "0.72rem",
-        fontFamily: "var(--font-display)",
-        letterSpacing: "0.05em",
-        textTransform: "uppercase",
+        display: "inline-flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: "0.3em",
       }}
     >
-      {SHIP_RARITY_LABEL[rarity]}
+      <span
+        style={{
+          color: `var(--rarity-${rarity})`,
+          border: `1px solid var(--rarity-${rarity})`,
+          background: `linear-gradient(180deg, var(--rarity-${rarity})26, transparent)`,
+          borderRadius: 4,
+          padding: "0.2em 0.6em",
+          fontSize: "0.68rem",
+          fontWeight: 700,
+          fontFamily: "var(--font-display)",
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+          boxShadow: `0 0 8px var(--rarity-${rarity})33`,
+        }}
+      >
+        {SHIP_RARITY_LABEL[rarity]}
+      </span>
+      {showPips && <RarityPips rarity={rarity} />}
     </span>
   );
 }
 
+const MODULE_RARITY_COLOR: Record<ModuleRarity, string> = {
+  mk1: "#8a97a6",
+  mk2: "#5dd6ff",
+  mk3: "#5dffb0",
+  mk4: "#b98cff",
+  mk5: "#ffe25d",
+};
+
 export function ModuleRarityTag({ rarity }: { rarity: ModuleRarity }) {
+  const color = MODULE_RARITY_COLOR[rarity];
   return (
     <span
       style={{
-        color: "var(--cyan)",
-        border: "1px solid var(--cyan-dim)",
+        color,
+        border: `1px solid ${color}`,
+        background: `linear-gradient(180deg, ${color}22, transparent)`,
         borderRadius: 4,
-        padding: "0.1em 0.5em",
-        fontSize: "0.72rem",
+        padding: "0.18em 0.55em",
+        fontSize: "0.68rem",
+        fontWeight: 700,
         fontFamily: "var(--font-display)",
+        letterSpacing: "0.04em",
       }}
     >
       {rarity.toUpperCase()}

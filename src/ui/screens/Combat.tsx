@@ -10,6 +10,7 @@ import { playSfx } from "../../audio/engine";
 import type { CrewRole, FactionId, ResourceType } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
+import { ResourceIcon, RESOURCE_LABEL } from "../components/Icons";
 
 const REF_W = 900;
 const REF_H = 520;
@@ -60,14 +61,6 @@ interface Particle {
   color: string;
   size: number;
 }
-
-const RESOURCE_LABEL: Record<ResourceType, string> = {
-  salvage: "Salvage",
-  sourcePoints: "Source Points",
-  alloy: "Alloy",
-  originEssence: "Origin Essence",
-  insight: "Insight",
-};
 
 interface Props {
   encounterId: string;
@@ -519,11 +512,17 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       {status === "victory" && (
         <div className="panel pop-in" style={{ margin: "0 1rem 1rem", padding: "1rem", textAlign: "center" }}>
           <div className="title" style={{ marginBottom: "0.5rem" }}>Victory</div>
-          {levelUp && <div style={{ color: "var(--amber)", fontSize: "0.85rem", marginBottom: "0.5rem" }}>⬆ {ship.name} reached Level {levelUp}!</div>}
+          {levelUp && (
+            <div className="eyebrow" style={{ color: "var(--amber)", marginBottom: "0.6rem" }}>
+              Level Up — {ship.name} reached Level {levelUp}
+            </div>
+          )}
           {rewardsEarned && (
             <div style={{ display: "flex", justifyContent: "center", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.75rem", fontSize: "0.8rem", color: "var(--text-mid)" }}>
               {Object.entries(rewardsEarned).map(([k, v]) => (
-                <span key={k} className="resource-chip">+{v} {RESOURCE_LABEL[k as ResourceType]}</span>
+                <span key={k} className="resource-chip">
+                  <ResourceIcon type={k as ResourceType} size={13} />+{v} {RESOURCE_LABEL[k as ResourceType]}
+                </span>
               ))}
             </div>
           )}
