@@ -21,6 +21,27 @@ const REF_W = 900;
 const REF_H = 520;
 const PROJECTILE_DURATION = 0.3;
 
+/** Issue #8 (2026-08 playtest): combat used to be a strict turn drum — player acts,
+ * then every enemy fires at once, then control returns. Now every timer (weapon
+ * cooldowns, debuffs, enemy attacks) runs on a real clock instead of a turn counter.
+ * TURN_SECONDS is the conversion factor from the old "N turns" balance numbers
+ * (still authored as small ints in crew/namedShips/module cooldown data) to real
+ * seconds, so existing balance ratios carry over instead of being re-tuned from
+ * scratch. COMBAT_TICK_MS drives cooldown/debuff decay and enemy attack dispatch —
+ * fast enough to feel continuous, slow enough to keep state updates cheap. */
+const TURN_SECONDS = 2.4;
+const COMBAT_TICK_MS = 150;
+const COMBAT_TICK_SEC = COMBAT_TICK_MS / 1000;
+/** Baseline seconds between one enemy's attacks, jittered per-enemy so a multi-enemy
+ * fight doesn't just relocate the old synchronized volley to a shorter clock — each
+ * enemy now runs its own independent attack rhythm. */
+const ENEMY_ATTACK_INTERVAL = 2.6;
+const ENEMY_ATTACK_JITTER = 0.7;
+/** How long a boss's charged-strike telegraph (the red warning ring) holds before it
+ * unleashes, replacing the old "one full turn of warning." */
+const CHARGE_WINDUP_SEC = 1.9;
+const REGEN_INTERVAL_SEC = TURN_SECONDS;
+
 /** Issue #9 (docs/design-principles.md Player-Tested Anti-Patterns #7): before this,
  * enemies only bobbed in place around a fixed slot — range band was something the
  * player set once and forgot, not a contested space. Each faction now actively
@@ -49,20 +70,31 @@ interface EnemyState {
   block: number;
   evasion: number;
   regen?: number;
-  /** Wound up on a prior turn — unleashes a 2x-damage strike this turn, then clears. */
+  /** Telegraphing a charged strike — see CHARGE_WINDUP_SEC. Unleashes a 2x-damage hit
+   * when the windup elapses, then clears. */
   charging?: boolean;
-  /** Disabled by an EMP proc — skips its attack entirely this turn. */
+  /** Disabled by an EMP proc — skips its next attack entirely. */
   stunned?: boolean;
   /** Shield-stripped by an EMP proc — takes full damage (block ignored) for N more player hits. */
   blockBrokenHits?: number;
   /** True once a boss has crossed the 50% enrage threshold. */
   enraged?: boolean;
-  /** Target Lock: halves evasion against the player's attacks. Decays once per round. */
-  evasionDebuffTurns?: number;
-  /** Undercut: halves block against the player's attacks. Decays once per round. */
-  blockDebuffTurns?: number;
-  /** Reaver's Cut: takes +25% damage from the player. Decays once per round. */
-  vulnerableTurns?: number;
+  /** Target Lock: halves evasion against the player's attacks. Real-time seconds remaining. */
+  evasionDebuffSec?: number;
+  /** Undercut: halves block against the player's attacks. Real-time seconds remaining. */
+  blockDebuffSec?: number;
+  /** Reaver's Cut: takes +25% damage from the player. Real-time seconds remaining. */
+  vulnerableSec?: number;
+}
+
+/** Per-enemy real-time attack/charge/regen clocks — kept in a ref (not React state)
+ * since they tick every frame; only the moments they actually fire, start a charge,
+ * or land a regen heal touch React state. Parallel-indexed to the enemies array. */
+interface EnemyTimer {
+  attackRemaining: number;
+  charging: boolean;
+  chargeRemaining: number;
+  regenAccum: number;
 }
 
 interface Popup {
@@ -148,7 +180,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [crewCooldowns, setCrewCooldowns] = useState<Record<string, number>>({});
   const [targetIdx, setTargetIdx] = useState(0);
   const [log, setLog] = useState<string[]>([`Contact: ${encounter.name}.`]);
-  const [status, setStatus] = useState<"active" | "resolving" | "victory" | "defeat">("active");
+  const [status, setStatus] = useState<"active" | "victory" | "defeat">("active");
   const [popups, setPopups] = useState<Popup[]>([]);
   const [playerShakeToken, setPlayerShakeToken] = useState(0);
   const [rewardsEarned, setRewardsEarned] = useState<Partial<Record<ResourceType, number>> | null>(null);
@@ -161,9 +193,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [overcharged, setOvercharged] = useState(false);
   const [guaranteedCrit, setGuaranteedCrit] = useState(false);
   const [riposteArmed, setRiposteArmed] = useState(false);
-  const [shieldedNextTurn, setShieldedNextTurn] = useState(false);
-  // Hollow doctrine, axis 2: Corrosion. Unlike the decaying-per-round debuffs crew
-  // abilities apply (evasionDebuffTurns/blockDebuffTurns), this is permanent for the
+  // Construct Override, real-time form: since enemies no longer act in a single
+  // synchronized batch, "negate the next enemy turn" becomes "negate incoming damage
+  // for a short window" — long enough to plausibly catch more than one enemy's
+  // attack in a multi-target fight, distinct from Phase Shift's single-hit dodge.
+  const [shieldSec, setShieldSec] = useState(0);
+  // Hollow doctrine, axis 2: Corrosion. Unlike the decaying-over-time debuffs crew
+  // abilities apply (evasionDebuffSec/blockDebuffSec), this is permanent for the
   // rest of the fight — Hollow attacks don't just drain resources, they eat the
   // plating itself. A distinct status-effect category from anything else in combat.
   const [corrodedBlock, setCorrodedBlock] = useState(0);
@@ -174,8 +210,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [namedAbilityCooldown, setNamedAbilityCooldown] = useState(0);
   const [alphaStrikeArmed, setAlphaStrikeArmed] = useState(false);
   const [phaseShiftReady, setPhaseShiftReady] = useState(false);
-  const [fortifyTurns, setFortifyTurns] = useState(0);
-  const [bloodscentTurns, setBloodscentTurns] = useState(0);
+  const [fortifySec, setFortifySec] = useState(0);
+  const [bloodscentSec, setBloodscentSec] = useState(0);
   const bloodscentTargetRef = useRef<number | null>(null);
   // Issues #5/#6 (2026-08 playtest): a signature ultimate, and the game's first
   // guaranteed (not rarity-pull-dependent) AoE — every ship has this regardless of
@@ -187,6 +223,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // Shared with the physics loop below so Displacement Charge (fired from
   // fireModuleImpl) can shove an enemy's chase position directly, not just read it.
   const enemyChaseXRef = useRef<number[]>([]);
+  // Issue #8: each enemy's independent real-time attack clock — see EnemyTimer.
+  // Initialized lazily (per index, on first tick) with a staggered random start so
+  // a multi-enemy fight doesn't open with every enemy firing in lockstep.
+  const enemyTimersRef = useRef<EnemyTimer[]>([]);
   // Ion Disruptor's Overload: a per-module shot counter, keyed by module instance id
   // so two Ion Disruptors equipped at once track independently.
   const overloadCountersRef = useRef<Record<string, number>>({});
@@ -206,13 +246,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const hasReflectArmor = equippedModuleList.some(
     (m) => moduleDefById(m.defId).type === "armor" && m.traits.includes("reflect"),
   );
-  // Inertial Dampers' Momentum: evasion rises with consecutive undamaged enemy turns,
-  // capped modestly so it augments rather than replaces the flat +evasion trait.
+  // Inertial Dampers' Momentum: evasion rises with consecutive undamaged enemy
+  // attacks, capped modestly so it augments rather than replaces the flat +evasion
+  // trait. Computed live off unhitStreakRef inside enemyAttack (see the ref-mirror
+  // block below), not here — this render-scope value would go stale inside the
+  // frozen combatTick/enemyAttack closure.
   const [unhitStreak, setUnhitStreak] = useState(0);
   const hasMomentum = equippedModuleList.some(
     (m) => moduleDefById(m.defId).type === "engine" && m.traits.includes("momentum"),
   );
-  const momentumBonus = hasMomentum ? Math.min(0.15, unhitStreak * 0.03) : 0;
 
   const capacity = computePowerCapacity(ship);
 
@@ -239,9 +281,26 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const enemiesRef = useRef(enemies);
   const targetIdxRef = useRef(targetIdx);
   const statusRef = useRef(status);
+  // Issue #8: combatTick/enemyAttack run inside a setInterval closure frozen at
+  // mount (same pattern as the existing physics loop below), so any state that
+  // changes mid-fight and needs to be read there must be mirrored into a ref every
+  // render — plain state reads inside that closure would stay stuck at their
+  // mount-time value forever.
+  const riposteArmedRef = useRef(riposteArmed);
+  const shieldSecRef = useRef(shieldSec);
+  const phaseShiftReadyRef = useRef(phaseShiftReady);
+  const fortifySecRef = useRef(fortifySec);
+  const corrodedBlockRef = useRef(corrodedBlock);
+  const unhitStreakRef = useRef(unhitStreak);
   enemiesRef.current = enemies;
   targetIdxRef.current = targetIdx;
   statusRef.current = status;
+  riposteArmedRef.current = riposteArmed;
+  shieldSecRef.current = shieldSec;
+  phaseShiftReadyRef.current = phaseShiftReady;
+  fortifySecRef.current = fortifySec;
+  corrodedBlockRef.current = corrodedBlock;
+  unhitStreakRef.current = unhitStreak;
 
   useEffect(() => {
     if (enemies[targetIdx] && enemies[targetIdx].hull <= 0) {
@@ -268,6 +327,62 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     prevHullsRef.current = enemies.map((e) => e.hull);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enemies]);
+
+  // Boss enrage: crossing 50% hull permanently shifts the fight — harder hits,
+  // thinner plating. Issue #8: this used to be checked once per enemy-turn batch;
+  // now that batches don't exist it fires reactively the instant the hull actually
+  // crosses the threshold, which is strictly more responsive than before.
+  useEffect(() => {
+    if (!encounter.isBoss || bossPhaseRef.current) return;
+    const boss = enemies[0];
+    if (!boss || boss.hull <= 0 || boss.hull > boss.maxHull * 0.5) return;
+    bossPhaseRef.current = true;
+    setEnemies((prev) => prev.map((e, i) => (i === 0
+      ? { ...e, damage: Math.round(e.damage * 1.3), block: Math.max(0, Math.round(e.block * 0.75)), enraged: true }
+      : e)));
+    pushLog(`${boss.name} is enraged — its strikes land harder now.`);
+    const pos = arenaRef.current.enemyPos[0];
+    if (pos) {
+      spawnBurst(pos.x, pos.y, "255,92,92", 24, 120);
+      explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
+    }
+    playSfx("alarm");
+    shakeRef.current = 14;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enemies]);
+
+  // Issue #8: victory/defeat used to be checked inline at the tail of the batched
+  // endPlayerAction/enemyTurn functions. Now that player fire and enemy attacks
+  // both mutate enemies/playerHull independently and asynchronously, detecting
+  // "the fight just ended" has to be reactive to whichever state actually crossed
+  // the line, not baked into whichever function happened to cause it.
+  useEffect(() => {
+    if (status === "active" && enemies.length > 0 && enemies.every((e) => e.hull <= 0)) {
+      finishCombat("victory", enemies);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enemies, status]);
+
+  useEffect(() => {
+    if (status === "active" && playerHull <= 0) {
+      finishCombat("defeat", enemiesRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerHull, status]);
+
+  // Issue #8: the real-time heartbeat — separate from the 16ms canvas/physics loop
+  // below since cooldown/debuff decay doesn't need per-frame precision.
+  useEffect(() => {
+    const id = setInterval(() => {
+      try {
+        combatTick();
+      } catch (err) {
+        reportError("Combat.combatTick", err);
+      }
+    }, COMBAT_TICK_MS);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Issue #4 (2026-08 playtest): spawnBurst takes "r,g,b" (used as rgb(...) in the
   // particle fillStyle), but every weapon's signature color is authored as hex — one
@@ -318,241 +433,274 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), 900);
   }
 
-  function endPlayerAction(nextEnemies: EnemyState[]) {
-    if (nextEnemies.every((e) => e.hull <= 0)) {
-      finishCombat("victory", nextEnemies);
-      return;
+  // Player passive-regen clock (Field Repair / regen-trait stacks) — independent of
+  // any specific enemy attack now that enemies no longer act in a synchronized
+  // batch; see combatTick.
+  const playerRegenAccumRef = useRef(0);
+
+  function getEnemyTimer(i: number): EnemyTimer {
+    if (!enemyTimersRef.current[i]) {
+      // Staggered random start so a multi-enemy fight doesn't open with every
+      // enemy's first shot landing in lockstep.
+      enemyTimersRef.current[i] = {
+        attackRemaining: 0.8 + Math.random() * ENEMY_ATTACK_INTERVAL,
+        charging: false,
+        chargeRemaining: 0,
+        regenAccum: 0,
+      };
     }
-    setStatus("resolving");
-    setTimeout(() => enemyTurn(nextEnemies), 650);
+    return enemyTimersRef.current[i];
   }
 
-  function enemyTurn(currentEnemies: EnemyState[]) {
-    const wasCharging = currentEnemies.map((e) => !!e.charging);
-    const shieldActive = shieldedNextTurn;
-    if (shieldActive) setShieldedNextTurn(false);
-    let riposteTriggered = false;
-    // Hollow Point's Phase Shift: the FIRST enemy attack this turn auto-misses (a
-    // guaranteed single-attack dodge), distinct from Construct Override's full-turn
-    // damage negation — a miss still triggers Lionsheart's honor-counter, a real
-    // tradeoff Construct Override doesn't have.
-    let phaseShiftConsumed = false;
-    const phaseShiftWasReady = phaseShiftReady;
-    if (phaseShiftWasReady) setPhaseShiftReady(false);
-    if (fortifyTurns > 0) setFortifyTurns((t) => t - 1);
-    if (bloodscentTurns > 0) setBloodscentTurns((t) => t - 1);
+  /** Issue #8: fires ONE enemy's attack, independent of every other enemy's clock —
+   * this is the real-time replacement for the old batched enemyTurn(). Reads all
+   * mutable combat state off the *Ref mirrors (see the ref-mirror block above),
+   * since this runs from a setInterval closure frozen at mount. Ported line-for-line
+   * from the original per-enemy turn logic where the mechanic itself didn't change,
+   * only its trigger (this enemy's own timer, not "everyone, once per batch"). */
+  function enemyAttack(idx: number, charged: boolean) {
+    const currentEnemies = enemiesRef.current;
+    const enemy = currentEnemies[idx];
+    if (!enemy || enemy.hull <= 0) return;
 
-    let regenerated = currentEnemies.map((e) => {
-      // Crew debuffs decay by one round every enemy turn, whether or not they're read.
-      const decayed = {
-        ...e,
-        evasionDebuffTurns: Math.max(0, (e.evasionDebuffTurns ?? 0) - 1),
-        blockDebuffTurns: Math.max(0, (e.blockDebuffTurns ?? 0) - 1),
-        vulnerableTurns: Math.max(0, (e.vulnerableTurns ?? 0) - 1),
-      };
-      if (decayed.hull <= 0 || !decayed.regen) return decayed;
-      const healed = Math.min(decayed.maxHull, decayed.hull + decayed.regen);
-      if (healed > decayed.hull) pushLog(`${decayed.name} regenerates ${healed - decayed.hull} hull.`);
-      return { ...decayed, hull: healed };
-    });
-    regenerated.forEach((e, i) => {
-      if (e.regen && e.hull > currentEnemies[i].hull) addPopup(i, `+${e.hull - currentEnemies[i].hull}`, "#5dffb0");
-    });
+    if (enemy.stunned) {
+      setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, stunned: false } : e)));
+      pushLog(`${enemy.name} is disabled and can't fire.`);
+      return;
+    }
 
-    // Boss enrage: crossing 50% hull permanently shifts the fight — harder hits,
-    // thinner plating. A real climax beat instead of a flat stat blob.
-    if (encounter.isBoss && !bossPhaseRef.current && regenerated[0] && regenerated[0].hull > 0) {
-      const boss = regenerated[0];
-      if (boss.hull <= boss.maxHull * 0.5) {
-        bossPhaseRef.current = true;
-        regenerated = [
-          { ...boss, damage: Math.round(boss.damage * 1.3), block: Math.max(0, Math.round(boss.block * 0.75)), enraged: true },
-          ...regenerated.slice(1),
-        ];
-        pushLog(`${boss.name} is enraged — its strikes land harder now.`);
-        const pos = arenaRef.current.enemyPos[0];
-        if (pos) {
-          spawnBurst(pos.x, pos.y, "255,92,92", 24, 120);
-          explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
-        }
-        playSfx("alarm");
-        shakeRef.current = 14;
+    const shieldActive = shieldSecRef.current > 0;
+    // Hollow Point's Phase Shift: the next enemy attack (whichever fires first)
+    // auto-misses — a guaranteed single-attack dodge, distinct from Construct
+    // Override's short full-negation window — a miss still triggers Lionsheart's
+    // honor-counter, a real tradeoff Construct Override doesn't have.
+    const phaseShiftBlocksThis = phaseShiftReadyRef.current;
+    if (phaseShiftBlocksThis) setPhaseShiftReady(false);
+    const riposteActive = riposteArmedRef.current;
+
+    // Reaver doctrine: Frenzy. Below 30% hull, a Reaver stops fighting defensively
+    // and goes all-in — a real threshold distinct from boss enrage (50%, isBoss-only).
+    const frenzied = encounter.faction === "reavers" && enemy.hull <= enemy.maxHull * 0.3;
+    // Swarm doctrine: Hive Retaliation. A downed hive-mate doesn't weaken the
+    // swarm, it enrages what's left — every dead ally adds +15% damage to each
+    // surviving Swarm attacker.
+    const deadHiveAllies = encounter.faction === "swarm" ? currentEnemies.filter((e) => e.hull <= 0).length : 0;
+    const hiveBonus = 1 + 0.15 * deadHiveAllies;
+    const enemyPos = arenaRef.current.enemyPos[idx] ?? enemySlot(idx, currentEnemies.length);
+    const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
+    const band = rangeBandFromDistance(dist);
+    // A charge telegraph is a real spatial tell, not just a stat flag: burning
+    // distance to long range during the windup negates the charged bonus entirely.
+    const chargeDodged = charged && band === "long";
+    const dmgMultiplier = (charged && !chargeDodged ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus;
+    const baseEvasion = shipBaseEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus
+      + (hasMomentum ? Math.min(0.15, unhitStreakRef.current * 0.03) : 0);
+    // Kaan Ferrous: "+10% evasion when at Long range" — only when he's assigned to the flagship.
+    const kaanAssigned = assignedCrew.some((c) => c.defId === "kaanFerrous");
+    const evasion = Math.min(0.6, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
+    // Iron Verdict's Fortify: armor block doubles for its duration.
+    const fortifyMult = fortifySecRef.current > 0 ? 2 : 1;
+    const rawResult = resolveAttack(enemy.damage * dmgMultiplier, Math.max(0, armorBlock - corrodedBlockRef.current) * fortifyMult, evasion, RANGE_MODIFIERS[band].incoming);
+    const result = phaseShiftBlocksThis ? { ...rawResult, hit: false } : rawResult;
+    // Ablative Plating's Absorb: negates exactly the first hit of the fight,
+    // regardless of which enemy lands it — consumed the instant it's used.
+    const absorbedHit = hasAbsorbArmor && absorbRef.current && result.hit && result.damageDealt > 0;
+    if (absorbedHit) absorbRef.current = false;
+    const dealt = shieldActive || absorbedHit ? 0 : result.hit ? result.damageDealt : 0;
+    // Kinetic Reflector's Reflect: a fraction of whatever the block actually
+    // absorbed strikes back, computed from resolveAttack's own pre-block raw damage.
+    let reflectDmg = 0;
+    if (hasReflectArmor && result.hit && !absorbedHit && !shieldActive) {
+      const preBlockRaw = Math.max(1, Math.round(enemy.damage * dmgMultiplier * RANGE_MODIFIERS[band].incoming));
+      const blockedAmount = Math.max(0, preBlockRaw - result.damageDealt);
+      reflectDmg = Math.round(blockedAmount * 0.3);
+    }
+
+    if (!result.hit && riposteActive) {
+      setRiposteArmed(false);
+      const bestWeapon = equippedModules
+        .filter((m) => moduleDefById(m.defId).baseDamage)
+        .sort((a, b) => computeModuleDamage(b) - computeModuleDamage(a))[0];
+      if (bestWeapon) {
+        const riposteDmg = Math.round(computeModuleDamage(bestWeapon) * 0.6);
+        setTimeout(() => {
+          setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, hull: Math.max(0, e.hull - riposteDmg) } : e)));
+          const pos = arenaRef.current.enemyPos[idx];
+          if (pos) {
+            fireProjectile(arenaRef.current.player, pos, "#ffe25d", () => {
+              spawnBurst(pos.x, pos.y, "255,226,93", 14, 110);
+              addPopup(idx, `-${riposteDmg}`, "#ffe25d");
+            });
+          }
+          pushLog(`Riposte! Whisper counters ${enemy.name} for ${riposteDmg}.`);
+          playSfx("laser");
+        }, 220);
       }
     }
 
-    const baseEvasion = shipBaseEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus + momentumBonus;
-    // Kaan Ferrous: "+10% evasion when at Long range" — only when he's assigned to the flagship.
-    const kaanAssigned = assignedCrew.some((c) => c.defId === "kaanFerrous");
-    let totalDamage = 0;
-    const riposteActive = riposteArmed;
-    regenerated = regenerated.map((enemy, i) => {
-      if (enemy.hull <= 0) return enemy;
-
-      if (enemy.stunned) {
-        pushLog(`${enemy.name} is disabled and can't fire.`);
-        return { ...enemy, stunned: false };
-      }
-
-      // Bosses occasionally wind up a haymaker instead of attacking — one full
-      // player turn of warning (a red ring on the arena), then it lands for double.
-      if (!wasCharging[i] && encounter.isBoss && i === 0 && Math.random() < 0.3) {
-        pushLog(`${enemy.name} is charging a devastating strike — brace for it!`);
-        playSfx("alarm");
-        return { ...enemy, charging: true };
-      }
-
-      // Reaver doctrine: Frenzy. Below 30% hull, a Reaver stops fighting defensively
-      // and goes all-in — a real threshold distinct from boss enrage (50%, isBoss-only).
-      const frenzied = encounter.faction === "reavers" && enemy.hull <= enemy.maxHull * 0.3;
-      // Swarm doctrine: Hive Retaliation. A downed hive-mate doesn't weaken the
-      // swarm, it enrages what's left — every dead ally adds +15% damage to each
-      // surviving Swarm attacker. Trigger is ally-death-count, not self-hull or
-      // boss-phase, so it's a genuinely distinct axis from Reaver frenzy/boss enrage.
-      const deadHiveAllies = encounter.faction === "swarm" ? regenerated.filter((e) => e.hull <= 0).length : 0;
-      const hiveBonus = 1 + 0.15 * deadHiveAllies;
-      const enemyPos = arenaRef.current.enemyPos[i] ?? enemySlot(i, regenerated.length);
-      const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
-      const band = rangeBandFromDistance(dist);
-      // A charge telegraph is a real spatial tell, not just a stat flag: burning
-      // distance to long range during the warning turn negates the charged bonus
-      // entirely, instead of the multiplier landing no matter where the player is.
-      const chargeDodged = wasCharging[i] && band === "long";
-      const dmgMultiplier = (wasCharging[i] && !chargeDodged ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus;
-      const evasion = Math.min(0.6, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
-      // Iron Verdict's Fortify: armor block doubles for its duration — a defense
-      // multiplier, not a bigger flat block number, so it scales with whatever's
-      // equipped instead of competing with it.
-      const fortifyMult = fortifyTurns > 0 ? 2 : 1;
-      const rawResult = resolveAttack(enemy.damage * dmgMultiplier, Math.max(0, armorBlock - corrodedBlock) * fortifyMult, evasion, RANGE_MODIFIERS[band].incoming);
-      const phaseShiftBlocksThis = phaseShiftWasReady && !phaseShiftConsumed;
-      if (phaseShiftBlocksThis) phaseShiftConsumed = true;
-      const result = phaseShiftBlocksThis ? { ...rawResult, hit: false } : rawResult;
-      // Ablative Plating's Absorb: negates exactly the first hit of the fight,
-      // regardless of which enemy lands it — consumed the instant it's used.
-      const absorbedHit = hasAbsorbArmor && absorbRef.current && result.hit && result.damageDealt > 0;
-      if (absorbedHit) absorbRef.current = false;
-      const dealt = shieldActive || absorbedHit ? 0 : result.hit ? result.damageDealt : 0;
-      if (dealt > 0) totalDamage += dealt;
-      // Kinetic Reflector's Reflect: a fraction of whatever the block actually
-      // absorbed strikes back — computed from the same pre-block raw damage
-      // resolveAttack itself derives internally, so it stays in lockstep with the
-      // real formula instead of drifting out of sync with it.
-      let reflectDmg = 0;
-      if (hasReflectArmor && result.hit && !absorbedHit && !shieldActive) {
-        const preBlockRaw = Math.max(1, Math.round(enemy.damage * dmgMultiplier * RANGE_MODIFIERS[band].incoming));
-        const blockedAmount = Math.max(0, preBlockRaw - result.damageDealt);
-        reflectDmg = Math.round(blockedAmount * 0.3);
-      }
-
-      if (!result.hit && riposteActive && !riposteTriggered) {
-        riposteTriggered = true;
-        const bestWeapon = equippedModules
-          .filter((m) => moduleDefById(m.defId).baseDamage)
-          .sort((a, b) => computeModuleDamage(b) - computeModuleDamage(a))[0];
-        if (bestWeapon) {
-          const riposteDmg = Math.round(computeModuleDamage(bestWeapon) * 0.6);
-          setTimeout(() => {
-            setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, hull: Math.max(0, e.hull - riposteDmg) } : e)));
-            const pos = arenaRef.current.enemyPos[i];
-            if (pos) {
-              fireProjectile(arenaRef.current.player, pos, "#ffe25d", () => {
-                spawnBurst(pos.x, pos.y, "255,226,93", 14, 110);
-                addPopup(i, `-${riposteDmg}`, "#ffe25d");
-              });
-            }
-            pushLog(`Riposte! Whisper counters ${enemy.name} for ${riposteDmg}.`);
-            playSfx("laser");
-          }, 220);
+    fireProjectile(enemyPos, arenaRef.current.player, charged ? "#ffe25d" : "#ff6b6b", () => {
+      if (result.hit && shieldActive) {
+        spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 10, 90);
+        addPopup("player", "DEFLECTED", "#8ff3ff");
+        pushLog(`Construct Override deflects ${enemy.name}'s attack.`);
+      } else if (result.hit && absorbedHit) {
+        spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "180,220,255", 10, 90);
+        addPopup("player", "ABSORBED", "#b4dcff");
+        pushLog(`Ablative Plating absorbs ${enemy.name}'s hit completely.`);
+      } else if (result.hit) {
+        spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", charged ? 20 : 10, charged ? 130 : 90);
+        addPopup("player", `-${result.damageDealt}`, "#ff5c5c", charged);
+        playSfx("hit");
+        setPlayerShakeToken((t) => t + 1);
+        triggerHitStop(charged ? 100 : 45);
+        hitPulseRef.current.player = performance.now();
+        pushLog(`${enemy.name}${charged ? (chargeDodged ? "'s charged strike (blunted by range)" : "'s charged strike") : ""}${deadHiveAllies > 0 ? " (hive-enraged)" : ""} hits Whisper for ${result.damageDealt}.`);
+        if (reflectDmg > 0) {
+          spawnBurst(enemyPos.x, enemyPos.y, "255,143,102", 8, 90);
+          addPopup(idx, `-${reflectDmg}`, "#ff8f66");
+          pushLog(`Kinetic Reflector throws ${reflectDmg} back at ${enemy.name}.`);
         }
-      }
 
-      fireProjectile(enemyPos, arenaRef.current.player, wasCharging[i] ? "#ffe25d" : "#ff6b6b", () => {
-        if (result.hit && shieldActive) {
-          spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 10, 90);
-          addPopup("player", "DEFLECTED", "#8ff3ff");
-          pushLog(`Construct Override deflects ${enemy.name}'s attack.`);
-        } else if (result.hit && absorbedHit) {
-          spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "180,220,255", 10, 90);
-          addPopup("player", "ABSORBED", "#b4dcff");
-          pushLog(`Ablative Plating absorbs ${enemy.name}'s hit completely.`);
-        } else if (result.hit) {
-          spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", wasCharging[i] ? 20 : 10, wasCharging[i] ? 130 : 90);
-          addPopup("player", `-${result.damageDealt}`, "#ff5c5c", wasCharging[i]);
-          playSfx("hit");
-          setPlayerShakeToken((t) => t + 1);
-          triggerHitStop(wasCharging[i] ? 100 : 45);
-          hitPulseRef.current.player = performance.now();
-          pushLog(`${enemy.name}${wasCharging[i] ? (chargeDodged ? "'s charged strike (blunted by range)" : "'s charged strike") : ""}${deadHiveAllies > 0 ? " (hive-enraged)" : ""} hits Whisper for ${result.damageDealt}.`);
-          if (reflectDmg > 0) {
-            spawnBurst(enemyPos.x, enemyPos.y, "255,143,102", 8, 90);
-            addPopup(i, `-${reflectDmg}`, "#ff8f66");
-            pushLog(`Kinetic Reflector throws ${reflectDmg} back at ${enemy.name}.`);
+        // Construct doctrine: a precise EMP pulse on hit has a chance to lock out
+        // one of the player's own weapons — the mirror of the player's own EMP
+        // Burst "disable" trait, from the enemy's side.
+        if (encounter.faction === "constructs" && Math.random() < 0.3) {
+          const targetable = equippedModules.filter((m) => moduleDefById(m.defId).cooldown !== null);
+          if (targetable.length > 0) {
+            const jammed = targetable[Math.floor(Math.random() * targetable.length)];
+            const jammedDef = moduleDefById(jammed.defId);
+            setCooldowns((prev) => ({ ...prev, [jammed.id]: Math.max(prev[jammed.id] ?? 0, TURN_SECONDS) }));
+            pushLog(`${enemy.name}'s EMP pulse jams ${jammedDef.name}.`);
           }
-
-          // Construct doctrine: a precise EMP pulse on hit has a chance to lock out
-          // one of the player's own weapons for a turn — the mirror of the player's
-          // own EMP Burst "disable" trait, from the enemy's side.
-          if (encounter.faction === "constructs" && Math.random() < 0.3) {
-            const targetable = equippedModules.filter((m) => moduleDefById(m.defId).cooldown !== null);
-            if (targetable.length > 0) {
-              const jammed = targetable[Math.floor(Math.random() * targetable.length)];
-              const jammedDef = moduleDefById(jammed.defId);
-              setCooldowns((prev) => ({ ...prev, [jammed.id]: Math.max(prev[jammed.id] ?? 0, 1) }));
-              pushLog(`${enemy.name}'s EMP pulse jams ${jammedDef.name} — it won't answer next turn.`);
-            }
-          }
-          // Hollow doctrine: it doesn't just damage the hull, it drains what's inside
-          // it — a real punishment axis distinct from hull damage (see the design
-          // intent in docs/story, never wired until now).
-          if (encounter.faction === "hollow") {
-            const drain = Math.max(1, Math.round(result.damageDealt * 0.25));
-            const pool: ResourceType = state.value.resources.insight > 0 ? "insight" : "sourcePoints";
-            const actualDrain = Math.min(drain, state.value.resources[pool]);
-            if (actualDrain > 0) {
-              spend({ [pool]: actualDrain } as Partial<Record<ResourceType, number>>);
-              addPopup("player", `-${actualDrain} ${RESOURCE_LABEL[pool]}`, "#e8d9ff");
-              pushLog(`${enemy.name} drains ${actualDrain} ${RESOURCE_LABEL[pool]} straight from Whisper's stores.`);
-            }
-            // Hollow doctrine, axis 2: Corrosion. A permanent (not decaying) block
-            // reduction for the rest of the fight — it's eating the plating, not just
-            // stunning or stealing from it.
-            if (armorBlock - corrodedBlock > 0) {
-              setCorrodedBlock((c) => c + 1);
-              pushLog(`${enemy.name}'s touch corrodes Whisper's plating — armor weakened for the rest of the fight.`);
-            }
-          }
-        } else {
-          pushLog(phaseShiftBlocksThis ? `Phase Shift — ${enemy.name}'s attack passes through nothing.` : `${enemy.name} misses.`);
         }
-      });
-      const afterCharge = wasCharging[i] ? { ...enemy, charging: false } : enemy;
-      return reflectDmg > 0 ? { ...afterCharge, hull: Math.max(0, afterCharge.hull - reflectDmg) } : afterCharge;
+        // Hollow doctrine: it doesn't just damage the hull, it drains what's inside it.
+        if (encounter.faction === "hollow") {
+          const drain = Math.max(1, Math.round(result.damageDealt * 0.25));
+          const pool: ResourceType = state.value.resources.insight > 0 ? "insight" : "sourcePoints";
+          const actualDrain = Math.min(drain, state.value.resources[pool]);
+          if (actualDrain > 0) {
+            spend({ [pool]: actualDrain } as Partial<Record<ResourceType, number>>);
+            addPopup("player", `-${actualDrain} ${RESOURCE_LABEL[pool]}`, "#e8d9ff");
+            pushLog(`${enemy.name} drains ${actualDrain} ${RESOURCE_LABEL[pool]} straight from Whisper's stores.`);
+          }
+          // Hollow doctrine, axis 2: Corrosion. A permanent (not decaying) block
+          // reduction for the rest of the fight.
+          if (armorBlock - corrodedBlockRef.current > 0) {
+            setCorrodedBlock((c) => c + 1);
+            pushLog(`${enemy.name}'s touch corrodes Whisper's plating — armor weakened for the rest of the fight.`);
+          }
+        }
+      } else {
+        pushLog(phaseShiftBlocksThis ? `Phase Shift — ${enemy.name}'s attack passes through nothing.` : `${enemy.name} misses.`);
+      }
+      if (dealt > 0) setPlayerHull((prev) => Math.max(0, Math.min(maxHull, prev - dealt)));
+      // Inertial Dampers' Momentum: real-time reinterpretation of "a clean enemy
+      // turn" — now evaluated per individual attack event instead of per batch,
+      // since batches no longer exist. Any hit landed resets the streak to zero.
+      if (hasMomentum) setUnhitStreak((s) => (dealt > 0 ? 0 : s + 1));
     });
-    if (riposteTriggered) setRiposteArmed(false);
 
-    setEnemies(regenerated);
+    if (charged) setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, charging: false } : e)));
+    if (reflectDmg > 0) setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, hull: Math.max(0, e.hull - reflectDmg) } : e)));
+  }
 
-    setCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
-    setCrewCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
-    setNamedAbilityCooldown((c) => Math.max(0, c - 1));
-    // Inertial Dampers' Momentum: a clean enemy turn (no damage taken, even if
-    // Ablative absorbed one) extends the streak; any damage resets it to zero.
-    if (hasMomentum) setUnhitStreak((s) => (totalDamage > 0 ? 0 : s + 1));
+  /** Issue #8: the real-time heartbeat replacing the old turn drum. Runs on a fixed
+   * COMBAT_TICK_MS cadence (not the 16ms physics frame — cooldown/debuff decay
+   * doesn't need per-frame precision, and ticking that often would mean far more
+   * state-setter calls than necessary). Decays every cooldown/debuff by real
+   * elapsed time, and advances each enemy's independent attack clock — a boss's
+   * charge windup included — dispatching enemyAttack() only for the enemy whose
+   * own timer just expired, never all of them at once. */
+  function combatTick() {
+    if (statusRef.current !== "active") return;
+    const dt = COMBAT_TICK_SEC;
 
-    const finalEnemies = regenerated;
-    setTimeout(() => {
-      setPlayerHull((prev) => {
-        const regenTick = regenStacks > 0 ? Math.round(maxHull * 0.04 * regenStacks) : 0;
-        const nextHull = Math.max(0, Math.min(maxHull, prev - totalDamage + regenTick));
-        if (nextHull <= 0) {
-          finishCombat("defeat", finalEnemies);
-        } else {
-          if (regenTick > 0 && prev < maxHull) pushLog(`Field systems recover ${Math.min(regenTick, maxHull - prev)} hull.`);
-          setStatus("active");
+    setCooldowns((prev) => {
+      const next: Record<string, number> = {};
+      for (const [k, v] of Object.entries(prev)) next[k] = Math.max(0, v - dt);
+      return next;
+    });
+    setCrewCooldowns((prev) => {
+      const next: Record<string, number> = {};
+      for (const [k, v] of Object.entries(prev)) next[k] = Math.max(0, v - dt);
+      return next;
+    });
+    setNamedAbilityCooldown((c) => Math.max(0, c - dt));
+    setFortifySec((t) => Math.max(0, t - dt));
+    setBloodscentSec((t) => Math.max(0, t - dt));
+    setShieldSec((t) => Math.max(0, t - dt));
+
+    setEnemies((prev) => prev.map((e) => (e.hull <= 0 ? e : {
+      ...e,
+      evasionDebuffSec: Math.max(0, (e.evasionDebuffSec ?? 0) - dt),
+      blockDebuffSec: Math.max(0, (e.blockDebuffSec ?? 0) - dt),
+      vulnerableSec: Math.max(0, (e.vulnerableSec ?? 0) - dt),
+    })));
+
+    // Passive player field regen — its own clock now, decoupled from any specific
+    // enemy attack (there's no longer a "batch boundary" to hang it on).
+    if (regenStacks > 0) {
+      playerRegenAccumRef.current += dt;
+      if (playerRegenAccumRef.current >= REGEN_INTERVAL_SEC) {
+        playerRegenAccumRef.current -= REGEN_INTERVAL_SEC;
+        const tick = Math.round(maxHull * 0.04 * regenStacks);
+        if (tick > 0) {
+          setPlayerHull((prev) => {
+            if (prev <= 0 || prev >= maxHull) return prev;
+            const next = Math.min(maxHull, prev + tick);
+            if (next > prev) pushLog(`Field systems recover ${next - prev} hull.`);
+            return next;
+          });
         }
-        return nextHull;
-      });
-    }, PROJECTILE_DURATION * 1000 + 20);
+      }
+    }
+
+    enemiesRef.current.forEach((enemy, i) => {
+      if (enemy.hull <= 0) return;
+      const timer = getEnemyTimer(i);
+
+      if (enemy.regen) {
+        timer.regenAccum += dt;
+        if (timer.regenAccum >= REGEN_INTERVAL_SEC) {
+          timer.regenAccum -= REGEN_INTERVAL_SEC;
+          setEnemies((prev) => prev.map((e, idx) => {
+            if (idx !== i || e.hull <= 0 || !e.regen) return e;
+            const healed = Math.min(e.maxHull, e.hull + e.regen);
+            if (healed > e.hull) {
+              addPopup(idx, `+${healed - e.hull}`, "#5dffb0");
+              pushLog(`${e.name} regenerates ${healed - e.hull} hull.`);
+            }
+            return { ...e, hull: healed };
+          }));
+        }
+      }
+
+      if (timer.charging) {
+        timer.chargeRemaining -= dt;
+        if (timer.chargeRemaining <= 0) {
+          timer.charging = false;
+          enemyAttack(i, true);
+          timer.attackRemaining = ENEMY_ATTACK_INTERVAL + (Math.random() - 0.5) * 2 * ENEMY_ATTACK_JITTER;
+        }
+        return;
+      }
+
+      timer.attackRemaining -= dt;
+      if (timer.attackRemaining <= 0) {
+        // Bosses occasionally wind up a haymaker instead of attacking — a real
+        // windup (the red ring on the arena), then it lands for double.
+        if (encounter.isBoss && i === 0 && Math.random() < 0.3) {
+          timer.charging = true;
+          timer.chargeRemaining = CHARGE_WINDUP_SEC;
+          setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, charging: true } : e)));
+          pushLog(`${enemy.name} is charging a devastating strike — brace for it!`);
+          playSfx("alarm");
+        } else {
+          enemyAttack(i, false);
+          timer.attackRemaining = ENEMY_ATTACK_INTERVAL + (Math.random() - 0.5) * 2 * ENEMY_ATTACK_JITTER;
+        }
+      }
+    });
   }
 
   function finishCombat(result: "victory" | "defeat", finalEnemies: EnemyState[]) {
@@ -614,7 +762,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const wasGuaranteedCrit = guaranteedCrit;
     const wasAlphaStrike = alphaStrikeArmed;
     const baseDmg = computeModuleDamage(mod);
-    const vulnerable = (target.vulnerableTurns ?? 0) > 0;
+    const vulnerable = (target.vulnerableSec ?? 0) > 0;
     // Ratchet Koi: "+10% weapon damage when at Close range" — only when he's assigned.
     const ratchetBonus = band === "close" && assignedCrew.some((c) => c.defId === "ratchetKoi") ? 1.1 : 1;
     // Railgun's Execute: a finisher axis, not a raw-damage lead — it does nothing
@@ -635,9 +783,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     distanceSinceLastShotRef.current = 0;
     const nextEnemies = [...enemies];
     if (dmg > 0) {
-      const targetEvasion = (target.evasionDebuffTurns ?? 0) > 0 ? target.evasion * 0.5 : target.evasion;
+      const targetEvasion = (target.evasionDebuffSec ?? 0) > 0 ? target.evasion * 0.5 : target.evasion;
       const blockBroken = (target.blockBrokenHits ?? 0) > 0;
-      const undercut = (target.blockDebuffTurns ?? 0) > 0;
+      const undercut = (target.blockDebuffSec ?? 0) > 0;
       const blockMult = blockBroken ? 0 : Math.min(mod.traits.includes("pierce") ? 0.5 : 1, undercut ? 0.5 : 1);
       const effectiveBlock = Math.round(target.block * blockMult);
       const critChance = wasGuaranteedCrit ? 1 : computeCritChance(mod, comboCount, shipBaseCrit);
@@ -795,14 +943,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const overchargePenalty = wasOvercharged ? 2 : 0;
     const alphaStrikePenalty = wasAlphaStrike ? 2 : 0;
     const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
-    setCooldowns((prev) => ({ ...prev, [moduleId]: Math.max(0, (def.cooldown ?? 0) + overchargePenalty + alphaStrikePenalty - cooldownReduction) }));
+    setCooldowns((prev) => ({ ...prev, [moduleId]: Math.max(0, ((def.cooldown ?? 0) + overchargePenalty + alphaStrikePenalty - cooldownReduction) * TURN_SECONDS) }));
     if (overloadShotCount > 0) overloadCountersRef.current[mod.id] = overloadShotCount >= 3 ? 0 : overloadShotCount;
     if (wasOvercharged) setOvercharged(false);
     if (wasGuaranteedCrit) setGuaranteedCrit(false);
     if (wasAlphaStrike) setAlphaStrikeArmed(false);
     // Starving Wolf's Bloodscent: a fraction of damage dealt to the marked target
     // heals Whisper — a sustain axis nothing else in combat has.
-    if (dmg > 0 && bloodscentTurns > 0 && targetIdx === bloodscentTargetRef.current) {
+    if (dmg > 0 && bloodscentSec > 0 && targetIdx === bloodscentTargetRef.current) {
       const dealt = nextEnemies[targetIdx].hull < target.hull ? target.hull - nextEnemies[targetIdx].hull : 0;
       const healed = Math.round(dealt * 0.25);
       if (healed > 0) {
@@ -812,7 +960,6 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       }
     }
     setEnemies(nextEnemies);
-    endPlayerAction(nextEnemies);
   }
 
   function useCrewActive(crewId: string, abilityId: string) {
@@ -847,18 +994,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       pushLog("Riposte primed — the next evaded hit draws an automatic counter.");
       playSfx("click");
     } else if (abilityId === "undercut") {
-      // Priya Osei: halves every living enemy's block for two rounds.
-      nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, blockDebuffTurns: 2 } : e));
-      pushLog("Undercut strips block fleet-wide for two rounds.");
+      // Priya Osei: halves every living enemy's block for a short window.
+      nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, blockDebuffSec: 2 * TURN_SECONDS } : e));
+      pushLog("Undercut strips block fleet-wide.");
       playSfx("click");
     } else if (abilityId === "reaversCut") {
-      // Kessa Vray: every living enemy takes +25% damage for one round.
-      nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, vulnerableTurns: 1 } : e));
+      // Kessa Vray: every living enemy takes +25% damage for a short window.
+      nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, vulnerableSec: TURN_SECONDS } : e));
       pushLog("Reaver's Cut marks every hostile — bonus damage incoming.");
       playSfx("click");
     } else if (abilityId === "constructOverride") {
-      // Unit 7-Requiem: negates all incoming damage on the next enemy turn.
-      setShieldedNextTurn(true);
+      // Unit 7-Requiem: negates incoming damage for a short window.
+      setShieldSec(TURN_SECONDS);
       pushLog("Construct Override primes a full damage negation for the next assault.");
       playSfx("click");
     } else if (abilityId === "evasiveBurn") {
@@ -876,17 +1023,16 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       pushLog("Evasive Burn repositions Whisper instantly.");
       playSfx("jump");
     } else if (abilityId === "targetLock") {
-      // Generic recruit tactician: halves the current target's evasion for two rounds.
+      // Generic recruit tactician: halves the current target's evasion for a short window.
       const target = enemies[targetIdx];
       if (target && target.hull > 0) {
-        nextEnemies = enemies.map((e, i) => (i === targetIdx ? { ...e, evasionDebuffTurns: 2 } : e));
-        pushLog(`Target Lock cuts ${target.name}'s evasion for two rounds.`);
+        nextEnemies = enemies.map((e, i) => (i === targetIdx ? { ...e, evasionDebuffSec: 2 * TURN_SECONDS } : e));
+        pushLog(`Target Lock cuts ${target.name}'s evasion.`);
       }
     }
     const cooldownValue = crewDefById(state.value.crew.find((c) => c.id === crewId)!.defId).activeCooldown;
-    setCrewCooldowns((prev) => ({ ...prev, [crewId]: cooldownValue }));
+    setCrewCooldowns((prev) => ({ ...prev, [crewId]: cooldownValue * TURN_SECONDS }));
     setEnemies(nextEnemies);
-    endPlayerAction(nextEnemies);
   }
 
   function useShipActive() {
@@ -908,12 +1054,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       setPhaseShiftReady(true);
       pushLog("Phase Shift primes — the next enemy attack will find nothing there.");
     } else if (namedDef.abilityId === "fortify") {
-      setFortifyTurns(2);
-      pushLog("Fortify doubles Whisper's armor block for two rounds.");
+      setFortifySec(2 * TURN_SECONDS);
+      pushLog("Fortify doubles Whisper's armor block.");
     } else if (namedDef.abilityId === "bloodscent") {
       const target = enemies[targetIdx];
       if (target && target.hull > 0) {
-        setBloodscentTurns(2);
+        setBloodscentSec(2 * TURN_SECONDS);
         bloodscentTargetRef.current = targetIdx;
         pushLog(`Bloodscent marks ${target.name} — damage dealt to it will heal Whisper.`);
       }
@@ -921,9 +1067,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       setCooldowns({});
       pushLog("Overdrive resets every weapon's cooldown.");
     }
-    setNamedAbilityCooldown(namedDef.activeCooldown);
+    setNamedAbilityCooldown(namedDef.activeCooldown * TURN_SECONDS);
     playSfx("click");
-    endPlayerAction(enemies);
   }
 
   function useEmberNova() {
@@ -956,7 +1101,6 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     triggerHitStop(140);
     setEmberNovaCharge(0);
     setEnemies(nextEnemies);
-    endPlayerAction(nextEnemies);
   }
 
   // --- Arena render/physics loop ---
@@ -1164,15 +1308,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         </span>
       </div>
 
-      {(guaranteedCrit || riposteArmed || shieldedNextTurn || alphaStrikeArmed || phaseShiftReady || fortifyTurns > 0 || bloodscentTurns > 0) && (
+      {(guaranteedCrit || riposteArmed || shieldSec > 0 || alphaStrikeArmed || phaseShiftReady || fortifySec > 0 || bloodscentSec > 0) && (
         <div style={{ display: "flex", gap: "0.4rem", padding: "0 1rem 0.4rem", flexWrap: "wrap" }}>
           {guaranteedCrit && <StatusBadge color="var(--amber)" text="Guaranteed Crit Armed" />}
           {riposteArmed && <StatusBadge color="var(--cyan)" text="Riposte Armed" />}
-          {shieldedNextTurn && <StatusBadge color="var(--violet)" text="Override Shield Primed" />}
+          {shieldSec > 0 && <StatusBadge color="var(--violet)" text={`Override Shield (${shieldSec.toFixed(1)}s)`} />}
           {alphaStrikeArmed && <StatusBadge color="var(--red)" text="Alpha Strike Armed" />}
           {phaseShiftReady && <StatusBadge color="var(--cyan)" text="Phase Shift Primed" />}
-          {fortifyTurns > 0 && <StatusBadge color="var(--violet)" text={`Fortified (${fortifyTurns})`} />}
-          {bloodscentTurns > 0 && <StatusBadge color="var(--green)" text={`Bloodscent (${bloodscentTurns})`} />}
+          {fortifySec > 0 && <StatusBadge color="var(--violet)" text={`Fortified (${fortifySec.toFixed(1)}s)`} />}
+          {bloodscentSec > 0 && <StatusBadge color="var(--green)" text={`Bloodscent (${bloodscentSec.toFixed(1)}s)`} />}
         </div>
       )}
 
@@ -1205,7 +1349,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               disabled={status !== "active" || cd > 0}
               onClick={() => fireModule(mod.id)}
             >
-              {def.name}{cd > 0 ? ` (${cd})` : ""}
+              {def.name}{cd > 0 ? ` (${cd.toFixed(1)}s)` : ""}
             </button>
           );
         })}
@@ -1214,7 +1358,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           const cd = crewCooldowns[c.id] ?? 0;
           return (
             <button key={c.id} className="btn" disabled={status !== "active" || cd > 0} onClick={() => useCrewActive(c.id, def.abilityId)}>
-              {def.active.split(" — ")[0]}{cd > 0 ? ` (${cd})` : ""}
+              {def.active.split(" — ")[0]}{cd > 0 ? ` (${cd.toFixed(1)}s)` : ""}
             </button>
           );
         })}
@@ -1227,7 +1371,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               onClick={useShipActive}
               title={namedDef.active}
             >
-              {namedDef.active.split(" — ")[0]}{namedAbilityCooldown > 0 ? ` (${namedAbilityCooldown})` : ""}
+              {namedDef.active.split(" — ")[0]}{namedAbilityCooldown > 0 ? ` (${namedAbilityCooldown.toFixed(1)}s)` : ""}
             </button>
           );
         })()}
