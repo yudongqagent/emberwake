@@ -13,6 +13,8 @@ import { StoryOverlay } from "./ui/screens/StoryOverlay";
 import { Combat } from "./ui/screens/Combat";
 import type { StoryScene } from "./data/types";
 import { setMuted, isMuted } from "./audio/engine";
+import { ErrorBoundary } from "./ui/components/ErrorBoundary";
+import { ErrorToast } from "./ui/components/ErrorToast";
 
 type Screen = "bridge" | "system" | "galaxy" | "fleet" | "modules" | "crew";
 
@@ -83,12 +85,15 @@ export function App() {
   if (combat) {
     const isPoiCombat = "poiId" in combat;
     return (
-      <Combat
-        encounterId={combat.encounterId}
-        poiId={isPoiCombat ? combat.poiId : null}
-        victoryFlag={isPoiCombat ? combat.victoryFlag : undefined}
-        onResolve={() => setCombat(null)}
-      />
+      <ErrorBoundary label="Combat">
+        <Combat
+          encounterId={combat.encounterId}
+          poiId={isPoiCombat ? combat.poiId : null}
+          victoryFlag={isPoiCombat ? combat.victoryFlag : undefined}
+          onResolve={() => setCombat(null)}
+        />
+        <ErrorToast />
+      </ErrorBoundary>
     );
   }
 
@@ -97,21 +102,32 @@ export function App() {
       {navBar}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <div key={screen} className="screen-enter" style={{ position: "absolute", inset: 0 }}>
-          {screen === "bridge" && <Bridge onNavigate={(s) => setScreen(s as Screen)} />}
-          {screen === "galaxy" && <GalaxyView onNavigate={(s) => setScreen(s as Screen)} />}
-          {screen === "system" && (
-            <SystemView
-              onNavigate={(s) => setScreen(s as Screen)}
-              onDock={() => setDocked(true)}
-              onEngage={(encounterId, poiId, victoryFlag) => setCombat({ encounterId, poiId, victoryFlag })}
-            />
-          )}
-          {screen === "fleet" && <Fleet />}
-          {screen === "modules" && <Modules />}
-          {screen === "crew" && <Crew />}
+          <ErrorBoundary label={NAV_ITEMS.find((n) => n.id === screen)?.label ?? "Screen"}>
+            {screen === "bridge" && <Bridge onNavigate={(s) => setScreen(s as Screen)} />}
+            {screen === "galaxy" && <GalaxyView onNavigate={(s) => setScreen(s as Screen)} />}
+            {screen === "system" && (
+              <SystemView
+                onNavigate={(s) => setScreen(s as Screen)}
+                onDock={() => setDocked(true)}
+                onEngage={(encounterId, poiId, victoryFlag) => setCombat({ encounterId, poiId, victoryFlag })}
+              />
+            )}
+            {screen === "fleet" && <Fleet />}
+            {screen === "modules" && <Modules />}
+            {screen === "crew" && <Crew />}
+          </ErrorBoundary>
         </div>
-        {docked && <StationPanel onClose={() => setDocked(false)} />}
-        {scene && !docked && <StoryOverlay scene={scene} onComplete={handleSceneComplete} />}
+        {docked && (
+          <ErrorBoundary label="Station">
+            <StationPanel onClose={() => setDocked(false)} />
+          </ErrorBoundary>
+        )}
+        {scene && !docked && (
+          <ErrorBoundary label="Story">
+            <StoryOverlay scene={scene} onComplete={handleSceneComplete} />
+          </ErrorBoundary>
+        )}
+        <ErrorToast />
       </div>
       <nav
         style={{

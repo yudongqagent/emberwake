@@ -22,6 +22,7 @@ import {
   drawWreckArt,
   drawDerelictArt,
 } from "../render/shipArt";
+import { reportError } from "../../engine/errorReporting";
 
 const REF_W = 1000;
 const REF_H = 600;
@@ -101,7 +102,12 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
     }));
 
     function onPointer(e: PointerEvent) {
-      target = vp.toWorld(e.clientX, e.clientY);
+      try {
+        const world = vp.toWorld(e.clientX, e.clientY);
+        if (Number.isFinite(world.x) && Number.isFinite(world.y)) target = world;
+      } catch (err) {
+        reportError("SystemView.onPointer", err);
+      }
     }
     function onKeyDown(e: KeyboardEvent) {
       keys.add(e.key.toLowerCase());
@@ -160,8 +166,19 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       const dragFactor = Math.pow(0.02, dt);
       player.vx *= dragFactor;
       player.vy *= dragFactor;
-      player.x = Math.max(20, Math.min(REF_W - 20, player.x + player.vx * dt));
-      player.y = Math.max(20, Math.min(REF_H - 20, player.y + player.vy * dt));
+      const nextX = player.x + player.vx * dt;
+      const nextY = player.y + player.vy * dt;
+      // Defense in depth — see the matching guard in Combat.tsx: NaN/Infinity from
+      // anywhere upstream must never poison position/velocity permanently.
+      if (Number.isFinite(nextX) && Number.isFinite(nextY)) {
+        player.x = Math.max(20, Math.min(REF_W - 20, nextX));
+        player.y = Math.max(20, Math.min(REF_H - 20, nextY));
+      } else {
+        reportError("SystemView.step (player position)", new Error(`non-finite position: vx=${player.vx} vy=${player.vy}`));
+        player.vx = 0;
+        player.vy = 0;
+        target = null;
+      }
       if (Math.hypot(player.vx, player.vy) > 8) {
         player.angle = Math.atan2(player.vy, player.vx);
       }
@@ -358,7 +375,15 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
     // A fixed-interval tick (rather than requestAnimationFrame) keeps the loop running
     // at a steady rate across embedding contexts that throttle rAF for backgrounded/
     // composited tabs — movement is still computed from real elapsed time either way.
-    const intervalId = setInterval(() => step(performance.now()), 16);
+    // See the matching guard in Combat.tsx: a throw anywhere in step() must never
+    // permanently stall the loop.
+    const intervalId = setInterval(() => {
+      try {
+        step(performance.now());
+      } catch (err) {
+        reportError("SystemView.step", err);
+      }
+    }, 16);
 
     return () => {
       clearInterval(intervalId);

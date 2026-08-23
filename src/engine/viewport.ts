@@ -17,6 +17,40 @@ export interface Viewport {
   destroy: () => void;
 }
 
+/** Pure, DOM-free so it's directly unit-testable: given the container's measured
+ * size, returns a scale that's never 0/NaN/Infinity even if displayW/displayH are
+ * momentarily 0 (a real mobile scenario — an orientation change or the address bar
+ * hiding/showing can report a 0-size rect for a frame, often right as a touch event
+ * lands). Falls back to lastGoodScale instead of propagating the bad value. */
+export function safeScale(displayW: number, displayH: number, refW: number, refH: number, lastGoodScale: number): number {
+  const scale = Math.min(displayW / refW, displayH / refH);
+  return Number.isFinite(scale) && scale > 0 ? scale : lastGoodScale;
+}
+
+/** Pure, DOM-free: converts a client-space point to world-space given an already-
+ * computed transform, clamping to the world center if the inputs still produce a
+ * non-finite result (a last-resort guard, since NaN/Infinity here would otherwise
+ * poison a physics loop's velocity permanently — every later frame's arithmetic on a
+ * NaN stays NaN forever, which reads to a player as their ship silently freezing). */
+export function safeToWorld(
+  clientX: number,
+  clientY: number,
+  rectLeft: number,
+  rectTop: number,
+  scale: number,
+  offsetX: number,
+  offsetY: number,
+  refW: number,
+  refH: number,
+): { x: number; y: number } {
+  const x = (clientX - rectLeft - offsetX) / scale;
+  const y = (clientY - rectTop - offsetY) / scale;
+  return {
+    x: Number.isFinite(x) ? x : refW / 2,
+    y: Number.isFinite(y) ? y : refH / 2,
+  };
+}
+
 export function attachResponsiveCanvas(
   canvas: HTMLCanvasElement,
   container: HTMLElement,
@@ -50,15 +84,18 @@ export function attachResponsiveCanvas(
   const ro = new ResizeObserver(resize);
   ro.observe(container);
 
+  let lastGoodScale = 1;
+
   function transform() {
-    const scale = Math.min(vp.displayW / refW, vp.displayH / refH);
+    const scale = safeScale(vp.displayW, vp.displayH, refW, refH, lastGoodScale);
+    lastGoodScale = scale;
     return { scale, offsetX: (vp.displayW - refW * scale) / 2, offsetY: (vp.displayH - refH * scale) / 2 };
   }
 
   function toWorld(clientX: number, clientY: number) {
     const rect = canvas.getBoundingClientRect();
     const { scale, offsetX, offsetY } = transform();
-    return { x: (clientX - rect.left - offsetX) / scale, y: (clientY - rect.top - offsetY) / scale };
+    return safeToWorld(clientX, clientY, rect.left, rect.top, scale, offsetX, offsetY, refW, refH);
   }
 
   function beginFrame(ctx: CanvasRenderingContext2D) {

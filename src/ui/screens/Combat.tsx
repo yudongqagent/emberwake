@@ -13,6 +13,7 @@ import { attachResponsiveCanvas } from "../../engine/viewport";
 import { ResourceIcon, RESOURCE_LABEL } from "../components/Icons";
 import { AnimatedFraction } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing } from "../render/shipArt";
+import { reportError } from "../../engine/errorReporting";
 
 const REF_W = 900;
 const REF_H = 520;
@@ -425,7 +426,19 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     }
   }
 
+  // Click handlers run as raw DOM/Preact event dispatch, outside the render cycle an
+  // ErrorBoundary can see — a throw here needs its own guard, or one bad shot could
+  // leave combat stuck mid-action forever with no visible cause.
   function fireModule(moduleId: string) {
+    try {
+      fireModuleImpl(moduleId);
+    } catch (err) {
+      reportError("Combat.fireModule", err);
+      setStatus("active");
+    }
+  }
+
+  function fireModuleImpl(moduleId: string) {
     if (status !== "active") return;
     const mod = state.value.modules.find((m) => m.id === moduleId)!;
     const def = moduleDefById(mod.defId);
@@ -545,6 +558,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   }
 
   function useCrewActive(crewId: string, abilityId: string) {
+    try {
+      useCrewActiveImpl(crewId, abilityId);
+    } catch (err) {
+      reportError("Combat.useCrewActive", err);
+      setStatus("active");
+    }
+  }
+
+  function useCrewActiveImpl(crewId: string, abilityId: string) {
     if (status !== "active") return;
     let nextEnemies = enemies;
     const livingIdx = enemies.map((e, i) => ({ e, i })).filter(({ e }) => e.hull > 0).map(({ i }) => i);
@@ -627,20 +649,25 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     }));
 
     function onPointer(e: PointerEvent) {
-      if (statusRef.current === "victory" || statusRef.current === "defeat") return;
-      const world = vp.toWorld(e.clientX, e.clientY);
-      // Tapping near a living enemy selects it as target instead of flying there.
-      const enemies = enemiesRef.current;
-      for (let i = 0; i < enemies.length; i++) {
-        if (enemies[i].hull <= 0) continue;
-        const pos = arena.enemyPos[i];
-        if (pos && Math.hypot(world.x - pos.x, world.y - pos.y) < 34) {
-          setTargetIdx(i);
-          playSfx("click");
-          return;
+      try {
+        if (statusRef.current === "victory" || statusRef.current === "defeat") return;
+        const world = vp.toWorld(e.clientX, e.clientY);
+        if (!Number.isFinite(world.x) || !Number.isFinite(world.y)) return;
+        // Tapping near a living enemy selects it as target instead of flying there.
+        const enemies = enemiesRef.current;
+        for (let i = 0; i < enemies.length; i++) {
+          if (enemies[i].hull <= 0) continue;
+          const pos = arena.enemyPos[i];
+          if (pos && Math.hypot(world.x - pos.x, world.y - pos.y) < 34) {
+            setTargetIdx(i);
+            playSfx("click");
+            return;
+          }
         }
+        pointerTarget = world;
+      } catch (err) {
+        reportError("Combat.onPointer", err);
       }
-      pointerTarget = world;
     }
     function onKeyDown(e: KeyboardEvent) { keys.add(e.key.toLowerCase()); }
     function onKeyUp(e: KeyboardEvent) { keys.delete(e.key.toLowerCase()); }
@@ -684,8 +711,23 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (spd > shipSpeed) { player.vx = (player.vx / spd) * shipSpeed; player.vy = (player.vy / spd) * shipSpeed; }
       const drag = Math.pow(0.02, dt);
       player.vx *= drag; player.vy *= drag;
-      arena.player.x = Math.max(24, Math.min(REF_W - 24, arena.player.x + player.vx * dt));
-      arena.player.y = Math.max(24, Math.min(REF_H - 24, arena.player.y + player.vy * dt));
+      const nextX = arena.player.x + player.vx * dt;
+      const nextY = arena.player.y + player.vy * dt;
+      // Defense in depth: NaN/Infinity anywhere upstream (a bad pointerTarget, a
+      // momentary zero-size viewport) would otherwise poison position/velocity
+      // permanently — every later frame's arithmetic on a NaN stays NaN forever,
+      // which reads to a player as the ship silently freezing. If either axis ever
+      // goes non-finite, drop the velocity and pointer target and hold the last
+      // good position instead of propagating the corruption.
+      if (Number.isFinite(nextX) && Number.isFinite(nextY)) {
+        arena.player.x = Math.max(24, Math.min(REF_W - 24, nextX));
+        arena.player.y = Math.max(24, Math.min(REF_H - 24, nextY));
+      } else {
+        reportError("Combat.step (player position)", new Error(`non-finite position: vx=${player.vx} vy=${player.vy}`));
+        player.vx = 0;
+        player.vy = 0;
+        pointerTarget = null;
+      }
       if (Math.hypot(player.vx, player.vy) > 8) player.angle = Math.atan2(player.vy, player.vx);
 
       // enemy gentle bob around their assigned slot
@@ -724,7 +766,16 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       draw(ctx, vp, arena, { ...player, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, hitPulseRef.current);
     }
 
-    const interval = setInterval(() => step(performance.now()), 16);
+    // A throw anywhere in step() (physics, draw, anything reachable from a frame
+    // tick) must never permanently stall the loop — catch, report, and let the next
+    // tick try again instead of leaving the canvas on its last frame forever.
+    const interval = setInterval(() => {
+      try {
+        step(performance.now());
+      } catch (err) {
+        reportError("Combat.step", err);
+      }
+    }, 16);
     return () => {
       clearInterval(interval);
       vp.destroy();
