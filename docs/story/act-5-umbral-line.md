@@ -7,6 +7,14 @@ a single fixed ending.
 Galaxy: **Umbral Line** — one vast convergence zone rather than a graph of many
 systems, reflecting the endgame's narrower, more focused staging.
 
+**Novel grounding:** see `docs/story/research-notes-act5.md`. Honest result of that
+research: the source novel is still ongoing serialization (3159+ chapters, updated as
+recently as today) with no published finale — there is no endgame to adapt Act V's
+beats from. This act is intentionally original invention rather than force-fit to a
+weak match; the two loosest thematic cousins found (ch. 120 "文明吞噬"/Civilization
+Devouring for a draining-antagonist concept, ch. 176 "复仇的终结"/The End of Revenge
+for a full-circle payoff) are noted per-chapter below but not claimed as sourcing.
+
 ---
 
 ## Chapter 1 — Calling the Reach
@@ -36,6 +44,11 @@ systems, reflecting the endgame's narrower, more focused staging.
 
 **Systems/Unlocks:** None mechanical — narrative payoff chapter.
 
+**Novel grounding:** no confirmed source — see `docs/story/research-notes-act5.md`.
+A multi-faction coalition-rally is a common enough genre beat that it's plausible the
+novel does something like it eventually, but no source confirms it, and the novel
+hasn't reached a point where it could be checked. Kept as original invention.
+
 ---
 
 ## Chapter 2 — The Umbral Line
@@ -56,6 +69,9 @@ systems, reflecting the endgame's narrower, more focused staging.
 **Choices & Consequences:** None major.
 
 **Systems/Unlocks:** None mechanical — Hollow enemy doctrine introduced.
+
+**Novel grounding:** no confirmed source for the Hollow specifically — see
+`docs/story/research-notes-act5.md`. Kept as original invention.
 
 ---
 
@@ -79,6 +95,12 @@ systems, reflecting the endgame's narrower, more focused staging.
 **Choices & Consequences:** None major.
 
 **Systems/Unlocks:** None — pure narrative payoff.
+
+**Novel grounding:** no confirmed source. Ch. 176's "复仇的终结" (The End of Revenge)
+is a loose emotional cousin — a revenge-arc closure beat — but nothing confirms it's
+a re-fight of the protagonist's original death/failure scenario specifically. Given
+the novel's own rebirth premise, a full-circle rematch is plausible as something the
+author is building toward, but plausible isn't sourced; kept as original invention.
 
 ---
 
@@ -104,6 +126,11 @@ systems, reflecting the endgame's narrower, more focused staging.
 
 **Systems/Unlocks:** None mechanical.
 
+**Novel grounding:** no confirmed source for the three-path choice structure itself.
+第十三卷 帝国风云 ("Imperial Storm," Vol. 13, reached by ch. 448) confirms
+political/imperial-power stakes are a real, ongoing thread in the novel's world —
+relevant context, not a matched beat. Kept as original invention.
+
 ---
 
 ## Chapter 5 — Second Ignition (campaign finale)
@@ -125,6 +152,14 @@ systems, reflecting the endgame's narrower, more focused staging.
   `tigerSharkAlliance`, and which named crew are alive/recruited/lost, giving a
   distinct final tableau per major playthrough shape without requiring separate ending
   "levels."
+
+**Novel grounding:** no confirmed source — the novel has no finale, so nothing to
+adapt a campaign-finale beat from (see `docs/story/research-notes-act5.md`). Ch. 120's
+"文明吞噬" (Civilization Devouring) is a loose thematic cousin for a draining/
+corrupting antagonist concept, but it's chapter 120 of 3000+, not confirmed as any
+kind of culminating threat. The Hollow, the non-total-victory ending, and the
+branching epilogue are all kept as intentional original invention — the honest
+conclusion of real research, not an unexamined default.
 
 **Characters:** Kade, the Cinder, full crew, full coalition.
 
