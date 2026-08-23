@@ -508,7 +508,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setEnemies(finalEnemies);
     if (result === "victory") {
       playSfx("victory");
-      const outcome = resolveCombatVictory(encounterId, poiId, victoryFlag, yieldBonusFraction);
+      // Convert the combat-local (hullBonus-scaled) playerHull back to the ship's
+      // own terms before persisting — see resolveCombatVictory's endingHullPoints.
+      const realEndingHull = playerHull / (1 + hullBonusFraction);
+      const outcome = resolveCombatVictory(encounterId, poiId, victoryFlag, yieldBonusFraction, realEndingHull);
       setRewardsEarned(outcome.rewards);
       if (outcome.bonusDrop) {
         setBonusDrop(outcome.bonusDrop);

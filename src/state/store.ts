@@ -354,6 +354,14 @@ export function resolveCombatVictory(
   poiId: string | null,
   victoryFlag?: string,
   salvageAlloyBonusFraction: number = 0,
+  /** Hull remaining at the end of the fight, in the ship's own (non-combat-buffed)
+   * terms — Combat.tsx divides out its combat-local hullBonus scaling before
+   * passing this. Damage taken in a fight you win used to be silently discarded
+   * (currentHp was never written back on victory, only on defeat) — undermining any
+   * balance/positioning tuning, since nothing you did in a winning fight had a
+   * lasting cost. Optional only so existing callers/tests don't break; always pass
+   * it from real combat. */
+  endingHullPoints?: number,
 ): { leveledUp: boolean; newLevel: number; rewards: Partial<Record<ResourceType, number>>; bonusDrop: ModuleInstance | null } {
   const enc = encounterById(encounterId);
   const rewards = { ...enc.rewards };
@@ -373,7 +381,12 @@ export function resolveCombatVictory(
   let newLevel = flagship.value?.level ?? 1;
   if (flagship.value) {
     const before = flagship.value.level;
-    const ships = state.value.ships.map((s) => (s.id === flagship.value!.id ? applyXp(s, enc.xp) : s));
+    const ships = state.value.ships.map((s) => {
+      if (s.id !== flagship.value!.id) return s;
+      const leveled = applyXp(s, enc.xp);
+      if (endingHullPoints === undefined) return leveled;
+      return { ...leveled, currentHp: Math.max(1, Math.min(computeMaxHull(leveled), Math.round(endingHullPoints))) };
+    });
     state.value = { ...state.value, ships };
     newLevel = ships.find((s) => s.id === flagship.value!.id)?.level ?? before;
     leveledUp = newLevel > before;
@@ -397,7 +410,10 @@ export function resolveCombatDefeat() {
 export function repairFlagship() {
   if (!flagship.value) return;
   const shipId = flagship.value.id;
-  const ships = state.value.ships.map((s) => (s.id === shipId ? { ...s, currentHp: computeMaxHull(s) } : s));
+  // effectiveMaxHull, not the bare computeMaxHull — otherwise a ship with Unit
+  // 7-Requiem's +15% max-hull passive would show "repaired" while still short of
+  // the bar's own endpoint, since every other screen displays effectiveMaxHull.
+  const ships = state.value.ships.map((s) => (s.id === shipId ? { ...s, currentHp: effectiveMaxHull(s) } : s));
   state.value = { ...state.value, ships };
   persist();
 }

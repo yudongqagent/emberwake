@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, flagship, spend, grant, canAfford, addShip, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, ownedNamedShipIds } from "../../state/store";
+import { state, flagship, spend, grant, canAfford, addShip, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, ownedNamedShipIds, repairFlagship } from "../../state/store";
 import { HULL_CLASSES, hullClassById, shipwrightCost } from "../../data/hullClasses";
 import { CREW_DEFS } from "../../data/crew";
 import { moduleDefById, fabricatorCost } from "../../data/modules";
@@ -181,12 +181,34 @@ function Row({ children }: { children: ComponentChildren }) {
 
 function TradeTab() {
   const res = state.value.resources;
+  const ship = flagship.value;
   // Priya Osei: "+10% Salvage and Alloy from Trade exchanges" — fleet-wide once recruited.
   const tradeBonus = hasCrewRecruited("priyaOsei") ? 1.1 : 1;
   const alloyOut = Math.round(10 * tradeBonus);
   const salvageOut = Math.round(20 * tradeBonus);
+  const missingHp = ship ? effectiveMaxHull(ship) - ship.currentHp : 0;
+  const repairCost = Math.round(missingHp * 0.5);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+      {ship && (
+        <Row>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
+            <HullIcon size={16} />
+            {missingHp > 0 ? (
+              <>Repair {missingHp} Hull <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="salvage" size={16} /> {repairCost}</>
+            ) : (
+              "Hull at full"
+            )}
+          </div>
+          <button
+            className="btn"
+            disabled={missingHp <= 0 || res.salvage < repairCost}
+            onClick={() => { spend({ salvage: repairCost }); repairFlagship(); }}
+          >
+            Repair
+          </button>
+        </Row>
+      )}
       <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
         Fence salvage for refined alloy, or break down alloy stock back into quick salvage.
       </div>
