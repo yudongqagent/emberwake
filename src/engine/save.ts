@@ -2,7 +2,7 @@ import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance } from ".
 import { drawShip, computeMaxHull } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 const SAVE_KEY = "emberwake.save";
 
 export interface PoiRuntimeState {
@@ -68,6 +68,13 @@ const migrations: Record<number, (s: any) => any> = {
     schemaVersion: 2,
     ships: s.ships.map((ship: any) => ({ ...ship, rolls: ship.rolls ?? { ...NEUTRAL_ROLLS } })),
     modules: s.modules.map((mod: any) => ({ ...mod, quality: mod.quality ?? 0.5 })),
+  }),
+  // Pre-named-ship saves have no namedShipId — every existing ship is an ordinary
+  // hull, never one of the new singletons.
+  2: (s: any) => ({
+    ...s,
+    schemaVersion: 3,
+    ships: s.ships.map((ship: any) => ({ ...ship, namedShipId: ship.namedShipId ?? null })),
   }),
 };
 

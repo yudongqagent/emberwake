@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance, xpToNextLevel, applyXp, qualityMultiplier } from "./ships";
+import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance, xpToNextLevel, applyXp, qualityMultiplier, drawShip } from "./ships";
 import { RARITY_ORDER, RARITY_MULTIPLIER } from "../data/hullClasses";
+import { NAMED_SHIP_DEFS } from "../data/namedShips";
 import type { ShipInstance } from "../data/types";
 
 function makeShip(overrides: Partial<ShipInstance> = {}): ShipInstance {
@@ -16,6 +17,7 @@ function makeShip(overrides: Partial<ShipInstance> = {}): ShipInstance {
     equipped: [null, null, null, null],
     currentHp: 120,
     rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 },
+    namedShipId: null,
     ...overrides,
   };
 }
@@ -118,6 +120,32 @@ describe("rarity tier gaps (no overlap between adjacent tiers)", () => {
       const loBest = RARITY_MULTIPLIER[lo] * qualityMultiplier(1);
       const hiWorst = RARITY_MULTIPLIER[hi] * qualityMultiplier(0);
       expect(hiWorst, `${hi} (worst roll) should exceed ${lo} (best roll)`).toBeGreaterThan(loBest);
+    }
+  });
+});
+
+// Issues #3/#4 (docs/design-principles.md): a named ship needs to be verifiably
+// special, not just occasionally tagged onto a mediocre roll, and its singleton
+// promise (data/namedShips.ts) needs to actually hold under repeated draws — not
+// just look right in the one manual playtest that happened to not hit the edge case.
+describe("named ship draws (data/namedShips.ts)", () => {
+  it("never rolls below the named-ship rarity floor", () => {
+    const destroyerNamed = NAMED_SHIP_DEFS.find((n) => n.hullClass === "destroyer")!;
+    const minIdx = RARITY_ORDER.indexOf("advanced");
+    for (let i = 0; i < 500; i++) {
+      const ship = drawShip("destroyer");
+      if (ship.namedShipId === destroyerNamed.id) {
+        expect(RARITY_ORDER.indexOf(ship.rarity)).toBeGreaterThanOrEqual(minIdx);
+      }
+    }
+  });
+
+  it("never rolls a named ship that's already owned", () => {
+    const destroyerNamed = NAMED_SHIP_DEFS.find((n) => n.hullClass === "destroyer")!;
+    const owned = new Set([destroyerNamed.id]);
+    for (let i = 0; i < 500; i++) {
+      const ship = drawShip("destroyer", owned);
+      expect(ship.namedShipId).not.toBe(destroyerNamed.id);
     }
   });
 });

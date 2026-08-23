@@ -17,8 +17,7 @@ import { ACT4_SCENES } from "../data/story/act4";
 import { ACT5_SCENES } from "../data/story/act5";
 import { encounterById } from "../data/encounters";
 import { CREW_DEFS } from "../data/crew";
-import { drawShip, applyXp, computeMaxHull } from "../engine/ships";
-import { drawModule } from "../engine/modules";
+import { applyXp, computeMaxHull } from "../engine/ships";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -152,22 +151,6 @@ export function collectWreck(poiId: string, rewards: Partial<Record<ResourceType
   grant(rewards);
   setPoiRuntime(poiId, { cleared: true, clearedAt: Date.now() });
   persist();
-}
-
-export function drawShipAction(hullClassId: Parameters<typeof drawShip>[0]) {
-  const ship = drawShip(hullClassId);
-  state.value = { ...state.value, ships: [...state.value.ships, ship] };
-  playSfx("draw");
-  persist();
-  return ship;
-}
-
-export function drawModuleAction() {
-  const mod = drawModule();
-  state.value = { ...state.value, modules: [...state.value.modules, mod] };
-  playSfx("draw");
-  persist();
-  return mod;
 }
 
 /** Adds an already-rolled ship instance (generated as a preview candidate the player
@@ -342,6 +325,12 @@ export function crewCount(defId: string): number {
 
 export function hasCrewRecruited(defId: string): boolean {
   return crewCount(defId) > 0;
+}
+
+/** Every named ship is a singleton (see data/namedShips.ts) — pass this to drawShip
+ * so an offer showcase or draw never rolls one the player already owns. */
+export function ownedNamedShipIds(): Set<string> {
+  return new Set(state.value.ships.map((s) => s.namedShipId).filter((id): id is string => !!id));
 }
 
 /** Unit 7-Requiem's "+15% max hull fleet-wide" passive, applied wherever a ship's max

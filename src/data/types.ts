@@ -110,6 +110,10 @@ export interface ShipInstance {
   /** Independent 0..1 rolls per attribute — two ships of the same rarity can trade off
    * a tanky hull against a nimble evasion build. */
   rolls: ShipRolls;
+  /** Set only for a named-ship draw (see data/namedShips.ts) — grants a fixed name and
+   * a unique combat ability nothing else has, not just bigger numbers. Each named ship
+   * is a singleton: once owned, it won't roll again. Null for an ordinary hull. */
+  namedShipId: string | null;
 }
 
 export interface CrewDef {

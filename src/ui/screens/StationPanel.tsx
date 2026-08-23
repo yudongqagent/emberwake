@@ -1,9 +1,10 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, flagship, spend, grant, canAfford, addShip, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull } from "../../state/store";
+import { state, flagship, spend, grant, canAfford, addShip, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, ownedNamedShipIds } from "../../state/store";
 import { HULL_CLASSES, hullClassById, shipwrightCost } from "../../data/hullClasses";
 import { CREW_DEFS } from "../../data/crew";
 import { moduleDefById, fabricatorCost } from "../../data/modules";
+import { namedShipDefById } from "../../data/namedShips";
 import { computeModuleDamage, computeModuleBlock } from "../../engine/modules";
 import { drawShip } from "../../engine/ships";
 import { computeMaxHull, computePowerCapacity, computeSpeed } from "../../engine/ships";
@@ -82,9 +83,14 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
         const curHull = cur ? effectiveMaxHull(cur) : 0;
         const delta = newHull - curHull;
         return (
-          <DrawReveal title="Hull Acquired" accent={`var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
+          <DrawReveal title={drawnShip.namedShipId ? "Named Ship Acquired!" : "Hull Acquired"} accent={drawnShip.namedShipId ? "var(--amber)" : `var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
             <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{drawnShip.name}</div>
             <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{hullClassById(drawnShip.hullClass).name}</div>
+            {drawnShip.namedShipId && (
+              <div style={{ fontSize: "0.78rem", color: "var(--amber)", marginBottom: "0.5rem" }}>
+                {namedShipDefById(drawnShip.namedShipId).active}
+              </div>
+            )}
             <ShipRarityTag rarity={drawnShip.rarity} showPips={false} />
             <div style={{ marginTop: "0.5rem" }}>
               <RollQualityBadge
@@ -208,7 +214,15 @@ const OFFER_COUNT = 4;
 
 function generateShipOffers(): ShipInstance[] {
   const unlocked = HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag]);
-  return Array.from({ length: OFFER_COUNT }, () => drawShip(pickOne(unlocked).id));
+  // Exclude within this batch too, not just already-owned ones — otherwise two
+  // offers in the same showcase could independently roll the same "singleton" named
+  // ship, and buying both would break the singleton guarantee.
+  const excluded = new Set(ownedNamedShipIds());
+  return Array.from({ length: OFFER_COUNT }, () => {
+    const candidate = drawShip(pickOne(unlocked).id, excluded);
+    if (candidate.namedShipId) excluded.add(candidate.namedShipId);
+    return candidate;
+  });
 }
 
 /** Curated random showcase, not a blind pull: every candidate's rarity, stats, and
@@ -231,15 +245,21 @@ function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
       {offers.map((candidate, i) => {
         const def = hullClassById(candidate.hullClass);
         const cost = shipwrightCost(candidate.hullClass, candidate.rarity);
+        const namedDef = candidate.namedShipId ? namedShipDefById(candidate.namedShipId) : null;
         return (
-          <div key={i} className="panel compact" style={{ padding: "0.75rem 0.9rem" }}>
+          <div key={i} className={`panel compact ${namedDef ? "accent" : ""}`} style={{ padding: "0.75rem 0.9rem", ["--accent" as any]: namedDef ? "var(--amber)" : undefined }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
               <div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{def.name}</div>
-                <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{def.nameCn}</div>
+                <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{namedDef ? namedDef.name : def.name}</div>
+                <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{def.name} ({def.nameCn})</div>
               </div>
               <ShipRarityTag rarity={candidate.rarity} showPips={false} />
             </div>
+            {namedDef && (
+              <div style={{ fontSize: "0.72rem", color: "var(--amber)", marginBottom: "0.5rem" }}>
+                ★ Named Ship — {namedDef.active}
+              </div>
+            )}
             <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.6rem" }}>
               <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><HullIcon size={12} /> {computeMaxHull(candidate)}</span>
               <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><PowerIcon size={12} /> {computePowerCapacity(candidate)}</span>
@@ -256,7 +276,7 @@ function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
                   spend({ sourcePoints: cost });
                   addShip(candidate);
                   onBuy(candidate);
-                  setOffers((prev) => prev.map((o, idx) => (idx === i ? drawShip(pickOne(HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag])).id) : o)));
+                  setOffers((prev) => prev.map((o, idx) => (idx === i ? drawShip(pickOne(HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag])).id, ownedNamedShipIds()) : o)));
                 }}
               >
                 Buy

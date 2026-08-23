@@ -6,6 +6,7 @@ import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion,
 import { RANGE_MODIFIERS, resolveAttack, rangeBandFromDistance, CRIT_MULTIPLIER, type RangeBand } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend } from "../../state/store";
 import { crewDefById } from "../../data/crew";
+import { namedShipDefById } from "../../data/namedShips";
 import { playSfx } from "../../audio/engine";
 import type { FactionId, ResourceType } from "../../data/types";
 import { randomId } from "../../engine/rng";
@@ -143,6 +144,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // plating itself. A distinct status-effect category from anything else in combat.
   const [corrodedBlock, setCorrodedBlock] = useState(0);
   const bossPhaseRef = useRef(false);
+  // Named-ship signature abilities (issues #3/#4 — see data/namedShips.ts): each one
+  // is a distinct mechanical axis, not a bigger number. namedAbilityCooldown mirrors
+  // crewCooldowns' per-instance pattern, just for the single flagship ability slot.
+  const [namedAbilityCooldown, setNamedAbilityCooldown] = useState(0);
+  const [alphaStrikeArmed, setAlphaStrikeArmed] = useState(false);
+  const [phaseShiftReady, setPhaseShiftReady] = useState(false);
+  const [fortifyTurns, setFortifyTurns] = useState(0);
+  const [bloodscentTurns, setBloodscentTurns] = useState(0);
+  const bloodscentTargetRef = useRef<number | null>(null);
   // Ablative Plating's Absorb: negates exactly the first hit landed each fight, then
   // behaves like ordinary block for the rest of it — a ref because it must mutate
   // synchronously mid-resolution, before any re-render, same pattern as bossPhaseRef.
@@ -264,6 +274,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const shieldActive = shieldedNextTurn;
     if (shieldActive) setShieldedNextTurn(false);
     let riposteTriggered = false;
+    // Hollow Point's Phase Shift: the FIRST enemy attack this turn auto-misses (a
+    // guaranteed single-attack dodge), distinct from Construct Override's full-turn
+    // damage negation — a miss still triggers Lionsheart's honor-counter, a real
+    // tradeoff Construct Override doesn't have.
+    let phaseShiftConsumed = false;
+    const phaseShiftWasReady = phaseShiftReady;
+    if (phaseShiftWasReady) setPhaseShiftReady(false);
+    if (fortifyTurns > 0) setFortifyTurns((t) => t - 1);
+    if (bloodscentTurns > 0) setBloodscentTurns((t) => t - 1);
 
     let regenerated = currentEnemies.map((e) => {
       // Crew debuffs decay by one round every enemy turn, whether or not they're read.
@@ -338,7 +357,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
       const band = rangeBandFromDistance(dist);
       const evasion = Math.min(0.6, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
-      const result = resolveAttack(enemy.damage * dmgMultiplier, Math.max(0, armorBlock - corrodedBlock), evasion, RANGE_MODIFIERS[band].incoming);
+      // Iron Verdict's Fortify: armor block doubles for its duration — a defense
+      // multiplier, not a bigger flat block number, so it scales with whatever's
+      // equipped instead of competing with it.
+      const fortifyMult = fortifyTurns > 0 ? 2 : 1;
+      const rawResult = resolveAttack(enemy.damage * dmgMultiplier, Math.max(0, armorBlock - corrodedBlock) * fortifyMult, evasion, RANGE_MODIFIERS[band].incoming);
+      const phaseShiftBlocksThis = phaseShiftWasReady && !phaseShiftConsumed;
+      if (phaseShiftBlocksThis) phaseShiftConsumed = true;
+      const result = phaseShiftBlocksThis ? { ...rawResult, hit: false } : rawResult;
       // Ablative Plating's Absorb: negates exactly the first hit of the fight,
       // regardless of which enemy lands it — consumed the instant it's used.
       const absorbedHit = hasAbsorbArmor && absorbRef.current && result.hit && result.damageDealt > 0;
@@ -419,7 +445,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             }
           }
         } else {
-          pushLog(`${enemy.name} misses.`);
+          pushLog(phaseShiftBlocksThis ? `Phase Shift — ${enemy.name}'s attack passes through nothing.` : `${enemy.name} misses.`);
         }
       });
       return wasCharging[i] ? { ...enemy, charging: false } : enemy;
@@ -430,6 +456,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
     setCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
     setCrewCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
+    setNamedAbilityCooldown((c) => Math.max(0, c - 1));
     // Inertial Dampers' Momentum: a clean enemy turn (no damage taken, even if
     // Ablative absorbed one) extends the streak; any damage resets it to zero.
     if (hasMomentum) setUnhitStreak((s) => (totalDamage > 0 ? 0 : s + 1));
@@ -495,6 +522,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
     const wasOvercharged = overcharged;
     const wasGuaranteedCrit = guaranteedCrit;
+    const wasAlphaStrike = alphaStrikeArmed;
     const baseDmg = computeModuleDamage(mod);
     const vulnerable = (target.vulnerableTurns ?? 0) > 0;
     // Ratchet Koi: "+10% weapon damage when at Close range" — only when he's assigned.
@@ -502,7 +530,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // Railgun's Execute: a finisher axis, not a raw-damage lead — it does nothing
     // against a healthy target and swings hard against a dying one.
     const executeMult = mod.traits.includes("execute") && target.hull <= target.maxHull * 0.25 ? 1.5 : 1;
-    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult);
+    // Nightfall Vow's Alpha Strike: doubles this one shot, at the cost of that
+    // weapon's cooldown locking out 2 extra turns (see the cooldown-set below).
+    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult * (wasAlphaStrike ? 2 : 1));
     const nextEnemies = [...enemies];
     if (dmg > 0) {
       const targetEvasion = (target.evasionDebuffTurns ?? 0) > 0 ? target.evasion * 0.5 : target.evasion;
@@ -625,10 +655,23 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       }
     }
     const overchargePenalty = wasOvercharged ? 2 : 0;
+    const alphaStrikePenalty = wasAlphaStrike ? 2 : 0;
     const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
-    setCooldowns((prev) => ({ ...prev, [moduleId]: Math.max(0, (def.cooldown ?? 0) + overchargePenalty - cooldownReduction) }));
+    setCooldowns((prev) => ({ ...prev, [moduleId]: Math.max(0, (def.cooldown ?? 0) + overchargePenalty + alphaStrikePenalty - cooldownReduction) }));
     if (wasOvercharged) setOvercharged(false);
     if (wasGuaranteedCrit) setGuaranteedCrit(false);
+    if (wasAlphaStrike) setAlphaStrikeArmed(false);
+    // Starving Wolf's Bloodscent: a fraction of damage dealt to the marked target
+    // heals Whisper — a sustain axis nothing else in combat has.
+    if (dmg > 0 && bloodscentTurns > 0 && targetIdx === bloodscentTargetRef.current) {
+      const dealt = nextEnemies[targetIdx].hull < target.hull ? target.hull - nextEnemies[targetIdx].hull : 0;
+      const healed = Math.round(dealt * 0.25);
+      if (healed > 0) {
+        setPlayerHull((h) => Math.min(maxHull, h + healed));
+        addPopup("player", `+${healed}`, "#5dffb0");
+        pushLog(`Bloodscent draws ${healed} hull back from ${target.name}.`);
+      }
+    }
     setEnemies(nextEnemies);
     endPlayerAction(nextEnemies);
   }
@@ -705,6 +748,43 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setCrewCooldowns((prev) => ({ ...prev, [crewId]: cooldownValue }));
     setEnemies(nextEnemies);
     endPlayerAction(nextEnemies);
+  }
+
+  function useShipActive() {
+    try {
+      useShipActiveImpl();
+    } catch (err) {
+      reportError("Combat.useShipActive", err);
+      setStatus("active");
+    }
+  }
+
+  function useShipActiveImpl() {
+    if (status !== "active" || !ship.namedShipId) return;
+    const namedDef = namedShipDefById(ship.namedShipId);
+    if (namedDef.abilityId === "alphaStrike") {
+      setAlphaStrikeArmed(true);
+      pushLog("Alpha Strike arms the next weapon volley for double damage.");
+    } else if (namedDef.abilityId === "phaseShift") {
+      setPhaseShiftReady(true);
+      pushLog("Phase Shift primes — the next enemy attack will find nothing there.");
+    } else if (namedDef.abilityId === "fortify") {
+      setFortifyTurns(2);
+      pushLog("Fortify doubles Whisper's armor block for two rounds.");
+    } else if (namedDef.abilityId === "bloodscent") {
+      const target = enemies[targetIdx];
+      if (target && target.hull > 0) {
+        setBloodscentTurns(2);
+        bloodscentTargetRef.current = targetIdx;
+        pushLog(`Bloodscent marks ${target.name} — damage dealt to it will heal Whisper.`);
+      }
+    } else if (namedDef.abilityId === "overdrive") {
+      setCooldowns({});
+      pushLog("Overdrive resets every weapon's cooldown.");
+    }
+    setNamedAbilityCooldown(namedDef.activeCooldown);
+    playSfx("click");
+    endPlayerAction(enemies);
   }
 
   // --- Arena render/physics loop ---
@@ -890,11 +970,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         </span>
       </div>
 
-      {(guaranteedCrit || riposteArmed || shieldedNextTurn) && (
+      {(guaranteedCrit || riposteArmed || shieldedNextTurn || alphaStrikeArmed || phaseShiftReady || fortifyTurns > 0 || bloodscentTurns > 0) && (
         <div style={{ display: "flex", gap: "0.4rem", padding: "0 1rem 0.4rem", flexWrap: "wrap" }}>
           {guaranteedCrit && <StatusBadge color="var(--amber)" text="Guaranteed Crit Armed" />}
           {riposteArmed && <StatusBadge color="var(--cyan)" text="Riposte Armed" />}
           {shieldedNextTurn && <StatusBadge color="var(--violet)" text="Override Shield Primed" />}
+          {alphaStrikeArmed && <StatusBadge color="var(--red)" text="Alpha Strike Armed" />}
+          {phaseShiftReady && <StatusBadge color="var(--cyan)" text="Phase Shift Primed" />}
+          {fortifyTurns > 0 && <StatusBadge color="var(--violet)" text={`Fortified (${fortifyTurns})`} />}
+          {bloodscentTurns > 0 && <StatusBadge color="var(--green)" text={`Bloodscent (${bloodscentTurns})`} />}
         </div>
       )}
 
@@ -940,6 +1024,19 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             </button>
           );
         })}
+        {ship.namedShipId && (() => {
+          const namedDef = namedShipDefById(ship.namedShipId);
+          return (
+            <button
+              className="btn primary"
+              disabled={status !== "active" || namedAbilityCooldown > 0}
+              onClick={useShipActive}
+              title={namedDef.active}
+            >
+              {namedDef.active.split(" — ")[0]}{namedAbilityCooldown > 0 ? ` (${namedAbilityCooldown})` : ""}
+            </button>
+          );
+        })()}
       </div>
 
       <div className="panel" style={{ margin: "0.6rem 1rem", padding: "0.5rem 0.75rem", fontSize: "0.75rem", color: "var(--text-mid)", maxHeight: 84, overflowY: "auto" }}>

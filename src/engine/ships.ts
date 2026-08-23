@@ -1,6 +1,15 @@
 import type { HullClassId, ShipInstance, ShipRolls } from "../data/types";
 import { RARITY_WEIGHTS, RARITY_ORDER, APTITUDE_WEIGHTS, APTITUDE_GROWTH, RARITY_MULTIPLIER, hullClassById } from "../data/hullClasses";
+import { NAMED_SHIP_DEFS } from "../data/namedShips";
 import { weightedPick, randomId, rollQuality } from "./rng";
+
+/** A named ship never rolls below this rarity — it's meant to always feel special,
+ * not occasionally show up as a mediocre roll wearing a unique name. */
+const NAMED_SHIP_MIN_RARITY: ShipInstance["rarity"] = "advanced";
+/** Flat per-draw chance to substitute a named ship for a hull class that has one
+ * still unowned — independent of rarity, so it's a distinct, legible moment rather
+ * than folded into the rarity roll itself. */
+const NAMED_SHIP_CHANCE = 0.12;
 
 /** A roll of 0 gives 88% of the class baseline, 0.5 (neutral) gives exactly 100%, and a
  * roll of 1 gives 112% — the same ±quality band used for every stat, so a ship's rarity
@@ -43,9 +52,22 @@ const SHIP_NAME_POOL = [
  * stat-delta comparison) have no rolls — treat them as dead-center average. */
 const NEUTRAL_ROLLS: ShipRolls = { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 };
 
-export function drawShip(hullClass: HullClassId): ShipInstance {
-  const rarity = weightedPick(RARITY_WEIGHTS);
+/** `ownedNamedShipIds` excludes named ships the player already has from the roll —
+ * each one is a singleton. Pass the current roster's namedShipIds when generating
+ * real draws/offers; omit it only for throwaway preview instances that never get
+ * added to state. */
+export function drawShip(hullClass: HullClassId, ownedNamedShipIds: ReadonlySet<string> = new Set()): ShipInstance {
+  let rarity = weightedPick(RARITY_WEIGHTS);
   const def = hullClassById(hullClass);
+
+  const availableNamedShip = NAMED_SHIP_DEFS.find(
+    (n) => n.hullClass === hullClass && !ownedNamedShipIds.has(n.id),
+  );
+  const namedShip = availableNamedShip && Math.random() < NAMED_SHIP_CHANCE ? availableNamedShip : null;
+  if (namedShip && RARITY_ORDER.indexOf(rarity) < RARITY_ORDER.indexOf(NAMED_SHIP_MIN_RARITY)) {
+    rarity = NAMED_SHIP_MIN_RARITY;
+  }
+
   const rolls = rollShipAttributes(rarity);
   return {
     id: randomId("ship"),
@@ -53,12 +75,13 @@ export function drawShip(hullClass: HullClassId): ShipInstance {
     rarity,
     aptitude: null,
     scanned: false,
-    name: SHIP_NAME_POOL[Math.floor(Math.random() * SHIP_NAME_POOL.length)],
+    name: namedShip ? namedShip.name : SHIP_NAME_POOL[Math.floor(Math.random() * SHIP_NAME_POOL.length)],
     level: 1,
     xp: 0,
     equipped: new Array(def.slots.weapon + def.slots.armor + def.slots.engine + def.slots.utility).fill(null),
     currentHp: computeMaxHull({ hullClass, rarity, level: 1, rolls }),
     rolls,
+    namedShipId: namedShip ? namedShip.id : null,
   };
 }
 

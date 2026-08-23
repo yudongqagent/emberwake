@@ -1,5 +1,6 @@
 import { state, flagship, setActiveFlagship, scanShipAction, effectiveMaxHull, sellShip } from "../../state/store";
 import { hullClassById, shipwrightCost } from "../../data/hullClasses";
+import { namedShipDefById } from "../../data/namedShips";
 import { computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { ShipRarityTag } from "../components/RarityTag";
 import { playSfx } from "../../audio/engine";
@@ -45,6 +46,17 @@ export function Fleet() {
               </div>
               <ShipRarityTag rarity={ship.rarity} />
             </div>
+
+            {ship.namedShipId && (() => {
+              const namedDef = namedShipDefById(ship.namedShipId);
+              return (
+                <div style={{ margin: "0.6rem 0 0", padding: "0.55rem 0.7rem", borderRadius: 6, border: "1px solid var(--amber)", background: "rgba(255,193,71,0.08)" }}>
+                  <div className="eyebrow" style={{ color: "var(--amber)", marginBottom: "0.25rem" }}>Named Ship — Unique Ability</div>
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-mid)" }}>{namedDef.active}</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem", fontStyle: "italic" }}>{namedDef.flavor}</div>
+                </div>
+              );
+            })()}
 
             <div style={{ margin: "0.75rem 0 0" }}>
               <Bar fraction={hullFraction} kind={hullBarKind(hullFraction)} />
