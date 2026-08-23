@@ -17,10 +17,15 @@ export type FactionId =
 export type HullClassId =
   | "corvette"
   | "destroyer"
+  | "interceptor"
   | "cruiser"
+  | "vanguard"
   | "battleship"
+  | "bulwark"
   | "dreadnought"
-  | "sovereign";
+  | "corsair"
+  | "sovereign"
+  | "aegis";
 
 export type ShipRarity =
   | "salvage"

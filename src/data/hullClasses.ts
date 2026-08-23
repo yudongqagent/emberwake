@@ -26,6 +26,21 @@ export const HULL_CLASSES: HullClassDef[] = [
     essenceCost: 40,
   },
   {
+    id: "interceptor",
+    order: 1,
+    name: "Interceptor-class",
+    nameCn: "拦截舰",
+    // Same tier and unlock as Destroyer, same 6-slot total, but traded a utility
+    // slot for a second engine slot — faster and more evasive, noticeably less
+    // hull. Neither hull dominates the other; see docs/content-depth-standards.md §1.
+    slots: { weapon: 2, armor: 1, engine: 2, utility: 1 },
+    baseHull: 170,
+    basePower: 9,
+    baseSpeed: 8,
+    unlockFlag: "act1.tigersReach.cleared",
+    essenceCost: 40,
+  },
+  {
     id: "cruiser",
     order: 2,
     name: "Cruiser-class",
@@ -34,6 +49,20 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseHull: 380,
     basePower: 16,
     baseSpeed: 4,
+    unlockFlag: "act1.emberRising.cleared",
+    essenceCost: 90,
+  },
+  {
+    id: "vanguard",
+    order: 2,
+    name: "Vanguard-class",
+    nameCn: "先锋舰",
+    // Same tier/unlock/8-slot total as Cruiser, but a weapon slot in place of an
+    // armor slot — a glass-cannon lateral option, not a strictly better Cruiser.
+    slots: { weapon: 3, armor: 1, engine: 2, utility: 2 },
+    baseHull: 300,
+    basePower: 18,
+    baseSpeed: 5,
     unlockFlag: "act1.emberRising.cleared",
     essenceCost: 90,
   },
@@ -50,6 +79,20 @@ export const HULL_CLASSES: HullClassDef[] = [
     essenceCost: 160,
   },
   {
+    id: "bulwark",
+    order: 3,
+    name: "Bulwark-class",
+    nameCn: "壁垒舰",
+    // Same tier/unlock/10-slot total as Battleship, but two armor slots in place
+    // of one weapon and one engine slot — a dedicated tank, much slower.
+    slots: { weapon: 2, armor: 4, engine: 1, utility: 3 },
+    baseHull: 800,
+    basePower: 20,
+    baseSpeed: 2,
+    unlockFlag: "act2.reachOpens.cleared",
+    essenceCost: 160,
+  },
+  {
     id: "dreadnought",
     order: 4,
     name: "Dreadnought-class",
@@ -62,6 +105,20 @@ export const HULL_CLASSES: HullClassDef[] = [
     essenceCost: 260,
   },
   {
+    id: "corsair",
+    order: 4,
+    name: "Corsair-class",
+    nameCn: "掠夺舰",
+    // Same tier/unlock/12-slot total as Dreadnought, but weighted hard toward
+    // weapons and engines instead of armor — an alpha-strike glass cannon.
+    slots: { weapon: 5, armor: 2, engine: 3, utility: 2 },
+    baseHull: 750,
+    basePower: 38,
+    baseSpeed: 5,
+    unlockFlag: "act3.originTide.cleared",
+    essenceCost: 260,
+  },
+  {
     id: "sovereign",
     order: 5,
     name: "Sovereign-class",
@@ -70,6 +127,20 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseHull: 1500,
     basePower: 48,
     baseSpeed: 3,
+    unlockFlag: "act4.deepOrigin.cleared",
+    essenceCost: 420,
+  },
+  {
+    id: "aegis",
+    order: 5,
+    name: "Aegis-class",
+    nameCn: "神盾舰",
+    // Same tier/unlock/16-slot total as Sovereign, but a weapon slot traded for
+    // two more armor slots — the ultimate-tank endgame lateral option.
+    slots: { weapon: 3, armor: 6, engine: 3, utility: 4 },
+    baseHull: 2000,
+    basePower: 44,
+    baseSpeed: 2,
     unlockFlag: "act4.deepOrigin.cleared",
     essenceCost: 420,
   },
