@@ -154,6 +154,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [bonusDrop, setBonusDrop] = useState<ModuleInstance | null>(null);
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [levelUpHullGain, setLevelUpHullGain] = useState(0);
+  const [levelUpPowerGain, setLevelUpPowerGain] = useState(0);
   const [displayRange, setDisplayRange] = useState<RangeBand>("mid");
   const [comboCount, setComboCount] = useState(0);
   const [overcharged, setOvercharged] = useState(false);
@@ -551,8 +552,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (outcome.leveledUp) {
         const hullBefore = computeMaxHull(ship);
         const hullAfter = computeMaxHull({ ...ship, level: outcome.newLevel });
+        const powerBefore = computePowerCapacity(ship);
+        const powerAfter = computePowerCapacity({ ...ship, level: outcome.newLevel });
         setLevelUpHullGain(hullAfter - hullBefore);
+        setLevelUpPowerGain(powerAfter - powerBefore);
         setLevelUp(outcome.newLevel);
+        playSfx("levelUp");
+        shakeRef.current = 10;
       }
     } else {
       playSfx("defeat");
@@ -1175,13 +1181,23 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         <div className="panel pop-in" style={{ margin: "0 1rem 1rem", padding: "1rem", textAlign: "center" }}>
           <div className="title" style={{ marginBottom: "0.5rem" }}>Victory</div>
           {levelUp && (
-            <div className="panel accent pop-in" style={{ padding: "0.7rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: "var(--amber)" }}>
-              <div className="eyebrow" style={{ color: "var(--amber)" }}>Level Up — {ship.name} reached Level {levelUp}</div>
-              {levelUpHullGain > 0 && (
-                <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--text-hi)", marginTop: "0.3rem" }}>
-                  +{levelUpHullGain} Max Hull
-                </div>
-              )}
+            <div className="panel accent scanline pop-in" style={{ padding: "0.9rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: "var(--amber)" }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: "1.15rem", fontWeight: 800, color: "var(--amber)", letterSpacing: "0.03em" }}>
+                LEVEL {levelUp}
+              </div>
+              <div className="eyebrow" style={{ marginTop: "0.15rem" }}>{ship.name} — Power Jump</div>
+              <div style={{ display: "flex", justifyContent: "center", gap: "1.25rem", marginTop: "0.55rem" }}>
+                {levelUpHullGain > 0 && (
+                  <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--text-hi)" }}>
+                    +{levelUpHullGain} <span style={{ fontSize: "0.68rem", color: "var(--text-dim)", fontWeight: 500 }}>Max Hull</span>
+                  </div>
+                )}
+                {levelUpPowerGain > 0 && (
+                  <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--amber)" }}>
+                    +{levelUpPowerGain} <span style={{ fontSize: "0.68rem", color: "var(--text-dim)", fontWeight: 500 }}>Power</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {rewardsEarned && (

@@ -76,7 +76,8 @@ type SfxName =
   | "dock"
   | "dialogue"
   | "victory"
-  | "defeat";
+  | "defeat"
+  | "levelUp";
 
 export function playSfx(name: SfxName) {
   if (muted) return;
@@ -121,6 +122,12 @@ export function playSfx(name: SfxName) {
       break;
     case "defeat":
       tone(ac, 220, "sawtooth", 0.6, 0.3, 80);
+      break;
+    // Issue #1 (2026-08 playtest): a level-up needs its own distinct, bigger sound —
+    // reusing "victory" made every level-up feel like just another combat win, not a
+    // separate, real power jump worth its own moment.
+    case "levelUp":
+      [523, 659, 784, 1047, 1319].forEach((f, i) => setTimeout(() => tone(ac, f, "triangle", 0.3, 0.35, f * 1.5), i * 70));
       break;
   }
 }

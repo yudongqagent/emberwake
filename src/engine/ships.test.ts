@@ -41,10 +41,20 @@ describe("computeMaxHull", () => {
 });
 
 describe("computePowerCapacity", () => {
-  it("is unaffected by level, only by hull class and rarity", () => {
+  // Issue #1 (2026-08 playtest): leveling used to only grow max hull — power capacity
+  // never moved, so most of a level-up did nothing you could feel. Now grows at the
+  // same +8%/level rate as hull (docs/design-principles.md's own "how to check" for
+  // this class of thing: does skipping the mechanic change anything real?).
+  it("grows with level at the same rate as max hull, not just hull class and rarity", () => {
     const a = computePowerCapacity(makeShip({ level: 1 }));
     const b = computePowerCapacity(makeShip({ level: 10 }));
-    expect(a).toBe(b);
+    expect(b).toBeGreaterThan(a);
+  });
+
+  it("defaults to no level bonus when level is omitted, for partial-ship callers", () => {
+    const withLevel1 = computePowerCapacity(makeShip({ level: 1 }));
+    const withoutLevel = computePowerCapacity({ hullClass: "corvette", rarity: "salvage", rolls: makeShip().rolls });
+    expect(withoutLevel).toBe(withLevel1);
   });
 });
 

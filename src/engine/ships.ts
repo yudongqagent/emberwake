@@ -97,10 +97,17 @@ export function computeMaxHull(ship: Pick<ShipInstance, "hullClass" | "rarity" |
   return Math.round(def.baseHull * RARITY_MULTIPLIER[ship.rarity] * growth * roll);
 }
 
-export function computePowerCapacity(ship: Pick<ShipInstance, "hullClass" | "rarity"> & Partial<Pick<ShipInstance, "rolls">>): number {
+/** Issue #1 (2026-08 playtest): leveling only ever grew max hull (+8%/level below) —
+ * power capacity, speed, evasion, and crit never moved regardless of level, so most
+ * of a ship's identity didn't change at all when it leveled up. Power now grows at
+ * the same +8%/level rate as hull, so leveling visibly unlocks room for stronger
+ * modules too, not just a bigger health bar. `level` defaults to 1 (no bonus) so
+ * existing partial-ship call sites that don't track level yet still work. */
+export function computePowerCapacity(ship: Pick<ShipInstance, "hullClass" | "rarity"> & Partial<Pick<ShipInstance, "rolls" | "level">>): number {
   const def = hullClassById(ship.hullClass);
+  const growth = 1 + ((ship.level ?? 1) - 1) * 0.08;
   const roll = qualityMultiplier((ship.rolls ?? NEUTRAL_ROLLS).power);
-  return Math.round(def.basePower * RARITY_MULTIPLIER[ship.rarity] * roll);
+  return Math.round(def.basePower * RARITY_MULTIPLIER[ship.rarity] * growth * roll);
 }
 
 /** World-units/sec the flagship moves at, both on the system map and in the combat
