@@ -356,6 +356,11 @@ export function drawWeaponBeam(
   toY: number,
   t: number,
   color: string,
+  /** Issue #4 (2026-08 playtest): every weapon used to draw an identical beam
+   * regardless of what it was — this scales line width, muzzle flare, and tip flash
+   * so a Railgun/Twin-Linked Cannon reads as a heavier weapon than an EMP Burst or
+   * Ion Disruptor, not just a different color. 1 = Pulse Cannon baseline. */
+  weight: number = 1,
 ) {
   const x = fromX + (toX - fromX) * t;
   const y = fromY + (toY - fromY) * t;
@@ -369,8 +374,8 @@ export function drawWeaponBeam(
   ctx.strokeStyle = color;
   ctx.globalAlpha = 0.35;
   ctx.shadowColor = color;
-  ctx.shadowBlur = 16;
-  ctx.lineWidth = 6;
+  ctx.shadowBlur = 14 + weight * 4;
+  ctx.lineWidth = 5 * weight;
   ctx.beginPath();
   ctx.moveTo(trailX, trailY);
   ctx.lineTo(x, y);
@@ -378,7 +383,7 @@ export function drawWeaponBeam(
   // bright core
   ctx.globalAlpha = 1;
   ctx.shadowBlur = 10;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = Math.max(1, 1.6 * weight);
   ctx.strokeStyle = "#ffffff";
   ctx.beginPath();
   ctx.moveTo(trailX, trailY);
@@ -391,7 +396,7 @@ export function drawWeaponBeam(
     ctx.fillStyle = "#ffffff";
     ctx.shadowBlur = 14;
     ctx.beginPath();
-    ctx.arc(fromX, fromY, 4.5, 0, Math.PI * 2);
+    ctx.arc(fromX, fromY, 3.5 + weight * 1.8, 0, Math.PI * 2);
     ctx.fill();
   }
   // leading tip flash
@@ -399,7 +404,7 @@ export function drawWeaponBeam(
   ctx.fillStyle = color;
   ctx.shadowBlur = 12;
   ctx.beginPath();
-  ctx.arc(x, y, 2.8, 0, Math.PI * 2);
+  ctx.arc(x, y, 2 + weight * 1.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }

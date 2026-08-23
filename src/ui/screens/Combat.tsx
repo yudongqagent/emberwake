@@ -86,6 +86,7 @@ interface Projectile {
   t: number;
   duration: number;
   color: string;
+  weight: number;
 }
 
 interface Particle {
@@ -261,6 +262,17 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enemies]);
 
+  // Issue #4 (2026-08 playtest): spawnBurst takes "r,g,b" (used as rgb(...) in the
+  // particle fillStyle), but every weapon's signature color is authored as hex — one
+  // small conversion point instead of re-deriving it at every call site.
+  function hexToRgbString(hex: string): string {
+    const clean = hex.replace("#", "");
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    return `${r},${g},${b}`;
+  }
+
   function spawnBurst(x: number, y: number, color: string, count: number, speed: number) {
     for (let i = 0; i < count; i++) {
       const ang = Math.random() * Math.PI * 2;
@@ -283,8 +295,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     to: ArenaPoint,
     color: string,
     onImpact: () => void,
+    weight: number = 1,
   ) {
-    projectilesRef.current.push({ fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, t: 0, duration: PROJECTILE_DURATION, color });
+    projectilesRef.current.push({ fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, t: 0, duration: PROJECTILE_DURATION, color, weight });
     setTimeout(onImpact, PROJECTILE_DURATION * 1000);
   }
 
@@ -631,15 +644,21 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         : rawResult;
       const playerPos = { ...arenaRef.current.player };
       const impactPos = { ...enemyPos };
-      fireProjectile(playerPos, impactPos, result.crit ? "#ffe25d" : "#8ff3ff", () => {
+      // Every weapon now fires in its own signature color (def.color) instead of a
+      // single generic blue for every module — a crit still flashes gold on top of
+      // that, so "this was a crit" stays a distinct, readable signal.
+      const weaponColor = def.color ?? "#8ff3ff";
+      const beamColor = result.crit ? "#ffe25d" : weaponColor;
+      const weaponWeight = def.powerDraw / 2;
+      fireProjectile(playerPos, impactPos, beamColor, () => {
         if (result.hit) {
-          spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : "143,243,255", result.crit ? 22 : 12, result.crit ? 150 : 110);
-          addPopup(targetIdx, `${result.crit ? "CRIT " : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : "#8ff3ff", result.crit);
+          spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : hexToRgbString(weaponColor), result.crit ? 22 : 12, result.crit ? 150 : 110);
+          addPopup(targetIdx, `${result.crit ? "CRIT " : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : weaponColor, result.crit);
           triggerHitStop(result.crit ? 90 : 35);
           hitPulseRef.current.enemy[targetIdx] = performance.now();
           if (result.crit) setPlayerShakeToken((t) => t + 1);
         }
-      });
+      }, weaponWeight);
       playSfx("laser");
       setComboCount((c) => (result.hit ? c + 1 : 0));
 
@@ -686,12 +705,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           const arcPos = arenaRef.current.enemyPos[arcIdx] ?? enemySlot(arcIdx, enemies.length);
           const arcResult = resolveAttack(Math.round(dmg * 0.4), arcTarget.block, arcTarget.evasion, outgoingMult);
           setTimeout(() => {
-            fireProjectile(impactPos, arcPos, "#8ff3ff", () => {
+            fireProjectile(impactPos, arcPos, weaponColor, () => {
               if (arcResult.hit) {
-                spawnBurst(arcPos.x, arcPos.y, "143,243,255", 8, 90);
-                addPopup(arcIdx, `-${arcResult.damageDealt}`, "#8ff3ff");
+                spawnBurst(arcPos.x, arcPos.y, hexToRgbString(weaponColor), 8, 90);
+                addPopup(arcIdx, `-${arcResult.damageDealt}`, weaponColor);
               }
-            });
+            }, weaponWeight);
           }, 90);
           if (arcResult.hit) {
             nextEnemies[arcIdx] = { ...arcTarget, hull: Math.max(0, arcTarget.hull - arcResult.damageDealt) };
@@ -712,12 +731,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           const splashResult = resolveAttack(Math.round(dmg * 0.6), splashTarget.block, splashTarget.evasion, outgoingMult);
           const splashPos = arenaRef.current.enemyPos[splashIdx] ?? enemySlot(splashIdx, enemies.length);
           setTimeout(() => {
-            fireProjectile(impactPos, splashPos, "#8ff3ff", () => {
+            fireProjectile(impactPos, splashPos, weaponColor, () => {
               if (splashResult.hit) {
-                spawnBurst(splashPos.x, splashPos.y, "143,243,255", 8, 90);
-                addPopup(splashIdx, `-${splashResult.damageDealt}`, "#8ff3ff");
+                spawnBurst(splashPos.x, splashPos.y, hexToRgbString(weaponColor), 8, 90);
+                addPopup(splashIdx, `-${splashResult.damageDealt}`, weaponColor);
               }
-            });
+            }, weaponWeight);
           }, 90);
           if (splashResult.hit) {
             nextEnemies[splashIdx] = { ...splashTarget, hull: Math.max(0, splashTarget.hull - splashResult.damageDealt) };
@@ -734,12 +753,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         const volleyTarget = nextEnemies[targetIdx];
         const volleyResult = resolveAttack(dmg, effectiveBlock, targetEvasion, outgoingMult);
         setTimeout(() => {
-          fireProjectile(playerPos, impactPos, "#8ff3ff", () => {
+          fireProjectile(playerPos, impactPos, weaponColor, () => {
             if (volleyResult.hit) {
-              spawnBurst(impactPos.x, impactPos.y, "143,243,255", 10, 90);
-              addPopup(targetIdx, `-${volleyResult.damageDealt}`, "#8ff3ff");
+              spawnBurst(impactPos.x, impactPos.y, hexToRgbString(weaponColor), 10, 90);
+              addPopup(targetIdx, `-${volleyResult.damageDealt}`, weaponColor);
             }
-          });
+          }, weaponWeight);
         }, 120);
         if (volleyResult.hit) {
           nextEnemies[targetIdx] = { ...volleyTarget, hull: Math.max(0, volleyTarget.hull - volleyResult.damageDealt) };
@@ -1398,7 +1417,7 @@ const FACTION_HULL_COLOR_RGB: Record<string, string> = {
 
 function drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]) {
   for (const p of projectiles) {
-    drawWeaponBeam(ctx, p.fromX, p.fromY, p.toX, p.toY, p.t, p.color);
+    drawWeaponBeam(ctx, p.fromX, p.fromY, p.toX, p.toY, p.t, p.color, p.weight);
   }
 }
 

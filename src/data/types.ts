@@ -72,6 +72,11 @@ export interface ModuleDef {
   baseDamage?: number;
   baseBlock?: number;
   traitPool: ModuleTrait[];
+  /** Issue #4 (2026-08 playtest): every weapon fired the same blue beam — the juice
+   * infrastructure existed but didn't vary with what actually fired. A weapon's
+   * signature color for its projectile beam and impact burst; falls back to the
+   * generic cyan if unset (non-weapon modules don't need one). */
+  color?: string;
 }
 
 /** Roll quality is 0..1, drawn from a band that shifts upward with rarity but always

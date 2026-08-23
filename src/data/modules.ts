@@ -30,6 +30,7 @@ export const MODULE_DEFS: ModuleDef[] = [
     powerDraw: 2,
     cooldown: 0,
     baseDamage: 14,
+    color: "#8ff3ff",
     traitPool: [
       { id: "crit", label: "+Crit", description: "Higher chance to strike a critical hit." },
       { id: "pierce", label: "+Pierce", description: "Ignores a portion of enemy armor." },
@@ -43,6 +44,7 @@ export const MODULE_DEFS: ModuleDef[] = [
     powerDraw: 3,
     cooldown: 1,
     baseDamage: 22,
+    color: "#b98cff",
     traitPool: [
       { id: "chainArc", label: "Chain Arc", description: "Damage arcs to a second target." },
       { id: "pierce", label: "+Pierce", description: "Ignores a portion of enemy armor." },
@@ -106,6 +108,7 @@ export const MODULE_DEFS: ModuleDef[] = [
     powerDraw: 2,
     cooldown: 3,
     baseDamage: 6,
+    color: "#8cc7ff",
     traitPool: [
       { id: "disable", label: "Disable", description: "Chance to disable an enemy module." },
       { id: "shieldBreak", label: "Shield Break", description: "Strips enemy block." },
@@ -131,6 +134,7 @@ export const MODULE_DEFS: ModuleDef[] = [
     powerDraw: 4,
     cooldown: 2,
     baseDamage: 34,
+    color: "#f2fbff",
     traitPool: [
       { id: "execute", label: "Execute", description: "+50% damage against a target below 25% hull — a finisher, not a raw damage lead." },
       { id: "pierce", label: "+Pierce", description: "Ignores a portion of enemy armor." },
@@ -144,6 +148,7 @@ export const MODULE_DEFS: ModuleDef[] = [
     powerDraw: 3,
     cooldown: 1,
     baseDamage: 12,
+    color: "#ff9f4d",
     traitPool: [
       { id: "aoe", label: "Splash", description: "Also hits every other living enemy for reduced damage — trades single-target power for group control." },
       { id: "crit", label: "+Crit", description: "Higher chance to strike a critical hit." },
@@ -194,6 +199,7 @@ export const MODULE_DEFS: ModuleDef[] = [
     powerDraw: 3,
     cooldown: 1,
     baseDamage: 11,
+    color: "#5dffb0",
     traitPool: [
       { id: "overload", label: "Overload", description: "Every third shot from this weapon deals double damage — a charge-up rhythm, not a flat number." },
       { id: "crit", label: "+Crit", description: "Higher chance to strike a critical hit." },
@@ -232,6 +238,7 @@ export const MODULE_DEFS: ModuleDef[] = [
     powerDraw: 4,
     cooldown: 1,
     baseDamage: 16,
+    color: "#ff6b6b",
     traitPool: [
       { id: "volley", label: "Volley", description: "Fires twice per activation, each an independent hit-or-miss roll against the same target — trades peak single-hit power for consistency." },
       { id: "pierce", label: "+Pierce", description: "Ignores a portion of enemy armor." },
