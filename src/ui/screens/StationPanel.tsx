@@ -311,14 +311,19 @@ function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
               <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><SpeedIcon size={12} /> {computeSpeed(candidate)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem", color: "var(--text-mid)" }}>
-                <ResourceIcon type="sourcePoints" size={13} /> {cost}
+              <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8rem", color: "var(--text-mid)" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><ResourceIcon type="sourcePoints" size={13} /> {cost}</span>
+                {def.essenceCost > 0 && (
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", color: canAfford({ originEssence: def.essenceCost }) ? "var(--text-mid)" : "var(--red)" }}>
+                    <ResourceIcon type="originEssence" size={13} /> {def.essenceCost}
+                  </span>
+                )}
               </span>
               <button
                 className="btn primary"
-                disabled={!canAfford({ sourcePoints: cost })}
+                disabled={!canAfford({ sourcePoints: cost, originEssence: def.essenceCost })}
                 onClick={() => {
-                  spend({ sourcePoints: cost });
+                  spend({ sourcePoints: cost, originEssence: def.essenceCost });
                   addShip(candidate);
                   onBuy(candidate);
                   setOffers((prev) => prev.map((o, idx) => (idx === i ? drawShip(pickOne(HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag])).id, ownedNamedShipIds()) : o)));
@@ -412,7 +417,13 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
 
 function RecruitTab() {
   const genericDefs = CREW_DEFS.filter((c) => !c.named);
-  const cost = 30;
+  // Issue #2 (2026-08 playtest): Alloy had no spend sink at all besides trading it
+  // back to Salvage at a loss — a resource with no real purpose is exactly the
+  // legibility problem reported. Crew outfitting is a natural fit and gives every
+  // resource a distinct, memorable job: Source Points for hulls/modules, Alloy for
+  // crew, Origin Essence gates hull tiers, Insight rerolls traits, Salvage repairs
+  // and is the base trade currency.
+  const cost = 20;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
       <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
@@ -433,13 +444,13 @@ function RecruitTab() {
           </div>
           <button
             className="btn primary"
-            disabled={!canAfford({ sourcePoints: cost })}
+            disabled={!canAfford({ alloy: cost })}
             onClick={() => {
-              spend({ sourcePoints: cost });
+              spend({ alloy: cost });
               recruitGenericCrew(c.id);
             }}
           >
-            Recruit
+            Recruit <ResourceIcon type="alloy" size={12} /> {cost}
           </button>
         </Row>
       ))}

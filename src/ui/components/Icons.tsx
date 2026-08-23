@@ -85,6 +85,18 @@ export const RESOURCE_LABEL: Record<ResourceType, string> = {
   insight: "Insight",
 };
 
+/** Issue #2 (2026-08 playtest): the player couldn't tell what any resource was
+ * *for* — five icons and numbers with no legible purpose. Each entry names the
+ * actual, current spend point(s) in the code, not an aspirational description —
+ * see ResourceBar's tap-to-reveal panel. */
+export const RESOURCE_INFO: Record<ResourceType, string> = {
+  salvage: "Raw scrap from combat and mining. Repairs your hull at any station, and trades for Alloy.",
+  sourcePoints: "The Shipwright and Fabricator's currency — spend it on new hulls, new modules, and rerolling their offers.",
+  alloy: "Refined material. Outfits new crew recruits, or trades back to Salvage if you're short on it.",
+  originEssence: "Earned from tougher fights. Higher hull tiers require it alongside Source Points — the better the ship, the more it costs.",
+  insight: "Earned from story and exploration. Spend it to lock in a module's trait instead of leaving it to the next roll.",
+};
+
 export function ResourceIcon({ type, size = 18 }: { type: ResourceType; size?: number }) {
   const Glyph = RESOURCE_GLYPHS[type];
   return (
