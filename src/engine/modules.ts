@@ -10,11 +10,14 @@ function rollModuleRarity(baseRarity: ModuleRarity): ModuleRarity {
   return MODULE_RARITY_ORDER[idx];
 }
 
-/** A roll of 0 gives 80% of the rarity's baseline stat, 0.5 (neutral) gives exactly
- * 100%, and 1 gives 120% — mirrors ships' qualityMultiplier so a mk3 weapon is a range,
- * not a fixed number. */
+/** A roll of 0 gives 88% of the rarity's baseline stat, 0.5 (neutral) gives exactly
+ * 100%, and 1 gives 112% — mirrors ships' qualityMultiplier so a mk3 weapon is a range,
+ * not a fixed number, while staying narrow enough (±12%) that it can't invert tier
+ * ordering given MODULE_RARITY_MULTIPLIER's ~1.32x-per-tier gap — verified in
+ * ships.test.ts's tier-overlap check (see docs/design-principles.md's Player-Tested
+ * Anti-Patterns #6). */
 export function qualityMultiplier(roll: number): number {
-  return 0.8 + roll * 0.4;
+  return 0.88 + roll * 0.24;
 }
 
 export function drawModule(defId?: string): ModuleInstance {

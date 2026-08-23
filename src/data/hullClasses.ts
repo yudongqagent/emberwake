@@ -155,13 +155,17 @@ export const RARITY_ORDER: ShipRarity[] = [
   "ascendant",
 ];
 
+/** ~1.32x per tier — wide enough, paired with the ±12% quality-roll band in
+ * engine/ships.ts, that a worst-roll ship of tier N+1 always beats a best-roll ship
+ * of tier N. See docs/design-principles.md's Player-Tested Anti-Patterns #6 and the
+ * verification in ships.test.ts. */
 export const RARITY_MULTIPLIER: Record<ShipRarity, number> = {
   salvage: 1.0,
-  standard: 1.15,
-  reinforced: 1.35,
-  advanced: 1.6,
-  prototype: 1.9,
-  ascendant: 2.3,
+  standard: 1.32,
+  reinforced: 1.74,
+  advanced: 2.3,
+  prototype: 3.04,
+  ascendant: 4.01,
 };
 
 export const RARITY_WEIGHTS: Record<ShipRarity, number> = {

@@ -2,12 +2,16 @@ import type { ModuleDef, ModuleRarity } from "./types";
 
 export const MODULE_RARITY_ORDER: ModuleRarity[] = ["mk1", "mk2", "mk3", "mk4", "mk5"];
 
+/** ~1.32x per tier — wide enough, paired with the ±12% quality-roll band in
+ * engine/modules.ts, that a worst-roll mk-N+1 module always beats a best-roll mk-N
+ * one. See docs/design-principles.md's Player-Tested Anti-Patterns #6 and the
+ * verification in ships.test.ts. */
 export const MODULE_RARITY_MULTIPLIER: Record<ModuleRarity, number> = {
   mk1: 1.0,
-  mk2: 1.25,
-  mk3: 1.55,
-  mk4: 1.95,
-  mk5: 2.5,
+  mk2: 1.32,
+  mk3: 1.74,
+  mk4: 2.3,
+  mk5: 3.04,
 };
 
 export const MODULE_DEFS: ModuleDef[] = [

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance, xpToNextLevel, applyXp } from "./ships";
+import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance, xpToNextLevel, applyXp, qualityMultiplier } from "./ships";
+import { RARITY_ORDER, RARITY_MULTIPLIER } from "../data/hullClasses";
 import type { ShipInstance } from "../data/types";
 
 function makeShip(overrides: Partial<ShipInstance> = {}): ShipInstance {
@@ -50,11 +51,11 @@ describe("attribute rolls", () => {
     expect(computeMaxHull(makeShip({ rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }))).toBe(120);
   });
 
-  it("hull roll of 0 gives 80% and 1 gives 120% of the neutral value", () => {
+  it("hull roll of 0 gives 88% and 1 gives 112% of the neutral value", () => {
     const low = computeMaxHull(makeShip({ rolls: { hull: 0, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
     const high = computeMaxHull(makeShip({ rolls: { hull: 1, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
-    expect(low).toBe(96); // 120 * 0.8
-    expect(high).toBe(144); // 120 * 1.2
+    expect(low).toBe(106); // 120 * 0.88
+    expect(high).toBe(134); // 120 * 1.12
   });
 
   it("two ships of the same rarity can roll differently — itemization variance is real", () => {
@@ -102,5 +103,21 @@ describe("xpToNextLevel / applyXp", () => {
     const ship = makeShip({ level: 1, xp: 0, currentHp: 120 });
     const leveled = applyXp(ship, xpToNextLevel(1));
     expect(leveled.currentHp).toBeGreaterThanOrEqual(120);
+  });
+});
+
+// Player-Tested Anti-Patterns #6 (docs/design-principles.md): tier gaps must be
+// verified, not assumed. A worst-roll ship of tier N+1 must always beat a best-roll
+// ship of tier N, or the rarity ladder doesn't actually mean anything in practice —
+// this exact overlap was the real bug a 2026-08-23 player playtest caught.
+describe("rarity tier gaps (no overlap between adjacent tiers)", () => {
+  it("a worst-roll ship of the next rarity always beats a best-roll ship of this one", () => {
+    for (let i = 0; i < RARITY_ORDER.length - 1; i++) {
+      const lo = RARITY_ORDER[i];
+      const hi = RARITY_ORDER[i + 1];
+      const loBest = RARITY_MULTIPLIER[lo] * qualityMultiplier(1);
+      const hiWorst = RARITY_MULTIPLIER[hi] * qualityMultiplier(0);
+      expect(hiWorst, `${hi} (worst roll) should exceed ${lo} (best roll)`).toBeGreaterThan(loBest);
+    }
   });
 });

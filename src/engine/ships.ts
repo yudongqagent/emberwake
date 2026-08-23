@@ -2,11 +2,16 @@ import type { HullClassId, ShipInstance, ShipRolls } from "../data/types";
 import { RARITY_WEIGHTS, RARITY_ORDER, APTITUDE_WEIGHTS, APTITUDE_GROWTH, RARITY_MULTIPLIER, hullClassById } from "../data/hullClasses";
 import { weightedPick, randomId, rollQuality } from "./rng";
 
-/** A roll of 0 gives 80% of the class baseline, 0.5 (neutral) gives exactly 100%, and a
- * roll of 1 gives 120% — the same ±quality band used for every stat, so a ship's rarity
- * sets the tier but its rolls decide whether it's a great one. */
+/** A roll of 0 gives 88% of the class baseline, 0.5 (neutral) gives exactly 100%, and a
+ * roll of 1 gives 112% — the same ±quality band used for every stat, so a ship's rarity
+ * sets the tier but its rolls decide whether it's a great one within that tier.
+ * Deliberately narrow (±12%, was ±20%): with RARITY_MULTIPLIER's ~1.32x-per-tier gap,
+ * this guarantees a worst-roll ship of tier N+1 still beats a best-roll ship of tier N
+ * — verified in ships.test.ts. A wider band here would let a lucky common roll beat an
+ * unlucky rare one, which is exactly the "tiers don't feel different" failure flagged
+ * in docs/design-principles.md's Player-Tested Anti-Patterns #6. */
 export function qualityMultiplier(roll: number): number {
-  return 0.8 + roll * 0.4;
+  return 0.88 + roll * 0.24;
 }
 
 function rollShipAttributes(rarity: ShipInstance["rarity"]): ShipRolls {
