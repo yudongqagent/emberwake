@@ -1,6 +1,6 @@
 import type { ModuleInstance, ModuleRarity } from "../data/types";
 import { MODULE_DEFS, MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, moduleDefById } from "../data/modules";
-import { pickOne, randomId } from "./rng";
+import { pickOne, randomId, rollQuality } from "./rng";
 
 function rollModuleRarity(baseRarity: ModuleRarity): ModuleRarity {
   const baseIdx = MODULE_RARITY_ORDER.indexOf(baseRarity);
@@ -10,11 +10,19 @@ function rollModuleRarity(baseRarity: ModuleRarity): ModuleRarity {
   return MODULE_RARITY_ORDER[idx];
 }
 
+/** A roll of 0 gives 80% of the rarity's baseline stat, 0.5 (neutral) gives exactly
+ * 100%, and 1 gives 120% — mirrors ships' qualityMultiplier so a mk3 weapon is a range,
+ * not a fixed number. */
+export function qualityMultiplier(roll: number): number {
+  return 0.8 + roll * 0.4;
+}
+
 export function drawModule(defId?: string): ModuleInstance {
   const def = defId ? moduleDefById(defId) : pickOne(MODULE_DEFS);
   const rarity = rollModuleRarity(def.baseRarity);
   const traitCount = 1 + Math.floor(Math.random() * Math.min(3, def.traitPool.length));
   const traits = shuffle(def.traitPool.map((t) => t.id)).slice(0, traitCount);
+  const quality = rollQuality(MODULE_RARITY_ORDER.indexOf(rarity), MODULE_RARITY_ORDER.length);
   return {
     id: randomId("module"),
     defId: def.id,
@@ -22,6 +30,7 @@ export function drawModule(defId?: string): ModuleInstance {
     level: 1,
     traits,
     lockedTraitSlot: null,
+    quality,
   };
 }
 
@@ -39,16 +48,18 @@ export function computeModuleDamage(mod: ModuleInstance): number {
   const base = def.baseDamage ?? 0;
   const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
   const levelMult = 1 + (mod.level - 1) * 0.12;
-  return Math.round(base * rarityMult * levelMult);
+  const rollMult = qualityMultiplier(mod.quality ?? 0.5);
+  return Math.round(base * rarityMult * levelMult * rollMult);
 }
 
-/** Trait-driven crit chance for a fired weapon: a base proc rate, boosted if the
- * module rolled the "crit" trait, boosted further by the player's current combo. */
-export function computeCritChance(mod: ModuleInstance, comboCount: number): number {
+/** Trait-driven crit chance for a fired weapon: a base proc rate, the ship's own
+ * gunnery-quality roll, a boost if the module rolled the "crit" trait, and a further
+ * boost from the player's current combo. */
+export function computeCritChance(mod: ModuleInstance, comboCount: number, shipBaseCrit: number = 0): number {
   const base = 0.08;
   const traitBonus = mod.traits.includes("crit") ? 0.12 : 0;
   const comboBonus = Math.min(0.2, comboCount * 0.02);
-  return Math.min(0.75, base + traitBonus + comboBonus);
+  return Math.min(0.75, base + shipBaseCrit + traitBonus + comboBonus);
 }
 
 export function computeModuleBlock(mod: ModuleInstance): number {
@@ -56,7 +67,8 @@ export function computeModuleBlock(mod: ModuleInstance): number {
   const base = def.baseBlock ?? 0;
   const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
   const levelMult = 1 + (mod.level - 1) * 0.12;
-  return Math.round(base * rarityMult * levelMult);
+  const rollMult = qualityMultiplier(mod.quality ?? 0.5);
+  return Math.round(base * rarityMult * levelMult * rollMult);
 }
 
 export function levelUpModule(mod: ModuleInstance): ModuleInstance {

@@ -2,21 +2,20 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { encounterById } from "../../data/encounters";
 import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeCritChance } from "../../engine/modules";
-import { computeMaxHull, computePowerCapacity } from "../../engine/ships";
+import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, rangeBandFromDistance, type RangeBand } from "../../engine/combat";
-import { state, flagship, resolveCombatVictory, resolveCombatDefeat } from "../../state/store";
+import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount } from "../../state/store";
 import { crewDefById } from "../../data/crew";
 import { playSfx } from "../../audio/engine";
-import type { CrewRole, FactionId, ResourceType } from "../../data/types";
+import type { FactionId, ResourceType } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
 import { ResourceIcon, RESOURCE_LABEL } from "../components/Icons";
+import { AnimatedFraction } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing } from "../render/shipArt";
 
 const REF_W = 900;
 const REF_H = 520;
-const PLAYER_SPEED = 230;
-const ACCEL = 560;
 const PROJECTILE_DURATION = 0.3;
 
 interface EnemyState {
@@ -26,7 +25,6 @@ interface EnemyState {
   damage: number;
   block: number;
   evasion: number;
-  debuffed?: boolean;
   regen?: number;
   /** Wound up on a prior turn — unleashes a 2x-damage strike this turn, then clears. */
   charging?: boolean;
@@ -36,6 +34,12 @@ interface EnemyState {
   blockBrokenHits?: number;
   /** True once a boss has crossed the 50% enrage threshold. */
   enraged?: boolean;
+  /** Target Lock: halves evasion against the player's attacks. Decays once per round. */
+  evasionDebuffTurns?: number;
+  /** Undercut: halves block against the player's attacks. Decays once per round. */
+  blockDebuffTurns?: number;
+  /** Reaver's Cut: takes +25% damage from the player. Decays once per round. */
+  vulnerableTurns?: number;
 }
 
 interface Popup {
@@ -94,7 +98,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // hullBonus grows the flagship's effective max hull for this fight, regen ticks
   // hull back each round, jumpRange shaves a turn off weapon cooldowns, an armor-slot
   // shieldBreak grants bonus evasion, and yieldBonus boosts salvage/alloy on victory.
-  const hullBonusFraction = 0.15 * equippedModuleList.filter((m) => m.traits.includes("hullBonus")).length;
+  // Unit 7-Requiem's passive ("+15% max hull fleet-wide") stacks with equipment hullBonus traits.
+  const hullBonusFraction = 0.15 * equippedModuleList.filter((m) => m.traits.includes("hullBonus")).length + (hasCrewRecruited("unit7Requiem") ? 0.15 : 0);
+  // Generic recruit helms passively contribute "+5% evasion fleet-wide" each, just by being recruited.
+  const recruitHelmEvasionBonus = crewCount("recruitHelm") * 0.05;
   const regenStacks = equippedModuleList.filter((m) => m.traits.includes("regen")).length;
   const jumpRangeStacks = equippedModuleList.filter((m) => m.traits.includes("jumpRange")).length;
   const shieldBreakArmorStacks = equippedModuleList.filter(
@@ -102,6 +109,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   ).length;
   const yieldBonusFraction = 0.2 * equippedModuleList.filter((m) => m.traits.includes("yieldBonus")).length;
   const assignedCrew = state.value.crew.filter((c) => c.assignedShipId === ship.id);
+  // The ship's own rolled attributes — real itemization variance, not a flat rarity number.
+  const shipBaseEvasion = computeBaseEvasion(ship);
+  const shipBaseCrit = computeBaseCritChance(ship);
+  const shipSpeed = computeSpeed(ship);
+  const shipAccel = shipSpeed * 2.4;
 
   const [enemies, setEnemies] = useState<EnemyState[]>(
     encounter.enemies.map((e) => ({ ...e, maxHull: e.hull })),
@@ -121,6 +133,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [displayRange, setDisplayRange] = useState<RangeBand>("mid");
   const [comboCount, setComboCount] = useState(0);
   const [overcharged, setOvercharged] = useState(false);
+  const [guaranteedCrit, setGuaranteedCrit] = useState(false);
+  const [riposteArmed, setRiposteArmed] = useState(false);
+  const [shieldedNextTurn, setShieldedNextTurn] = useState(false);
   const bossPhaseRef = useRef(false);
 
   const capacity = computePowerCapacity(ship);
@@ -134,6 +149,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const particlesRef = useRef<Particle[]>([]);
   const explosionsRef = useRef<{ x: number; y: number; start: number }[]>([]);
   const shakeRef = useRef(0);
+  /** Freeze-frame juice on meaningful impacts — see docs/visual-standards.md §3.
+   * A timestamp; while performance.now() is under it, the sim clock stalls for a
+   * beat (motion visibly freezes) without touching the setTimeout-driven combat
+   * resolution at all. */
+  const hitStopUntilRef = useRef(0);
+  function triggerHitStop(ms: number) {
+    hitStopUntilRef.current = Math.max(hitStopUntilRef.current, performance.now() + ms);
+  }
   const vpRef = useRef<ReturnType<typeof attachResponsiveCanvas> | null>(null);
   const enemiesRef = useRef(enemies);
   const targetIdxRef = useRef(targetIdx);
@@ -158,6 +181,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         if (pos) {
           spawnBurst(pos.x, pos.y, "255,180,90", 30, 140);
           spawnBurst(pos.x, pos.y, "255,226,93", 14, 70);
+          triggerHitStop(120);
           explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
         }
         playSfx("explosion");
@@ -215,11 +239,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
   function enemyTurn(currentEnemies: EnemyState[]) {
     const wasCharging = currentEnemies.map((e) => !!e.charging);
+    const shieldActive = shieldedNextTurn;
+    if (shieldActive) setShieldedNextTurn(false);
+    let riposteTriggered = false;
+
     let regenerated = currentEnemies.map((e) => {
-      if (e.hull <= 0 || !e.regen) return e;
-      const healed = Math.min(e.maxHull, e.hull + e.regen);
-      if (healed > e.hull) pushLog(`${e.name} regenerates ${healed - e.hull} hull.`);
-      return { ...e, hull: healed };
+      // Crew debuffs decay by one round every enemy turn, whether or not they're read.
+      const decayed = {
+        ...e,
+        evasionDebuffTurns: Math.max(0, (e.evasionDebuffTurns ?? 0) - 1),
+        blockDebuffTurns: Math.max(0, (e.blockDebuffTurns ?? 0) - 1),
+        vulnerableTurns: Math.max(0, (e.vulnerableTurns ?? 0) - 1),
+      };
+      if (decayed.hull <= 0 || !decayed.regen) return decayed;
+      const healed = Math.min(decayed.maxHull, decayed.hull + decayed.regen);
+      if (healed > decayed.hull) pushLog(`${decayed.name} regenerates ${healed - decayed.hull} hull.`);
+      return { ...decayed, hull: healed };
     });
     regenerated.forEach((e, i) => {
       if (e.regen && e.hull > currentEnemies[i].hull) addPopup(i, `+${e.hull - currentEnemies[i].hull}`, "#5dffb0");
@@ -246,8 +281,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       }
     }
 
-    const evasion = Math.min(0.6, 0.05 + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08);
+    const baseEvasion = shipBaseEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus;
+    // Kaan Ferrous: "+10% evasion when at Long range" — only when he's assigned to the flagship.
+    const kaanAssigned = assignedCrew.some((c) => c.defId === "kaanFerrous");
     let totalDamage = 0;
+    const riposteActive = riposteArmed;
     regenerated = regenerated.map((enemy, i) => {
       if (enemy.hull <= 0) return enemy;
 
@@ -268,14 +306,44 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       const enemyPos = arenaRef.current.enemyPos[i] ?? enemySlot(i, regenerated.length);
       const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
       const band = rangeBandFromDistance(dist);
+      const evasion = Math.min(0.6, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
       const result = resolveAttack(enemy.damage * dmgMultiplier, armorBlock, evasion, RANGE_MODIFIERS[band].incoming);
-      if (result.hit) totalDamage += result.damageDealt;
+      const dealt = shieldActive ? 0 : result.hit ? result.damageDealt : 0;
+      if (dealt > 0) totalDamage += dealt;
+
+      if (!result.hit && riposteActive && !riposteTriggered) {
+        riposteTriggered = true;
+        const bestWeapon = equippedModules
+          .filter((m) => moduleDefById(m.defId).baseDamage)
+          .sort((a, b) => computeModuleDamage(b) - computeModuleDamage(a))[0];
+        if (bestWeapon) {
+          const riposteDmg = Math.round(computeModuleDamage(bestWeapon) * 0.6);
+          setTimeout(() => {
+            setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, hull: Math.max(0, e.hull - riposteDmg) } : e)));
+            const pos = arenaRef.current.enemyPos[i];
+            if (pos) {
+              fireProjectile(arenaRef.current.player, pos, "#ffe25d", () => {
+                spawnBurst(pos.x, pos.y, "255,226,93", 14, 110);
+                addPopup(i, `-${riposteDmg}`, "#ffe25d");
+              });
+            }
+            pushLog(`Riposte! Whisper counters ${enemy.name} for ${riposteDmg}.`);
+            playSfx("laser");
+          }, 220);
+        }
+      }
+
       fireProjectile(enemyPos, arenaRef.current.player, wasCharging[i] ? "#ffe25d" : "#ff6b6b", () => {
-        if (result.hit) {
+        if (result.hit && shieldActive) {
+          spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 10, 90);
+          addPopup("player", "DEFLECTED", "#8ff3ff");
+          pushLog(`Construct Override deflects ${enemy.name}'s attack.`);
+        } else if (result.hit) {
           spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", wasCharging[i] ? 20 : 10, wasCharging[i] ? 130 : 90);
           addPopup("player", `-${result.damageDealt}`, "#ff5c5c", wasCharging[i]);
           playSfx("hit");
           setPlayerShakeToken((t) => t + 1);
+          triggerHitStop(wasCharging[i] ? 100 : 45);
           pushLog(`${enemy.name}${wasCharging[i] ? "'s charged strike" : ""} hits Whisper for ${result.damageDealt}.`);
         } else {
           pushLog(`${enemy.name} misses.`);
@@ -283,6 +351,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       });
       return wasCharging[i] ? { ...enemy, charging: false } : enemy;
     });
+    if (riposteTriggered) setRiposteArmed(false);
 
     setEnemies(regenerated);
 
@@ -337,14 +406,20 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const outgoingMult = RANGE_MODIFIERS[band].outgoing;
 
     const wasOvercharged = overcharged;
+    const wasGuaranteedCrit = guaranteedCrit;
     const baseDmg = computeModuleDamage(mod);
-    const dmg = wasOvercharged ? Math.round(baseDmg * 1.5) : baseDmg;
+    const vulnerable = (target.vulnerableTurns ?? 0) > 0;
+    // Ratchet Koi: "+10% weapon damage when at Close range" — only when he's assigned.
+    const ratchetBonus = band === "close" && assignedCrew.some((c) => c.defId === "ratchetKoi") ? 1.1 : 1;
+    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1));
     const nextEnemies = [...enemies];
     if (dmg > 0) {
-      const targetEvasion = target.debuffed ? target.evasion * 0.5 : target.evasion;
+      const targetEvasion = (target.evasionDebuffTurns ?? 0) > 0 ? target.evasion * 0.5 : target.evasion;
       const blockBroken = (target.blockBrokenHits ?? 0) > 0;
-      const effectiveBlock = blockBroken ? 0 : mod.traits.includes("pierce") ? Math.round(target.block * 0.5) : target.block;
-      const critChance = computeCritChance(mod, comboCount);
+      const undercut = (target.blockDebuffTurns ?? 0) > 0;
+      const blockMult = blockBroken ? 0 : Math.min(mod.traits.includes("pierce") ? 0.5 : 1, undercut ? 0.5 : 1);
+      const effectiveBlock = Math.round(target.block * blockMult);
+      const critChance = wasGuaranteedCrit ? 1 : computeCritChance(mod, comboCount, shipBaseCrit);
       const result = resolveAttack(dmg, effectiveBlock, targetEvasion, outgoingMult, undefined, critChance);
       const playerPos = { ...arenaRef.current.player };
       const impactPos = { ...enemyPos };
@@ -352,6 +427,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         if (result.hit) {
           spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : "143,243,255", result.crit ? 22 : 12, result.crit ? 150 : 110);
           addPopup(targetIdx, `${result.crit ? "CRIT " : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : "#8ff3ff", result.crit);
+          triggerHitStop(result.crit ? 90 : 35);
           if (result.crit) setPlayerShakeToken((t) => t + 1);
         }
       });
@@ -362,7 +438,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (result.hit && blockBroken) hitTarget.blockBrokenHits = Math.max(0, (target.blockBrokenHits ?? 0) - 1);
 
       if (result.hit) {
-        pushLog(`${def.name}${result.crit ? " lands a CRITICAL hit on" : " hits"} ${target.name} for ${result.damageDealt}.`);
+        const critNote = wasGuaranteedCrit ? " — Focus Fire's mark guarantees the critical hit on" : result.crit ? " lands a CRITICAL hit on" : " hits";
+        pushLog(`${def.name}${critNote} ${target.name} for ${result.damageDealt}.`);
       } else {
         pushLog(`${def.name} missed ${target.name}.`);
       }
@@ -409,31 +486,50 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
     setCooldowns((prev) => ({ ...prev, [moduleId]: Math.max(0, (def.cooldown ?? 0) + overchargePenalty - cooldownReduction) }));
     if (wasOvercharged) setOvercharged(false);
+    if (wasGuaranteedCrit) setGuaranteedCrit(false);
     setEnemies(nextEnemies);
     endPlayerAction(nextEnemies);
   }
 
-  function useCrewActive(crewId: string, role: CrewRole) {
+  function useCrewActive(crewId: string, abilityId: string) {
     if (status !== "active") return;
     let nextEnemies = enemies;
-    if (role === "engineer") {
+    const livingIdx = enemies.map((e, i) => ({ e, i })).filter(({ e }) => e.hull > 0).map(({ i }) => i);
+
+    if (abilityId === "fieldPatch") {
+      // Ori Vashti: a straightforward mid-battle repair.
       const heal = Math.round(maxHull * 0.15);
       setPlayerHull((h) => Math.min(maxHull, h + heal));
       addPopup("player", `+${heal}`, "#5dffb0");
       pushLog(`Field Patch restores ${heal} hull.`);
       playSfx("dock");
-    } else if (role === "gunner") {
-      const target = enemies[targetIdx];
-      if (target && target.hull > 0) {
-        nextEnemies = enemies.map((e, i) => (i === targetIdx ? { ...e, hull: Math.max(0, e.hull - 20) } : e));
-        pushLog(`Focus Fire deals 20 direct damage to ${target.name}.`);
-        const pos = arenaRef.current.enemyPos[targetIdx];
-        if (pos) spawnBurst(pos.x, pos.y, "255,159,77", 10, 100);
-        addPopup(targetIdx, "-20", "#ff9f4d");
-        playSfx("laser");
-      }
-    } else if (role === "helm") {
-      // Evasive Burn: an instant burst toward the target, closing or opening range on demand.
+    } else if (abilityId === "focusFire") {
+      // Ratchet Koi: no damage now — the next weapon fired this fight is a guaranteed crit.
+      setGuaranteedCrit(true);
+      pushLog("Focus Fire locks in a guaranteed critical hit on the next weapon volley.");
+      playSfx("click");
+    } else if (abilityId === "riposte") {
+      // Kaan Ferrous: arms a free counter-attack the next time an enemy misses.
+      setRiposteArmed(true);
+      pushLog("Riposte primed — the next evaded hit draws an automatic counter.");
+      playSfx("click");
+    } else if (abilityId === "undercut") {
+      // Priya Osei: halves every living enemy's block for two rounds.
+      nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, blockDebuffTurns: 2 } : e));
+      pushLog("Undercut strips block fleet-wide for two rounds.");
+      playSfx("click");
+    } else if (abilityId === "reaversCut") {
+      // Kessa Vray: every living enemy takes +25% damage for one round.
+      nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, vulnerableTurns: 1 } : e));
+      pushLog("Reaver's Cut marks every hostile — bonus damage incoming.");
+      playSfx("click");
+    } else if (abilityId === "constructOverride") {
+      // Unit 7-Requiem: negates all incoming damage on the next enemy turn.
+      setShieldedNextTurn(true);
+      pushLog("Construct Override primes a full damage negation for the next assault.");
+      playSfx("click");
+    } else if (abilityId === "evasiveBurn") {
+      // Generic recruit helm: an instant burst toward the target, closing or opening range.
       const target = arenaRef.current.enemyPos[targetIdx];
       if (target) {
         const dx = target.x - arenaRef.current.player.x;
@@ -446,11 +542,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       }
       pushLog("Evasive Burn repositions Whisper instantly.");
       playSfx("jump");
-    } else if (role === "tactician") {
+    } else if (abilityId === "targetLock") {
+      // Generic recruit tactician: halves the current target's evasion for two rounds.
       const target = enemies[targetIdx];
       if (target && target.hull > 0) {
-        nextEnemies = enemies.map((e, i) => (i === targetIdx ? { ...e, debuffed: true } : e));
-        pushLog(`Target Lock cuts ${target.name}'s evasion.`);
+        nextEnemies = enemies.map((e, i) => (i === targetIdx ? { ...e, evasionDebuffTurns: 2 } : e));
+        pushLog(`Target Lock cuts ${target.name}'s evasion for two rounds.`);
       }
     }
     const cooldownValue = crewDefById(state.value.crew.find((c) => c.id === crewId)!.defId).activeCooldown;
@@ -502,7 +599,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const player = { vx: 0, vy: 0, angle: 0 };
 
     function step(now: number) {
-      const dt = Math.min(0.25, Math.max(0, (now - last) / 1000));
+      const frozen = now < hitStopUntilRef.current;
+      const dt = frozen ? 0 : Math.min(0.25, Math.max(0, (now - last) / 1000));
       last = now;
 
       // player free movement — frozen once the encounter has ended
@@ -527,10 +625,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         if (dist > 6) { ax = dx / dist; ay = dy / dist; } else pointerTarget = null;
       }
       const mag = Math.hypot(ax, ay) || 1;
-      player.vx += (ax / mag) * ACCEL * dt;
-      player.vy += (ay / mag) * ACCEL * dt;
+      player.vx += (ax / mag) * shipAccel * dt;
+      player.vy += (ay / mag) * shipAccel * dt;
       const spd = Math.hypot(player.vx, player.vy);
-      if (spd > PLAYER_SPEED) { player.vx = (player.vx / spd) * PLAYER_SPEED; player.vy = (player.vy / spd) * PLAYER_SPEED; }
+      if (spd > shipSpeed) { player.vx = (player.vx / spd) * shipSpeed; player.vy = (player.vy / spd) * shipSpeed; }
       const drag = Math.pow(0.02, dt);
       player.vx *= drag; player.vy *= drag;
       arena.player.x = Math.max(24, Math.min(REF_W - 24, arena.player.x + player.vx * dt));
@@ -593,7 +691,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       <div style={{ padding: "0.6rem 1rem 0" }} className="title">{encounter.name}</div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.3rem 1rem 0.5rem", fontSize: "0.78rem", color: "var(--text-mid)" }}>
-        <span>{ship.name} — Hull {playerHull}/{maxHull}</span>
+        <span>{ship.name} — Hull <AnimatedFraction current={playerHull} max={maxHull} /></span>
         {comboCount > 0 && (
           <span
             className="eyebrow"
@@ -611,6 +709,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           {" · "}Power {capacity}
         </span>
       </div>
+
+      {(guaranteedCrit || riposteArmed || shieldedNextTurn) && (
+        <div style={{ display: "flex", gap: "0.4rem", padding: "0 1rem 0.4rem", flexWrap: "wrap" }}>
+          {guaranteedCrit && <StatusBadge color="var(--amber)" text="Guaranteed Crit Armed" />}
+          {riposteArmed && <StatusBadge color="var(--cyan)" text="Riposte Armed" />}
+          {shieldedNextTurn && <StatusBadge color="var(--violet)" text="Override Shield Primed" />}
+        </div>
+      )}
 
       <div style={{ flex: 1, position: "relative", minHeight: 220 }}>
         <canvas
@@ -649,7 +755,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           const def = crewDefById(c.defId);
           const cd = crewCooldowns[c.id] ?? 0;
           return (
-            <button key={c.id} className="btn" disabled={status !== "active" || cd > 0} onClick={() => useCrewActive(c.id, def.role)}>
+            <button key={c.id} className="btn" disabled={status !== "active" || cd > 0} onClick={() => useCrewActive(c.id, def.abilityId)}>
               {def.active.split(" — ")[0]}{cd > 0 ? ` (${cd})` : ""}
             </button>
           );
@@ -695,6 +801,25 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+function StatusBadge({ color, text }: { color: string; text: string }) {
+  return (
+    <span
+      style={{
+        fontSize: "0.66rem",
+        fontWeight: 700,
+        fontFamily: "var(--font-display)",
+        color,
+        border: `1px solid ${color}`,
+        borderRadius: 999,
+        padding: "0.2em 0.65em",
+        textShadow: `0 0 6px ${color}`,
+      }}
+    >
+      {text}
+    </span>
   );
 }
 

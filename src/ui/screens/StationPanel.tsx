@@ -1,13 +1,13 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, flagship, spend, grant, canAfford, drawShipAction, drawModuleAction, recruitGenericCrew } from "../../state/store";
+import { state, flagship, spend, grant, canAfford, drawShipAction, drawModuleAction, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull } from "../../state/store";
 import { HULL_CLASSES, hullClassById } from "../../data/hullClasses";
 import { CREW_DEFS } from "../../data/crew";
 import { moduleDefById } from "../../data/modules";
-import { computeMaxHull } from "../../engine/ships";
 import { computeModuleDamage, computeModuleBlock } from "../../engine/modules";
 import { ShipRarityTag, ModuleRarityTag } from "../components/RarityTag";
 import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon } from "../components/Icons";
+import { RollQualityBadge } from "../components/StatBlock";
 import type { ShipInstance, ModuleInstance } from "../../data/types";
 
 type Tab = "trade" | "shipwright" | "fabricator" | "recruit";
@@ -74,14 +74,20 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
 
       {drawnShip && (() => {
         const cur = flagship.value;
-        const newHull = computeMaxHull(drawnShip);
-        const curHull = cur ? computeMaxHull(cur) : 0;
+        const newHull = effectiveMaxHull(drawnShip);
+        const curHull = cur ? effectiveMaxHull(cur) : 0;
         const delta = newHull - curHull;
         return (
           <DrawReveal title="New Hull Drawn" accent={`var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
             <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{drawnShip.name}</div>
             <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{hullClassById(drawnShip.hullClass).name}</div>
             <ShipRarityTag rarity={drawnShip.rarity} showPips={false} />
+            <div style={{ marginTop: "0.5rem" }}>
+              <RollQualityBadge
+                roll={(drawnShip.rolls.hull + drawnShip.rolls.power + drawnShip.rolls.speed + drawnShip.rolls.evasion + drawnShip.rolls.crit) / 5}
+                label="Overall roll"
+              />
+            </div>
             {cur && (
               <div style={{ marginTop: "0.75rem", fontFamily: "var(--font-display)", fontWeight: 700, color: delta >= 0 ? "var(--green)" : "var(--red)" }}>
                 {delta >= 0 ? "+" : ""}{delta} Hull vs {cur.name}
@@ -112,6 +118,9 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
             <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{def.name}</div>
             <div style={{ color: "var(--text-mid)", margin: "0.4rem 0", textTransform: "capitalize" }}>{def.type}</div>
             <ModuleRarityTag rarity={drawnModule.rarity} />
+            <div style={{ marginTop: "0.5rem" }}>
+              <RollQualityBadge roll={drawnModule.quality} />
+            </div>
             {drawnModule.traits.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", justifyContent: "center", marginTop: "0.6rem" }}>
                 {drawnModule.traits.map((t, i) => (
@@ -162,6 +171,10 @@ function Row({ children }: { children: ComponentChildren }) {
 
 function TradeTab() {
   const res = state.value.resources;
+  // Priya Osei: "+10% Salvage and Alloy from Trade exchanges" — fleet-wide once recruited.
+  const tradeBonus = hasCrewRecruited("priyaOsei") ? 1.1 : 1;
+  const alloyOut = Math.round(10 * tradeBonus);
+  const salvageOut = Math.round(20 * tradeBonus);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
@@ -169,17 +182,17 @@ function TradeTab() {
       </div>
       <Row>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
-          <ResourceIcon type="salvage" size={16} /> 30 <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="alloy" size={16} /> 10
+          <ResourceIcon type="salvage" size={16} /> 30 <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="alloy" size={16} /> {alloyOut}
         </div>
-        <button className="btn" disabled={res.salvage < 30} onClick={() => { spend({ salvage: 30 }); grant({ alloy: 10 }); }}>
+        <button className="btn" disabled={res.salvage < 30} onClick={() => { spend({ salvage: 30 }); grant({ alloy: alloyOut }); }}>
           Exchange
         </button>
       </Row>
       <Row>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
-          <ResourceIcon type="alloy" size={16} /> 10 <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="salvage" size={16} /> 20
+          <ResourceIcon type="alloy" size={16} /> 10 <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="salvage" size={16} /> {salvageOut}
         </div>
-        <button className="btn" disabled={res.alloy < 10} onClick={() => { spend({ alloy: 10 }); grant({ salvage: 20 }); }}>
+        <button className="btn" disabled={res.alloy < 10} onClick={() => { spend({ alloy: 10 }); grant({ salvage: salvageOut }); }}>
           Exchange
         </button>
       </Row>

@@ -1,11 +1,11 @@
-import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem } from "../../state/store";
+import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
-import { computeMaxHull, computePowerCapacity } from "../../engine/ships";
+import { computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { ShipRarityTag } from "../components/RarityTag";
 import { crewDefById } from "../../data/crew";
 import { playSfx } from "../../audio/engine";
-import { HullIcon, PowerIcon, AptitudeIcon, LevelIcon, LocationIcon, CrewRoleIcon, NavIcon } from "../components/Icons";
-import { StatReadout, Bar, hullBarKind } from "../components/StatBlock";
+import { HullIcon, PowerIcon, AptitudeIcon, LevelIcon, LocationIcon, CrewRoleIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
+import { StatReadout, Bar, hullBarKind, AnimatedFraction } from "../components/StatBlock";
 import { BridgeViewscreen } from "../components/BridgeViewscreen";
 
 export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void }) {
@@ -14,7 +14,7 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
   const crewCount = state.value.crew.length;
   const objective = getNextObjective();
   const sameSystem = objective?.systemId === currentSystem.value.id;
-  const hullFraction = ship ? ship.currentHp / computeMaxHull(ship) : 0;
+  const hullFraction = ship ? ship.currentHp / effectiveMaxHull(ship) : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", height: "100%", overflowY: "auto", padding: "1rem" }}>
@@ -72,8 +72,11 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: "0.75rem", marginTop: "0.9rem" }}>
-            <StatReadout icon={<HullIcon size={18} />} value={`${ship.currentHp}/${computeMaxHull(ship)}`} label="Hull" />
+            <StatReadout icon={<HullIcon size={18} />} value={<AnimatedFraction current={ship.currentHp} max={effectiveMaxHull(ship)} />} label="Hull" />
             <StatReadout icon={<PowerIcon size={18} />} value={computePowerCapacity(ship)} label="Power" color="var(--amber)" />
+            <StatReadout icon={<SpeedIcon size={18} />} value={computeSpeed(ship)} label="Speed" color="var(--cyan)" />
+            <StatReadout icon={<EvasionIcon size={18} />} value={`${Math.round(computeBaseEvasion(ship) * 100)}%`} label="Evasion" color="var(--green)" />
+            <StatReadout icon={<CritIcon size={18} />} value={`${Math.round(computeBaseCritChance(ship) * 100)}%`} label="Crit" color="var(--red)" />
             <StatReadout icon={<LevelIcon size={18} />} value={ship.level} label="Level" color="var(--violet)" />
             <StatReadout icon={<AptitudeIcon size={18} />} value={ship.scanned ? ship.aptitude! : "??"} label="Aptitude" color="var(--green)" />
           </div>

@@ -2,7 +2,7 @@ import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance } from ".
 import { drawShip, computeMaxHull } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 const SAVE_KEY = "emberwake.save";
 
 export interface PoiRuntimeState {
@@ -27,7 +27,7 @@ export interface GameState {
 }
 
 function startingModule(defId: string): ModuleInstance {
-  return { id: randomId("module"), defId, rarity: "mk1", level: 1, traits: [], lockedTraitSlot: null };
+  return { id: randomId("module"), defId, rarity: "mk1", level: 1, traits: [], lockedTraitSlot: null, quality: 0.5 };
 }
 
 export function createInitialState(): GameState {
@@ -58,8 +58,17 @@ export function createInitialState(): GameState {
   };
 }
 
+const NEUTRAL_ROLLS = { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 };
+
 const migrations: Record<number, (s: any) => any> = {
-  // 1 -> 2 would go here when the shape changes.
+  // Pre-itemization-overhaul saves have no per-instance rolls — backfill neutral
+  // (1.0x) values so existing ships/modules keep their prior effective stats exactly.
+  1: (s: any) => ({
+    ...s,
+    schemaVersion: 2,
+    ships: s.ships.map((ship: any) => ({ ...ship, rolls: ship.rolls ?? { ...NEUTRAL_ROLLS } })),
+    modules: s.modules.map((mod: any) => ({ ...mod, quality: mod.quality ?? 0.5 })),
+  }),
 };
 
 function migrate(raw: any): GameState {

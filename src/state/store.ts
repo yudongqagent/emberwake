@@ -281,6 +281,26 @@ export function getNextObjective(): Objective | null {
 
 // --- Combat ---
 
+/** How many of this crew def are currently recruited — "fleet-wide" passives (Ori's
+ * alloy bonus, Kessa's victory bonus, Requiem's hull bonus, the generic recruits'
+ * bonuses) apply as soon as the crew member is recruited, no assignment required,
+ * and stack per-copy for the non-unique generic recruits. */
+export function crewCount(defId: string): number {
+  return state.value.crew.filter((c) => c.defId === defId).length;
+}
+
+export function hasCrewRecruited(defId: string): boolean {
+  return crewCount(defId) > 0;
+}
+
+/** Unit 7-Requiem's "+15% max hull fleet-wide" passive, applied wherever a ship's max
+ * hull is shown or used outside of combat (combat applies its own equipment-driven
+ * hull bonus on top of this — see Combat.tsx). */
+export function effectiveMaxHull(ship: Parameters<typeof computeMaxHull>[0]): number {
+  const bonus = hasCrewRecruited("unit7Requiem") ? 0.15 : 0;
+  return Math.round(computeMaxHull(ship) * (1 + bonus));
+}
+
 export function resolveCombatVictory(
   encounterId: string,
   poiId: string | null,
@@ -289,10 +309,14 @@ export function resolveCombatVictory(
 ): { leveledUp: boolean; newLevel: number; rewards: Partial<Record<ResourceType, number>> } {
   const enc = encounterById(encounterId);
   const rewards = { ...enc.rewards };
-  if (salvageAlloyBonusFraction > 0) {
-    if (rewards.salvage) rewards.salvage = Math.round(rewards.salvage * (1 + salvageAlloyBonusFraction));
-    if (rewards.alloy) rewards.alloy = Math.round(rewards.alloy * (1 + salvageAlloyBonusFraction));
-  }
+  // Crew passives: Ori Vashti (+8% alloy), Kessa Vray (+15% salvage/alloy), and each
+  // recruited generic tactician (+5% insight) — all fleet-wide, no assignment needed.
+  const alloyBonus = salvageAlloyBonusFraction + (hasCrewRecruited("oriVashti") ? 0.08 : 0) + (hasCrewRecruited("kessaVray") ? 0.15 : 0);
+  const salvageBonus = salvageAlloyBonusFraction + (hasCrewRecruited("kessaVray") ? 0.15 : 0);
+  const insightBonus = crewCount("recruitTactician") * 0.05;
+  if (rewards.salvage) rewards.salvage = Math.round(rewards.salvage * (1 + salvageBonus));
+  if (rewards.alloy) rewards.alloy = Math.round(rewards.alloy * (1 + alloyBonus));
+  if (rewards.insight && insightBonus > 0) rewards.insight = Math.round(rewards.insight * (1 + insightBonus));
   grant(rewards);
   let leveledUp = false;
   let newLevel = flagship.value?.level ?? 1;

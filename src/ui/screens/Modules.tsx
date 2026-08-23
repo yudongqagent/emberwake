@@ -7,7 +7,7 @@ import { computeModuleDamage, computeModuleBlock, lockTrait } from "../../engine
 import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon } from "../components/Icons";
-import { Bar } from "../components/StatBlock";
+import { Bar, RollQualityBadge } from "../components/StatBlock";
 import type { ModuleType, ModuleInstance } from "../../data/types";
 
 const TYPE_ORDER: ModuleType[] = ["weapon", "armor", "engine", "utility"];
@@ -84,6 +84,11 @@ export function Modules() {
                     {def.baseDamage ? <span style={{ color: "var(--red)" }}>Dmg {computeModuleDamage(mod)}</span> : null}
                     {def.baseBlock ? <span style={{ color: "var(--cyan)" }}>Block {computeModuleBlock(mod)}</span> : null}
                   </div>
+                  {(def.baseDamage !== undefined || def.baseBlock !== undefined) && (
+                    <div style={{ marginBottom: "0.5rem" }}>
+                      <RollQualityBadge roll={mod.quality} />
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: "0.4rem" }}>
                     <button className="btn" onClick={() => setPickerSlot(slot.index)}>Swap</button>
                     <button className="btn danger" onClick={() => equipModule(ship.id, slot.index, null)}>Remove</button>

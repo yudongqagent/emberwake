@@ -1,10 +1,10 @@
-import { state, flagship, setActiveFlagship, scanShipAction } from "../../state/store";
+import { state, flagship, setActiveFlagship, scanShipAction, effectiveMaxHull } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
-import { computeMaxHull, computePowerCapacity } from "../../engine/ships";
+import { computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { ShipRarityTag } from "../components/RarityTag";
 import { playSfx } from "../../audio/engine";
-import { HullIcon, PowerIcon, SlotsIcon, AptitudeIcon, NavIcon } from "../components/Icons";
-import { StatReadout, Bar, hullBarKind } from "../components/StatBlock";
+import { HullIcon, PowerIcon, SlotsIcon, AptitudeIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
+import { StatReadout, Bar, hullBarKind, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 
 export function Fleet() {
   const activeId = flagship.value?.id;
@@ -20,7 +20,7 @@ export function Fleet() {
         const def = hullClassById(ship.hullClass);
         const isActive = ship.id === activeId;
         const totalSlots = def.slots.weapon + def.slots.armor + def.slots.engine + def.slots.utility;
-        const hullFraction = ship.currentHp / computeMaxHull(ship);
+        const hullFraction = ship.currentHp / effectiveMaxHull(ship);
         return (
           <div key={ship.id} className={`panel ${isActive ? "accent" : ""}`} style={{ padding: "1.1rem", ["--accent" as any]: `var(--rarity-${ship.rarity})` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -51,10 +51,20 @@ export function Fleet() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: "0.6rem", margin: "0.8rem 0" }}>
-              <StatReadout icon={<HullIcon size={16} />} value={`${ship.currentHp}/${computeMaxHull(ship)}`} label="Hull" />
+              <StatReadout icon={<HullIcon size={16} />} value={<AnimatedFraction current={ship.currentHp} max={effectiveMaxHull(ship)} />} label="Hull" />
               <StatReadout icon={<PowerIcon size={16} />} value={computePowerCapacity(ship)} label="Power" color="var(--amber)" />
-              <StatReadout icon={<SlotsIcon size={16} />} value={totalSlots} label="Slots" color="var(--cyan)" />
+              <StatReadout icon={<SpeedIcon size={16} />} value={computeSpeed(ship)} label="Speed" color="var(--cyan)" />
+              <StatReadout icon={<EvasionIcon size={16} />} value={`${Math.round(computeBaseEvasion(ship) * 100)}%`} label="Evasion" color="var(--green)" />
+              <StatReadout icon={<CritIcon size={16} />} value={`${Math.round(computeBaseCritChance(ship) * 100)}%`} label="Crit" color="var(--red)" />
+              <StatReadout icon={<SlotsIcon size={16} />} value={totalSlots} label="Slots" color="var(--violet)" />
               <StatReadout icon={<AptitudeIcon size={16} />} value={ship.scanned ? ship.aptitude! : "??"} label="Aptitude" color="var(--green)" />
+            </div>
+
+            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.7rem" }}>
+              <RollQualityBadge roll={ship.rolls.hull} label="Hull roll" />
+              <RollQualityBadge roll={ship.rolls.speed} label="Speed roll" />
+              <RollQualityBadge roll={ship.rolls.evasion} label="Evasion roll" />
+              <RollQualityBadge roll={ship.rolls.crit} label="Crit roll" />
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem" }}>

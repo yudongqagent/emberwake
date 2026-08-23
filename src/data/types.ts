@@ -69,6 +69,9 @@ export interface ModuleDef {
   traitPool: ModuleTrait[];
 }
 
+/** Roll quality is 0..1, drawn from a band that shifts upward with rarity but always
+ * overlaps neighboring tiers — so a lucky low-rarity roll can beat an unlucky high-rarity
+ * one, and no two items of the same rarity are identical. */
 export interface ModuleInstance {
   id: string;
   defId: string;
@@ -76,6 +79,16 @@ export interface ModuleInstance {
   level: number;
   traits: string[];
   lockedTraitSlot: number | null;
+  /** 0..1 roll governing this instance's primary stat within its rarity's range. */
+  quality: number;
+}
+
+export interface ShipRolls {
+  hull: number;
+  power: number;
+  speed: number;
+  evasion: number;
+  crit: number;
 }
 
 export interface ShipInstance {
@@ -89,6 +102,9 @@ export interface ShipInstance {
   xp: number;
   equipped: (string | null)[]; // parallel to slot order: weapon..weapon,armor..armor,engine..engine,utility..utility
   currentHp: number;
+  /** Independent 0..1 rolls per attribute — two ships of the same rarity can trade off
+   * a tanky hull against a nimble evasion build. */
+  rolls: ShipRolls;
 }
 
 export interface CrewDef {
@@ -99,6 +115,9 @@ export interface CrewDef {
   named: boolean;
   passive: string;
   active: string;
+  /** Identifies which distinct combat behavior this crew member's active triggers —
+   * every named crew member has a unique implementation, not a generic per-role one. */
+  abilityId: string;
   activeCooldown: number;
   unlockFlag: string | null;
 }

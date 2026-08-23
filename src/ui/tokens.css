@@ -161,8 +161,14 @@ h1, h2, h3 {
   color: var(--text-dim);
 }
 
-/* --- Buttons --- */
+/* --- Buttons ---
+   Every interactive element gets the same "hardware" language as .panel: cut
+   corners via clip-path (never border-radius — see docs/visual-standards.md §1),
+   filter: drop-shadow instead of box-shadow (box-shadow gets clipped by clip-path,
+   drop-shadow doesn't), and a scanning top-edge highlight so it reads as a lit
+   control surface, not a rounded div. */
 .btn {
+  --btn-notch: 7px;
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -175,12 +181,33 @@ h1, h2, h3 {
   background: linear-gradient(180deg, rgba(75, 232, 255, 0.14), rgba(75, 232, 255, 0.05));
   border: 1px solid var(--line-bright);
   color: var(--text-hi);
-  border-radius: 4px;
+  border-radius: 0;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--btn-notch)) 0,
+    100% var(--btn-notch),
+    100% 100%,
+    var(--btn-notch) 100%,
+    0 calc(100% - var(--btn-notch))
+  );
   padding: 0.65em 1.1em;
   cursor: pointer;
-  transition: background 120ms ease, transform 80ms ease, box-shadow 120ms ease;
+  transition: background 120ms ease, transform 80ms ease, filter 120ms ease;
   touch-action: manipulation;
   position: relative;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+}
+
+.btn::before {
+  /* top highlight edge, matching .panel's language */
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: var(--btn-notch);
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .btn:hover {
@@ -200,23 +227,25 @@ h1, h2, h3 {
   background: linear-gradient(180deg, rgba(75, 232, 255, 0.85), rgba(28, 125, 148, 0.9));
   border-color: var(--cyan);
   color: #04141a;
-  box-shadow: 0 0 18px rgba(75, 232, 255, 0.35);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 14px rgba(75, 232, 255, 0.5));
 }
 
 .btn.primary:hover {
-  box-shadow: 0 0 24px rgba(75, 232, 255, 0.55);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 20px rgba(75, 232, 255, 0.7));
 }
 
 .btn.danger {
   border-color: var(--red);
   color: var(--red);
   background: linear-gradient(180deg, rgba(255, 92, 92, 0.14), rgba(255, 92, 92, 0.04));
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 10px rgba(255, 92, 92, 0.3));
 }
 
 .btn.ghost {
   background: transparent;
   border-color: var(--line);
   color: var(--text-mid);
+  filter: none;
 }
 
 .scanline {

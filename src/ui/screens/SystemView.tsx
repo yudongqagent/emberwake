@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   GALAXIES,
   state,
+  flagship,
   mineResource,
   collectWreck,
   isPoiAvailable,
@@ -12,6 +13,7 @@ import type { Poi, ResourceType } from "../../data/types";
 import { playSfx } from "../../audio/engine";
 import { attachResponsiveCanvas } from "../../engine/viewport";
 import { encounterById } from "../../data/encounters";
+import { computeSpeed } from "../../engine/ships";
 import {
   drawPlayerHull,
   drawEnemyHull,
@@ -23,8 +25,6 @@ import {
 
 const REF_W = 1000;
 const REF_H = 600;
-const PLAYER_SPEED = 260; // world units/sec
-const ACCEL = 620;
 
 interface Props {
   onNavigate: (screen: string) => void;
@@ -75,6 +75,8 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
     const ctx2d = canvas.getContext("2d")!;
     const vp = attachResponsiveCanvas(canvas, container, REF_W, REF_H);
     const player = { x: 120, y: REF_H / 2, vx: 0, vy: 0, angle: 0 };
+    const shipSpeed = flagship.value ? computeSpeed(flagship.value) : 200;
+    const shipAccel = shipSpeed * 2.4;
     let target: { x: number; y: number } | null = null;
     const keys = new Set<string>();
     let workingPoi: Poi | null = null;
@@ -147,12 +149,12 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       }
       const mag = Math.hypot(ax, ay) || 1;
       const thrusting = mag > 0 && (ax !== 0 || ay !== 0);
-      player.vx += (ax / mag) * ACCEL * dt;
-      player.vy += (ay / mag) * ACCEL * dt;
+      player.vx += (ax / mag) * shipAccel * dt;
+      player.vy += (ay / mag) * shipAccel * dt;
       const speed = Math.hypot(player.vx, player.vy);
-      if (speed > PLAYER_SPEED) {
-        player.vx = (player.vx / speed) * PLAYER_SPEED;
-        player.vy = (player.vy / speed) * PLAYER_SPEED;
+      if (speed > shipSpeed) {
+        player.vx = (player.vx / speed) * shipSpeed;
+        player.vy = (player.vy / speed) * shipSpeed;
       }
       // Frame-rate-independent drag: ~2% of velocity remains after 1 full second of no thrust.
       const dragFactor = Math.pow(0.02, dt);

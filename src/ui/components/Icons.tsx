@@ -370,6 +370,34 @@ export function SlotsIcon({ size = 16, color = "currentColor" }: IconProps) {
   );
 }
 
+export function SpeedIcon({ size = 16, color = "currentColor" }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M3 12 H15 M10 6 L16 12 L10 18" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M15 8 L19 12 L15 16" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.6" />
+    </Svg>
+  );
+}
+
+export function EvasionIcon({ size = 16, color = "currentColor" }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M12 2 L20 5.5 V11 C20 16.5 16.6 20.6 12 22 C7.4 20.6 4 16.5 4 11 V5.5 Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round" opacity="0.55" />
+      <path d="M8.5 11 L11 14 L16 8.5" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+export function CritIcon({ size = 16, color = "currentColor" }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="12" r="7" stroke={color} strokeWidth="1.4" />
+      <path d="M12 3 V7 M12 17 V21 M3 12 H7 M17 12 H21" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="2" fill={color} />
+    </Svg>
+  );
+}
+
 export function LocationIcon({ size = 16, color = "currentColor" }: IconProps) {
   return (
     <Svg size={size}>

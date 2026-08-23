@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeMaxHull, computePowerCapacity, xpToNextLevel, applyXp } from "./ships";
+import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance, xpToNextLevel, applyXp } from "./ships";
 import type { ShipInstance } from "../data/types";
 
 function makeShip(overrides: Partial<ShipInstance> = {}): ShipInstance {
@@ -14,6 +14,7 @@ function makeShip(overrides: Partial<ShipInstance> = {}): ShipInstance {
     xp: 0,
     equipped: [null, null, null, null],
     currentHp: 120,
+    rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 },
     ...overrides,
   };
 }
@@ -41,6 +42,37 @@ describe("computePowerCapacity", () => {
     const a = computePowerCapacity(makeShip({ level: 1 }));
     const b = computePowerCapacity(makeShip({ level: 10 }));
     expect(a).toBe(b);
+  });
+});
+
+describe("attribute rolls", () => {
+  it("a neutral 0.5 roll leaves max hull unchanged from the un-rolled baseline", () => {
+    expect(computeMaxHull(makeShip({ rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }))).toBe(120);
+  });
+
+  it("hull roll of 0 gives 80% and 1 gives 120% of the neutral value", () => {
+    const low = computeMaxHull(makeShip({ rolls: { hull: 0, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
+    const high = computeMaxHull(makeShip({ rolls: { hull: 1, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
+    expect(low).toBe(96); // 120 * 0.8
+    expect(high).toBe(144); // 120 * 1.2
+  });
+
+  it("two ships of the same rarity can roll differently — itemization variance is real", () => {
+    const a = computeMaxHull(makeShip({ rolls: { hull: 0.1, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
+    const b = computeMaxHull(makeShip({ rolls: { hull: 0.9, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
+    expect(a).not.toBe(b);
+  });
+
+  it("bigger hull classes move slower even at the same speed roll", () => {
+    const corvette = computeSpeed(makeShip({ hullClass: "corvette", rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
+    const sovereign = computeSpeed(makeShip({ hullClass: "sovereign", rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
+    expect(sovereign).toBeLessThan(corvette);
+  });
+
+  it("base evasion and crit chance scale with their own rolls", () => {
+    expect(computeBaseEvasion({ rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0, crit: 0.5 } })).toBe(0);
+    expect(computeBaseEvasion({ rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 1, crit: 0.5 } })).toBeCloseTo(0.1);
+    expect(computeBaseCritChance({ rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 1 } })).toBeCloseTo(0.08);
   });
 });
 
