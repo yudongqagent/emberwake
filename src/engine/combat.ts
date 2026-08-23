@@ -17,19 +17,25 @@ export interface AttackResult {
   crit: boolean;
 }
 
-/** Deterministic given a supplied roll, so combat math is unit-testable without RNG. */
+export const CRIT_MULTIPLIER = 1.75;
+
+/** Deterministic given supplied rolls, so combat math is unit-testable without RNG.
+ * critChance defaults to 0 (never crits) so existing callers are unaffected. */
 export function resolveAttack(
   baseDamage: number,
   targetBlock: number,
   targetEvasion: number,
   rangeMultiplier: number,
   roll: number = Math.random(),
+  critChance: number = 0,
+  critRoll: number = Math.random(),
 ): AttackResult {
   if (roll < targetEvasion) {
     return { hit: false, damageDealt: 0, crit: false };
   }
-  const raw = Math.max(1, Math.round(baseDamage * rangeMultiplier) - targetBlock);
-  return { hit: true, damageDealt: raw, crit: false };
+  const crit = critRoll < critChance;
+  const raw = Math.max(1, Math.round(baseDamage * rangeMultiplier * (crit ? CRIT_MULTIPLIER : 1)) - targetBlock);
+  return { hit: true, damageDealt: raw, crit };
 }
 
 export interface CombatEnemyState {

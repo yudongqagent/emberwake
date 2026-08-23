@@ -118,14 +118,15 @@ export function Modules() {
 function LockRow({ moduleId, traits }: { moduleId: string; traits: string[] }) {
   const cost = 8;
   const mod = state.value.modules.find((m) => m.id === moduleId);
-  const pool = mod ? moduleDefById(mod.defId).traitPool.map((t) => t.id) : [];
+  const traitPool = mod ? moduleDefById(mod.defId).traitPool : [];
+  const pool = traitPool.map((t) => t.id);
   return (
     <div style={{ marginTop: "0.55rem" }}>
       {traits.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginBottom: "0.4rem" }}>
           {traits.map((t, i) => (
-            <span key={i} style={{ fontSize: "0.68rem", padding: "0.15em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
-              {t}
+            <span key={i} title={traitPool.find((tp) => tp.id === t)?.description} style={{ fontSize: "0.68rem", padding: "0.15em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
+              {traitPool.find((tp) => tp.id === t)?.label ?? t}
             </span>
           ))}
         </div>

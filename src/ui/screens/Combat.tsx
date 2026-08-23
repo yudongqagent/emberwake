@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { encounterById } from "../../data/encounters";
 import { moduleDefById } from "../../data/modules";
-import { computeModuleDamage } from "../../engine/modules";
+import { computeModuleDamage, computeCritChance } from "../../engine/modules";
 import { computeMaxHull, computePowerCapacity } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, rangeBandFromDistance, type RangeBand } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat } from "../../state/store";
@@ -28,6 +28,14 @@ interface EnemyState {
   evasion: number;
   debuffed?: boolean;
   regen?: number;
+  /** Wound up on a prior turn — unleashes a 2x-damage strike this turn, then clears. */
+  charging?: boolean;
+  /** Disabled by an EMP proc — skips its attack entirely this turn. */
+  stunned?: boolean;
+  /** Shield-stripped by an EMP proc — takes full damage (block ignored) for N more player hits. */
+  blockBrokenHits?: number;
+  /** True once a boss has crossed the 50% enrage threshold. */
+  enraged?: boolean;
 }
 
 interface Popup {
@@ -35,6 +43,7 @@ interface Popup {
   target: "player" | number;
   text: string;
   color: string;
+  big?: boolean;
 }
 
 interface ArenaPoint {
@@ -73,23 +82,32 @@ interface Props {
 export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const encounter = encounterById(encounterId);
   const ship = flagship.value!;
-  const equippedModules = ship.equipped
+  const equippedModuleList = ship.equipped
     .map((id) => state.value.modules.find((m) => m.id === id))
-    .filter((m): m is NonNullable<typeof m> => !!m && moduleDefById(m.defId).cooldown !== null);
-  const armorBlock = ship.equipped
-    .map((id) => state.value.modules.find((m) => m.id === id))
-    .filter((m): m is NonNullable<typeof m> => !!m && moduleDefById(m.defId).baseBlock !== undefined)
+    .filter((m): m is NonNullable<typeof m> => !!m);
+  const equippedModules = equippedModuleList.filter((m) => moduleDefById(m.defId).cooldown !== null);
+  const armorBlock = equippedModuleList
+    .filter((m) => moduleDefById(m.defId).baseBlock !== undefined)
     .reduce((sum, m) => sum + (moduleDefById(m.defId).baseBlock ?? 0), 0);
-  const evasionTraitCount = ship.equipped
-    .map((id) => state.value.modules.find((m) => m.id === id))
-    .filter((m): m is NonNullable<typeof m> => !!m)
-    .filter((m) => m.traits.includes("evasion")).length;
+  const evasionTraitCount = equippedModuleList.filter((m) => m.traits.includes("evasion")).length;
+  // Passive trait aggregates — every trait id in the game now does something real:
+  // hullBonus grows the flagship's effective max hull for this fight, regen ticks
+  // hull back each round, jumpRange shaves a turn off weapon cooldowns, an armor-slot
+  // shieldBreak grants bonus evasion, and yieldBonus boosts salvage/alloy on victory.
+  const hullBonusFraction = 0.15 * equippedModuleList.filter((m) => m.traits.includes("hullBonus")).length;
+  const regenStacks = equippedModuleList.filter((m) => m.traits.includes("regen")).length;
+  const jumpRangeStacks = equippedModuleList.filter((m) => m.traits.includes("jumpRange")).length;
+  const shieldBreakArmorStacks = equippedModuleList.filter(
+    (m) => moduleDefById(m.defId).type === "armor" && m.traits.includes("shieldBreak"),
+  ).length;
+  const yieldBonusFraction = 0.2 * equippedModuleList.filter((m) => m.traits.includes("yieldBonus")).length;
   const assignedCrew = state.value.crew.filter((c) => c.assignedShipId === ship.id);
 
   const [enemies, setEnemies] = useState<EnemyState[]>(
     encounter.enemies.map((e) => ({ ...e, maxHull: e.hull })),
   );
-  const [playerHull, setPlayerHull] = useState(ship.currentHp);
+  const maxHull = Math.round(computeMaxHull(ship) * (1 + hullBonusFraction));
+  const [playerHull, setPlayerHull] = useState(Math.min(maxHull, Math.round(ship.currentHp * (1 + hullBonusFraction))));
   const [cooldowns, setCooldowns] = useState<Record<string, number>>({});
   const [crewCooldowns, setCrewCooldowns] = useState<Record<string, number>>({});
   const [targetIdx, setTargetIdx] = useState(0);
@@ -99,9 +117,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [playerShakeToken, setPlayerShakeToken] = useState(0);
   const [rewardsEarned, setRewardsEarned] = useState<Partial<Record<ResourceType, number>> | null>(null);
   const [levelUp, setLevelUp] = useState<number | null>(null);
+  const [levelUpHullGain, setLevelUpHullGain] = useState(0);
   const [displayRange, setDisplayRange] = useState<RangeBand>("mid");
+  const [comboCount, setComboCount] = useState(0);
+  const [overcharged, setOvercharged] = useState(false);
+  const bossPhaseRef = useRef(false);
 
-  const maxHull = computeMaxHull(ship);
   const capacity = computePowerCapacity(ship);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -177,9 +198,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setLog((l) => [...l.slice(-5), line]);
   }
 
-  function addPopup(target: "player" | number, text: string, color: string) {
+  function addPopup(target: "player" | number, text: string, color: string, big: boolean = false) {
     const id = randomId("popup");
-    setPopups((p) => [...p, { id, target, text, color }]);
+    setPopups((p) => [...p, { id, target, text, color, big }]);
     setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), 900);
   }
 
@@ -193,7 +214,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   }
 
   function enemyTurn(currentEnemies: EnemyState[]) {
-    const regenerated = currentEnemies.map((e) => {
+    const wasCharging = currentEnemies.map((e) => !!e.charging);
+    let regenerated = currentEnemies.map((e) => {
       if (e.hull <= 0 || !e.regen) return e;
       const healed = Math.min(e.maxHull, e.hull + e.regen);
       if (healed > e.hull) pushLog(`${e.name} regenerates ${healed - e.hull} hull.`);
@@ -202,39 +224,80 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     regenerated.forEach((e, i) => {
       if (e.regen && e.hull > currentEnemies[i].hull) addPopup(i, `+${e.hull - currentEnemies[i].hull}`, "#5dffb0");
     });
-    setEnemies(regenerated);
 
-    const evasion = Math.min(0.6, 0.05 + evasionTraitCount * 0.05);
+    // Boss enrage: crossing 50% hull permanently shifts the fight — harder hits,
+    // thinner plating. A real climax beat instead of a flat stat blob.
+    if (encounter.isBoss && !bossPhaseRef.current && regenerated[0] && regenerated[0].hull > 0) {
+      const boss = regenerated[0];
+      if (boss.hull <= boss.maxHull * 0.5) {
+        bossPhaseRef.current = true;
+        regenerated = [
+          { ...boss, damage: Math.round(boss.damage * 1.3), block: Math.max(0, Math.round(boss.block * 0.75)), enraged: true },
+          ...regenerated.slice(1),
+        ];
+        pushLog(`${boss.name} is enraged — its strikes land harder now.`);
+        const pos = arenaRef.current.enemyPos[0];
+        if (pos) {
+          spawnBurst(pos.x, pos.y, "255,92,92", 24, 120);
+          explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
+        }
+        playSfx("alarm");
+        shakeRef.current = 14;
+      }
+    }
+
+    const evasion = Math.min(0.6, 0.05 + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08);
     let totalDamage = 0;
-    regenerated.forEach((enemy, i) => {
-      if (enemy.hull <= 0) return;
+    regenerated = regenerated.map((enemy, i) => {
+      if (enemy.hull <= 0) return enemy;
+
+      if (enemy.stunned) {
+        pushLog(`${enemy.name} is disabled and can't fire.`);
+        return { ...enemy, stunned: false };
+      }
+
+      // Bosses occasionally wind up a haymaker instead of attacking — one full
+      // player turn of warning (a red ring on the arena), then it lands for double.
+      if (!wasCharging[i] && encounter.isBoss && i === 0 && Math.random() < 0.3) {
+        pushLog(`${enemy.name} is charging a devastating strike — brace for it!`);
+        playSfx("alarm");
+        return { ...enemy, charging: true };
+      }
+
+      const dmgMultiplier = wasCharging[i] ? 2 : 1;
       const enemyPos = arenaRef.current.enemyPos[i] ?? enemySlot(i, regenerated.length);
       const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
       const band = rangeBandFromDistance(dist);
-      const result = resolveAttack(enemy.damage, armorBlock, evasion, RANGE_MODIFIERS[band].incoming);
+      const result = resolveAttack(enemy.damage * dmgMultiplier, armorBlock, evasion, RANGE_MODIFIERS[band].incoming);
       if (result.hit) totalDamage += result.damageDealt;
-      fireProjectile(enemyPos, arenaRef.current.player, "#ff6b6b", () => {
+      fireProjectile(enemyPos, arenaRef.current.player, wasCharging[i] ? "#ffe25d" : "#ff6b6b", () => {
         if (result.hit) {
-          spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", 10, 90);
-          addPopup("player", `-${result.damageDealt}`, "#ff5c5c");
+          spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", wasCharging[i] ? 20 : 10, wasCharging[i] ? 130 : 90);
+          addPopup("player", `-${result.damageDealt}`, "#ff5c5c", wasCharging[i]);
           playSfx("hit");
           setPlayerShakeToken((t) => t + 1);
-          pushLog(`${enemy.name} hits Whisper for ${result.damageDealt}.`);
+          pushLog(`${enemy.name}${wasCharging[i] ? "'s charged strike" : ""} hits Whisper for ${result.damageDealt}.`);
         } else {
           pushLog(`${enemy.name} misses.`);
         }
       });
+      return wasCharging[i] ? { ...enemy, charging: false } : enemy;
     });
+
+    setEnemies(regenerated);
 
     setCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
     setCrewCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
 
+    const finalEnemies = regenerated;
     setTimeout(() => {
       setPlayerHull((prev) => {
-        const nextHull = Math.max(0, prev - totalDamage);
+        const regenTick = regenStacks > 0 ? Math.round(maxHull * 0.04 * regenStacks) : 0;
+        const nextHull = Math.max(0, Math.min(maxHull, prev - totalDamage + regenTick));
         if (nextHull <= 0) {
-          finishCombat("defeat", regenerated);
+          finishCombat("defeat", finalEnemies);
         } else {
+          if (regenTick > 0 && prev < maxHull) pushLog(`Field systems recover ${Math.min(regenTick, maxHull - prev)} hull.`);
           setStatus("active");
         }
         return nextHull;
@@ -247,9 +310,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setEnemies(finalEnemies);
     if (result === "victory") {
       playSfx("victory");
-      const outcome = resolveCombatVictory(encounterId, poiId, victoryFlag);
-      setRewardsEarned(encounter.rewards);
-      if (outcome.leveledUp) setLevelUp(outcome.newLevel);
+      const outcome = resolveCombatVictory(encounterId, poiId, victoryFlag, yieldBonusFraction);
+      setRewardsEarned(outcome.rewards);
+      if (outcome.leveledUp) {
+        const hullBefore = computeMaxHull(ship);
+        const hullAfter = computeMaxHull({ ...ship, level: outcome.newLevel });
+        setLevelUpHullGain(hullAfter - hullBefore);
+        setLevelUp(outcome.newLevel);
+      }
     } else {
       playSfx("defeat");
       resolveCombatDefeat();
@@ -268,30 +336,79 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const band = rangeBandFromDistance(dist);
     const outgoingMult = RANGE_MODIFIERS[band].outgoing;
 
-    const dmg = computeModuleDamage(mod);
+    const wasOvercharged = overcharged;
+    const baseDmg = computeModuleDamage(mod);
+    const dmg = wasOvercharged ? Math.round(baseDmg * 1.5) : baseDmg;
     const nextEnemies = [...enemies];
     if (dmg > 0) {
       const targetEvasion = target.debuffed ? target.evasion * 0.5 : target.evasion;
-      const result = resolveAttack(dmg, target.block, targetEvasion, outgoingMult);
+      const blockBroken = (target.blockBrokenHits ?? 0) > 0;
+      const effectiveBlock = blockBroken ? 0 : mod.traits.includes("pierce") ? Math.round(target.block * 0.5) : target.block;
+      const critChance = computeCritChance(mod, comboCount);
+      const result = resolveAttack(dmg, effectiveBlock, targetEvasion, outgoingMult, undefined, critChance);
       const playerPos = { ...arenaRef.current.player };
       const impactPos = { ...enemyPos };
-      fireProjectile(playerPos, impactPos, "#8ff3ff", () => {
+      fireProjectile(playerPos, impactPos, result.crit ? "#ffe25d" : "#8ff3ff", () => {
         if (result.hit) {
-          spawnBurst(impactPos.x, impactPos.y, "143,243,255", 12, 110);
-          addPopup(targetIdx, `-${result.damageDealt}`, "#ffe25d");
+          spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : "143,243,255", result.crit ? 22 : 12, result.crit ? 150 : 110);
+          addPopup(targetIdx, `${result.crit ? "CRIT " : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : "#8ff3ff", result.crit);
+          if (result.crit) setPlayerShakeToken((t) => t + 1);
         }
       });
       playSfx("laser");
+      setComboCount((c) => (result.hit ? c + 1 : 0));
+
+      let hitTarget = { ...target, hull: Math.max(0, target.hull - (result.hit ? result.damageDealt : 0)) };
+      if (result.hit && blockBroken) hitTarget.blockBrokenHits = Math.max(0, (target.blockBrokenHits ?? 0) - 1);
+
       if (result.hit) {
-        nextEnemies[targetIdx] = { ...target, hull: Math.max(0, target.hull - result.damageDealt) };
-        pushLog(`${def.name} hits ${target.name} for ${result.damageDealt}.`);
+        pushLog(`${def.name}${result.crit ? " lands a CRITICAL hit on" : " hits"} ${target.name} for ${result.damageDealt}.`);
       } else {
         pushLog(`${def.name} missed ${target.name}.`);
+      }
+
+      // EMP-style traits: a chance to disable the target's next attack, or strip
+      // its block outright so follow-up hits land at full force.
+      if (result.hit && mod.traits.includes("disable") && hitTarget.hull > 0 && Math.random() < 0.35) {
+        hitTarget.stunned = true;
+        pushLog(`${target.name}'s systems lock up — it won't fire next turn.`);
+      }
+      if (result.hit && def.type === "utility" && mod.traits.includes("shieldBreak") && hitTarget.hull > 0) {
+        hitTarget.blockBrokenHits = 3;
+        pushLog(`${target.name}'s plating is stripped — the next few hits land unblocked.`);
+      }
+      nextEnemies[targetIdx] = hitTarget;
+
+      // Chain Arc: a fraction of the hit arcs to a second living target.
+      if (result.hit && mod.traits.includes("chainArc")) {
+        const others = nextEnemies.map((e, i) => ({ e, i })).filter(({ e, i }) => i !== targetIdx && e.hull > 0);
+        if (others.length > 0) {
+          const { e: arcTarget, i: arcIdx } = others[Math.floor(Math.random() * others.length)];
+          const arcPos = arenaRef.current.enemyPos[arcIdx] ?? enemySlot(arcIdx, enemies.length);
+          const arcResult = resolveAttack(Math.round(dmg * 0.4), arcTarget.block, arcTarget.evasion, outgoingMult);
+          setTimeout(() => {
+            fireProjectile(impactPos, arcPos, "#8ff3ff", () => {
+              if (arcResult.hit) {
+                spawnBurst(arcPos.x, arcPos.y, "143,243,255", 8, 90);
+                addPopup(arcIdx, `-${arcResult.damageDealt}`, "#8ff3ff");
+              }
+            });
+          }, 90);
+          if (arcResult.hit) {
+            nextEnemies[arcIdx] = { ...arcTarget, hull: Math.max(0, arcTarget.hull - arcResult.damageDealt) };
+            pushLog(`Chain Arc jumps to ${arcTarget.name} for ${arcResult.damageDealt}.`);
+          } else {
+            pushLog(`Chain Arc jumps to ${arcTarget.name} but misses.`);
+          }
+        }
       }
     } else {
       pushLog(`${def.name} activated.`);
     }
-    setCooldowns((prev) => ({ ...prev, [moduleId]: def.cooldown ?? 0 }));
+    const overchargePenalty = wasOvercharged ? 2 : 0;
+    const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
+    setCooldowns((prev) => ({ ...prev, [moduleId]: Math.max(0, (def.cooldown ?? 0) + overchargePenalty - cooldownReduction) }));
+    if (wasOvercharged) setOvercharged(false);
     setEnemies(nextEnemies);
     endPlayerAction(nextEnemies);
   }
@@ -475,8 +592,20 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "0.6rem 1rem 0" }} className="title">{encounter.name}</div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "0.3rem 1rem 0.5rem", fontSize: "0.78rem", color: "var(--text-mid)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.3rem 1rem 0.5rem", fontSize: "0.78rem", color: "var(--text-mid)" }}>
         <span>{ship.name} — Hull {playerHull}/{maxHull}</span>
+        {comboCount > 0 && (
+          <span
+            className="eyebrow"
+            style={{
+              color: comboCount >= 8 ? "var(--red)" : comboCount >= 4 ? "var(--amber)" : "var(--cyan)",
+              textShadow: `0 0 ${6 + Math.min(comboCount, 10)}px currentColor`,
+              fontWeight: 700,
+            }}
+          >
+            Combo ×{comboCount}
+          </span>
+        )}
         <span>
           Range: <span style={{ color: displayRange === "close" ? "var(--red)" : displayRange === "mid" ? "var(--amber)" : "var(--cyan)" }}>{displayRange}</span>
           {" · "}Power {capacity}
@@ -494,11 +623,24 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", padding: "0.6rem 1rem 0" }}>
+        <button
+          className={`btn ${overcharged ? "danger" : "ghost"}`}
+          disabled={status !== "active"}
+          onClick={() => setOvercharged((o) => !o)}
+          title="Overcharge: next weapon shot deals +50% damage, but that weapon locks out for 2 extra turns."
+        >
+          {overcharged ? "Overcharged ⚡" : "Overcharge"}
+        </button>
         {equippedModules.map((mod) => {
           const def = moduleDefById(mod.defId);
           const cd = cooldowns[mod.id] ?? 0;
           return (
-            <button key={mod.id} className="btn" disabled={status !== "active" || cd > 0} onClick={() => fireModule(mod.id)}>
+            <button
+              key={mod.id}
+              className={`btn ${overcharged && def.baseDamage ? "primary" : ""}`}
+              disabled={status !== "active" || cd > 0}
+              onClick={() => fireModule(mod.id)}
+            >
               {def.name}{cd > 0 ? ` (${cd})` : ""}
             </button>
           );
@@ -522,8 +664,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         <div className="panel pop-in" style={{ margin: "0 1rem 1rem", padding: "1rem", textAlign: "center" }}>
           <div className="title" style={{ marginBottom: "0.5rem" }}>Victory</div>
           {levelUp && (
-            <div className="eyebrow" style={{ color: "var(--amber)", marginBottom: "0.6rem" }}>
-              Level Up — {ship.name} reached Level {levelUp}
+            <div className="panel accent pop-in" style={{ padding: "0.7rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: "var(--amber)" }}>
+              <div className="eyebrow" style={{ color: "var(--amber)" }}>Level Up — {ship.name} reached Level {levelUp}</div>
+              {levelUpHullGain > 0 && (
+                <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--text-hi)", marginTop: "0.3rem" }}>
+                  +{levelUpHullGain} Max Hull
+                </div>
+              )}
             </div>
           )}
           {rewardsEarned && (
@@ -571,9 +718,9 @@ function PopupOverlay({
         style={{
           color: popup.color,
           fontFamily: "var(--font-display)",
-          fontSize: "1rem",
+          fontSize: popup.big ? "1.6rem" : "1rem",
           fontWeight: 700,
-          textShadow: "0 0 6px rgba(0,0,0,0.8)",
+          textShadow: popup.big ? `0 0 14px ${popup.color}, 0 0 4px rgba(0,0,0,0.9)` : "0 0 6px rgba(0,0,0,0.8)",
           animation: "floatUp 0.9s ease-out forwards",
         }}
       >
@@ -720,8 +867,48 @@ function drawEnemyShip(
     ctx.stroke();
   }
 
+  if (enemy.charging) {
+    // telegraphed haymaker — an urgent, fast-pulsing warning ring the player has
+    // exactly one turn to react to.
+    const pulse = 0.5 + 0.5 * Math.sin(now / 90);
+    ctx.strokeStyle = `rgba(255,92,92,${0.4 + pulse * 0.5})`;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.arc(0, 0, 46 + pulse * 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (enemy.enraged) {
+    const pulse = 0.4 + 0.3 * Math.sin(now / 200);
+    ctx.strokeStyle = `rgba(255,92,92,${pulse})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 36, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   drawEnemyHull(ctx, faction, 1.5, now);
   ctx.restore();
+
+  if (enemy.charging) {
+    ctx.save();
+    ctx.fillStyle = "#ff5c5c";
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.shadowColor = "#ff5c5c";
+    ctx.shadowBlur = 8;
+    ctx.fillText("⚠ CHARGING", pos.x, pos.y + 62);
+    ctx.restore();
+  }
+  if (enemy.stunned) {
+    ctx.save();
+    ctx.fillStyle = "#8ff3ff";
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("DISABLED", pos.x, pos.y + 62);
+    ctx.restore();
+  }
 
   // HP bar
   const w = 54;

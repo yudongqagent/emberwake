@@ -1,9 +1,11 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, spend, grant, canAfford, drawShipAction, drawModuleAction, recruitGenericCrew } from "../../state/store";
+import { state, flagship, spend, grant, canAfford, drawShipAction, drawModuleAction, recruitGenericCrew } from "../../state/store";
 import { HULL_CLASSES, hullClassById } from "../../data/hullClasses";
 import { CREW_DEFS } from "../../data/crew";
 import { moduleDefById } from "../../data/modules";
+import { computeMaxHull } from "../../engine/ships";
+import { computeModuleDamage, computeModuleBlock } from "../../engine/modules";
 import { ShipRarityTag, ModuleRarityTag } from "../components/RarityTag";
 import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon } from "../components/Icons";
 import type { ShipInstance, ModuleInstance } from "../../data/types";
@@ -70,22 +72,65 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {drawnShip && (
-        <DrawReveal title="New Hull Drawn" accent={`var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
-          <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{drawnShip.name}</div>
-          <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{hullClassById(drawnShip.hullClass).name}</div>
-          <ShipRarityTag rarity={drawnShip.rarity} showPips={false} />
-        </DrawReveal>
-      )}
-      {drawnModule && (
-        <DrawReveal title="New Module Drawn" accent="var(--cyan)" onClose={() => setDrawnModule(null)}>
-          <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{moduleDefById(drawnModule.defId).name}</div>
-          <div style={{ color: "var(--text-mid)", margin: "0.4rem 0", textTransform: "capitalize" }}>
-            {moduleDefById(drawnModule.defId).type}
-          </div>
-          <ModuleRarityTag rarity={drawnModule.rarity} />
-        </DrawReveal>
-      )}
+      {drawnShip && (() => {
+        const cur = flagship.value;
+        const newHull = computeMaxHull(drawnShip);
+        const curHull = cur ? computeMaxHull(cur) : 0;
+        const delta = newHull - curHull;
+        return (
+          <DrawReveal title="New Hull Drawn" accent={`var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{drawnShip.name}</div>
+            <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{hullClassById(drawnShip.hullClass).name}</div>
+            <ShipRarityTag rarity={drawnShip.rarity} showPips={false} />
+            {cur && (
+              <div style={{ marginTop: "0.75rem", fontFamily: "var(--font-display)", fontWeight: 700, color: delta >= 0 ? "var(--green)" : "var(--red)" }}>
+                {delta >= 0 ? "+" : ""}{delta} Hull vs {cur.name}
+              </div>
+            )}
+          </DrawReveal>
+        );
+      })()}
+      {drawnModule && (() => {
+        const def = moduleDefById(drawnModule.defId);
+        const cur = flagship.value;
+        const equippedSameType = cur
+          ? cur.equipped
+              .map((id) => state.value.modules.find((m) => m.id === id))
+              .find((m): m is NonNullable<typeof m> => !!m && moduleDefById(m.defId).type === def.type)
+          : null;
+        const statLabel = def.baseDamage !== undefined ? "Damage" : def.baseBlock !== undefined ? "Block" : null;
+        const newStat = def.baseDamage !== undefined ? computeModuleDamage(drawnModule) : def.baseBlock !== undefined ? computeModuleBlock(drawnModule) : null;
+        const curStat = equippedSameType
+          ? def.baseDamage !== undefined
+            ? computeModuleDamage(equippedSameType)
+            : def.baseBlock !== undefined
+              ? computeModuleBlock(equippedSameType)
+              : null
+          : null;
+        return (
+          <DrawReveal title="New Module Drawn" accent="var(--cyan)" onClose={() => setDrawnModule(null)}>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{def.name}</div>
+            <div style={{ color: "var(--text-mid)", margin: "0.4rem 0", textTransform: "capitalize" }}>{def.type}</div>
+            <ModuleRarityTag rarity={drawnModule.rarity} />
+            {drawnModule.traits.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", justifyContent: "center", marginTop: "0.6rem" }}>
+                {drawnModule.traits.map((t, i) => (
+                  <span key={i} style={{ fontSize: "0.68rem", padding: "0.15em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
+                    {def.traitPool.find((tp) => tp.id === t)?.label ?? t}
+                  </span>
+                ))}
+              </div>
+            )}
+            {statLabel && newStat !== null && (
+              <div style={{ marginTop: "0.75rem", fontFamily: "var(--font-display)", fontWeight: 700, color: curStat === null || newStat >= curStat ? "var(--green)" : "var(--red)" }}>
+                {curStat === null
+                  ? `${newStat} ${statLabel} — nothing equipped in this slot yet`
+                  : `${newStat >= curStat ? "+" : ""}${newStat - curStat} ${statLabel} vs equipped`}
+              </div>
+            )}
+          </DrawReveal>
+        );
+      })()}
     </div>
   );
 }

@@ -285,9 +285,15 @@ export function resolveCombatVictory(
   encounterId: string,
   poiId: string | null,
   victoryFlag?: string,
-): { leveledUp: boolean; newLevel: number } {
+  salvageAlloyBonusFraction: number = 0,
+): { leveledUp: boolean; newLevel: number; rewards: Partial<Record<ResourceType, number>> } {
   const enc = encounterById(encounterId);
-  grant(enc.rewards);
+  const rewards = { ...enc.rewards };
+  if (salvageAlloyBonusFraction > 0) {
+    if (rewards.salvage) rewards.salvage = Math.round(rewards.salvage * (1 + salvageAlloyBonusFraction));
+    if (rewards.alloy) rewards.alloy = Math.round(rewards.alloy * (1 + salvageAlloyBonusFraction));
+  }
+  grant(rewards);
   let leveledUp = false;
   let newLevel = flagship.value?.level ?? 1;
   if (flagship.value) {
@@ -300,7 +306,7 @@ export function resolveCombatVictory(
   if (poiId) setPoiRuntime(poiId, { cleared: true, clearedAt: Date.now() });
   if (victoryFlag) setFlags([victoryFlag]);
   persist();
-  return { leveledUp, newLevel };
+  return { leveledUp, newLevel, rewards };
 }
 
 export function resolveCombatDefeat() {

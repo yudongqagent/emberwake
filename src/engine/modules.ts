@@ -39,8 +39,16 @@ export function computeModuleDamage(mod: ModuleInstance): number {
   const base = def.baseDamage ?? 0;
   const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
   const levelMult = 1 + (mod.level - 1) * 0.12;
-  const critMult = mod.traits.includes("crit") ? 1.15 : 1;
-  return Math.round(base * rarityMult * levelMult * critMult);
+  return Math.round(base * rarityMult * levelMult);
+}
+
+/** Trait-driven crit chance for a fired weapon: a base proc rate, boosted if the
+ * module rolled the "crit" trait, boosted further by the player's current combo. */
+export function computeCritChance(mod: ModuleInstance, comboCount: number): number {
+  const base = 0.08;
+  const traitBonus = mod.traits.includes("crit") ? 0.12 : 0;
+  const comboBonus = Math.min(0.2, comboCount * 0.02);
+  return Math.min(0.75, base + traitBonus + comboBonus);
 }
 
 export function computeModuleBlock(mod: ModuleInstance): number {
