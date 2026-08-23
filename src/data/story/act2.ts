@@ -43,6 +43,7 @@ export const ACT2_SCENES: StoryScene[] = [
       { speaker: "", text: "Ashenvale, the Concord capital. Council chatter already has Kade pegged as a Bauhinia agent extending Principality reach into the Expanse." },
       { speaker: "", text: "It takes three days of quiet digging to find the source — a familiar name, working the council through proxies." },
       { speaker: "Kaan Ferrous", text: "Arthaine. Your court games followed you here." },
+      { speaker: "Kade Ren", text: "It's not the same face every time. New territory, new proxy, same hand behind it. That's the pattern — he doesn't come himself until he has to." },
       { speaker: "", text: "The evidence is solid enough to clear Kade's name before the council votes on Concord-Principality relations. What's less clear is how loudly to use it." },
     ],
     choices: [
@@ -96,6 +97,7 @@ export const ACT2_SCENES: StoryScene[] = [
     hiddenAfterFlag: "act2.firstContact.cleared",
     lines: [
       { speaker: "", text: "Driftmarket's border sensors log something new — biosignatures no one's catalogued, mapping the trade lanes with a patience that isn't remotely piratical." },
+      { speaker: "The Cinder", text: "Scan's picking up a structure on the lead hull — organized, deliberate, not armor. Something closer to a totem than a weapon. These aren't just scouts. They're marked." },
       { speaker: "", text: "The scouts break off the instant Whisper's guns register the first kill. They weren't here to fight." },
       { speaker: "The Cinder", text: "They were here to measure you. That's not nothing." },
       { speaker: "Kade Ren", text: "Measure me for what?" },

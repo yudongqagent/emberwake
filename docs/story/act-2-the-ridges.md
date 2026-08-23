@@ -7,6 +7,12 @@ and ends with first contact against the Chitin Swarm.
 Systems used: Ferrous Gate, Ashenvale, the Hollow Fleet Yard (Lionsheart); Meridian
 Exchange, Driftmarket (Swanreach).
 
+**Novel grounding:** see `docs/story/research-notes-act2.md`. Best-sourced of the
+acts researched this pass: a strong match for the recurring-antagonist-through-
+proxies pattern (Ch.3), a partial match for an insectoid enemy race (Ch.6/7), and no
+confirmed source for the Lionsheart/Swanreach culture clash or the shipyard raid
+(Ch.1/2/4/5) — each annotated per chapter below.
+
 ---
 
 ## Chapter 1 — Open Lanes
@@ -33,6 +39,10 @@ Exchange, Driftmarket (Swanreach).
 
 **Systems/Unlocks:** Third named crew recruit, Lionsheart Expanse fully open.
 
+**Novel grounding:** no confirmed source for a duel-culture faction. The only
+duel-adjacent material anywhere in the novel is a single scene (ep. 32, 宴会上的挑战/
+Challenge at the Banquet), not an ongoing culture. Kept as original invention.
+
 ---
 
 ## Chapter 2 — Trade Winds
@@ -56,6 +66,10 @@ Exchange, Driftmarket (Swanreach).
 
 **Systems/Unlocks:** Fourth named crew recruit, deepened Trade (price fluctuation,
 delivery objectives), Swanreach Combine fully open.
+
+**Novel grounding:** no confirmed source for an ongoing trade-culture faction. The
+novel's only trade-caravan material is a one-off defeat (used for Act I's Ch.5) that
+never recurs. Kept as original invention.
 
 ---
 
@@ -84,6 +98,13 @@ Ferrous.
 
 **Systems/Unlocks:** None mechanical.
 
+**Novel grounding:** strong match — Baron Blackstone's antagonist pattern really does
+work this way in the novel: the same antagonist family resurfaces through a
+different named agent in each new territory (Blackstone's Tiger, ep. 80; Blackstone's
+Fox, ep. 128), with an explicit "War of Revenge" beat (ep. 74) confirming it's
+deliberate pursuit, not coincidence. Kade's new line naming this as a recognized
+pattern is grounded in that; the formal-exposure/blackmail choice itself is original.
+
 ---
 
 ## Chapter 4 — The Hollow Fleet
@@ -106,6 +127,11 @@ Ferrous.
 **Choices & Consequences:** None major.
 
 **Systems/Unlocks:** Meaningful Origin Essence toward a Battleship-class refit.
+
+**Novel grounding:** no confirmed source for a hidden pirate shipyard raid. Pirates
+recur throughout the novel as an enemy type (White Fang, Giant Lizard, Straw Hat
+bands), and a Royal Shipyard exists (ep. 39) — but it's allied, not pirate, and never
+raided. Kept as original invention.
 
 ---
 
@@ -138,6 +164,9 @@ exploited | lionsheartAligned | swanreachAligned`, read by Act V Ch.1.
 **Systems/Unlocks:** None mechanical directly, but strongly shapes later Favor
 economy.
 
+**Novel grounding:** no confirmed source — this chapter's culture clash inherits the
+same "not found" result as Ch.1/2. Kept as original invention.
+
 ---
 
 ## Chapter 6 — First Contact
@@ -160,6 +189,12 @@ economy.
 
 **Systems/Unlocks:** Chitin Swarm established as upcoming threat; Fractured Veil
 becomes visible (not yet enterable) on the Galaxy view.
+
+**Novel grounding:** partial match — a recurring insectoid enemy race is genuinely in
+the novel (虫图腾/"Insect Totem," ep. 81, recurring at ep. 129-130), which is why the
+scan result now flags a "totem" structure rather than generic biosignatures. What's
+not sourced: the scouts-probing-before-a-full-incursion narrative shape, and framing
+it as a coming war — original elaboration on a real recurring-enemy element.
 
 ---
 
@@ -187,3 +222,6 @@ introduced here.
 
 **Systems/Unlocks:** Battleship-class refit (10 slots), Fractured Veil galaxy unlocked
 — **Act II complete.**
+
+**Novel grounding:** same partial match as Ch.6 — the insect race is real, the
+full-incursion-as-a-real-organized-threat framing here is original elaboration.
