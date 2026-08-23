@@ -177,6 +177,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [fortifyTurns, setFortifyTurns] = useState(0);
   const [bloodscentTurns, setBloodscentTurns] = useState(0);
   const bloodscentTargetRef = useRef<number | null>(null);
+  // Issues #5/#6 (2026-08 playtest): a signature ultimate, and the game's first
+  // guaranteed (not rarity-pull-dependent) AoE — every ship has this regardless of
+  // loadout. Charges from landing hits, not from time or RNG, so it rewards active
+  // play. Damage scales with Power Capacity, which now grows with level (see
+  // computePowerCapacity) — leveling up makes the ultimate hit harder too.
+  const [emberNovaCharge, setEmberNovaCharge] = useState(0);
+  const EMBER_NOVA_MAX = 100;
   // Shared with the physics loop below so Displacement Charge (fired from
   // fireModuleImpl) can shove an enemy's chase position directly, not just read it.
   const enemyChaseXRef = useRef<number[]>([]);
@@ -661,6 +668,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       }, weaponWeight);
       playSfx("laser");
       setComboCount((c) => (result.hit ? c + 1 : 0));
+      if (result.hit) setEmberNovaCharge((c) => Math.min(EMBER_NOVA_MAX, c + 12));
 
       let hitTarget = { ...target, hull: Math.max(0, target.hull - (result.hit ? result.damageDealt : 0)) };
       if (result.hit && blockBroken) hitTarget.blockBrokenHits = Math.max(0, (target.blockBrokenHits ?? 0) - 1);
@@ -916,6 +924,39 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setNamedAbilityCooldown(namedDef.activeCooldown);
     playSfx("click");
     endPlayerAction(enemies);
+  }
+
+  function useEmberNova() {
+    try {
+      useEmberNovaImpl();
+    } catch (err) {
+      reportError("Combat.useEmberNova", err);
+      setStatus("active");
+    }
+  }
+
+  /** Issues #5/#6: a genuinely guaranteed AoE ultimate — every living enemy takes
+   * real damage scaled off Power Capacity (which itself now grows with level, see
+   * computePowerCapacity), not gated behind a rarity pull the way Flak Battery's
+   * Splash trait is. */
+  function useEmberNovaImpl() {
+    if (status !== "active" || emberNovaCharge < EMBER_NOVA_MAX) return;
+    const novaDamage = Math.round(capacity * 1.5);
+    const nextEnemies = enemies.map((enemy, i) => {
+      if (enemy.hull <= 0) return enemy;
+      const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
+      spawnBurst(pos.x, pos.y, "255,159,77", 26, 160);
+      addPopup(i, `-${novaDamage}`, "#ff9f4d", true);
+      explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
+      return { ...enemy, hull: Math.max(0, enemy.hull - novaDamage) };
+    });
+    pushLog(`Ember Nova erupts — ${novaDamage} damage to every enemy in the field.`);
+    playSfx("explosion");
+    shakeRef.current = 22;
+    triggerHitStop(140);
+    setEmberNovaCharge(0);
+    setEnemies(nextEnemies);
+    endPlayerAction(nextEnemies);
   }
 
   // --- Arena render/physics loop ---
@@ -1190,6 +1231,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             </button>
           );
         })()}
+        <button
+          className={`btn ${emberNovaCharge >= EMBER_NOVA_MAX ? "danger" : "ghost"}`}
+          disabled={status !== "active" || emberNovaCharge < EMBER_NOVA_MAX}
+          onClick={useEmberNova}
+          title="Ember Nova — every hit landed charges it. At full charge, deals heavy damage to every living enemy at once, scaled with your ship's Power Capacity."
+          style={emberNovaCharge >= EMBER_NOVA_MAX ? { boxShadow: "0 0 14px var(--red)", fontWeight: 800 } : undefined}
+        >
+          {emberNovaCharge >= EMBER_NOVA_MAX ? "★ EMBER NOVA ★" : `Ember Nova ${emberNovaCharge}/${EMBER_NOVA_MAX}`}
+        </button>
       </div>
 
       <div className="panel" style={{ margin: "0.6rem 1rem", padding: "0.5rem 0.75rem", fontSize: "0.75rem", color: "var(--text-mid)", maxHeight: 84, overflowY: "auto" }}>
