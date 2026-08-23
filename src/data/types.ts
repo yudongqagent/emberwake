@@ -12,7 +12,8 @@ export type FactionId =
   | "reavers"
   | "swarm"
   | "constructs"
-  | "hollow";
+  | "hollow"
+  | "riftEchoes";
 
 export type HullClassId =
   | "corvette"
@@ -143,7 +144,7 @@ export interface CrewInstance {
   assignedShipId: string | null;
 }
 
-export type PoiKind = "station" | "asteroidField" | "derelict" | "patrol" | "storyMarker" | "wreck";
+export type PoiKind = "station" | "asteroidField" | "derelict" | "patrol" | "storyMarker" | "wreck" | "riftPocket";
 
 export interface Poi {
   id: string;

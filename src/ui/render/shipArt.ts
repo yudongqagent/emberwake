@@ -8,6 +8,7 @@ export const FACTION_HULL_COLOR: Record<string, string> = {
   bauhinia: "#b98cff",
   constructs: "#9fb8cc",
   hollow: "#e8d9ff",
+  riftEchoes: "#b478ff",
 };
 
 /** Deterministic 0..1 hash so per-entity "random" art (rock shapes, tumble phase) stays
@@ -309,6 +310,42 @@ export function drawEnemyHull(ctx: CanvasRenderingContext2D, faction: FactionId 
       ctx.fillRect(-15, by, 30, 1.4);
       ctx.globalAlpha = 1;
     }
+  } else if (faction === "riftEchoes") {
+    // Issue #10: a fractured shard cluster, not the Hollow's coherent glitching
+    // rectangle — these are unstable fragments of something, not the thing itself.
+    // Three overlapping triangular shards, each independently jittering.
+    const shards = [
+      { dx: -4, dy: 0, r: 13, seed: 0 },
+      { dx: 6, dy: -6, r: 9, seed: 17 },
+      { dx: 5, dy: 7, r: 8, seed: 34 },
+    ];
+    for (const s of shards) {
+      const jx = (seededRand(Math.floor(now / 110) + s.seed) - 0.5) * 3;
+      const jy = (seededRand(Math.floor(now / 110) + s.seed + 1) - 0.5) * 3;
+      ctx.save();
+      ctx.translate(s.dx + jx, s.dy + jy);
+      ctx.globalAlpha = 0.55 + 0.25 * Math.sin(now / 170 + s.seed);
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 9;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(-s.r, -s.r * 0.6);
+      ctx.lineTo(s.r, 0);
+      ctx.lineTo(-s.r, s.r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+      ctx.restore();
+    }
+    // faint core glow binding the shards together
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
   } else {
     // bauhinia / swanreach / default: utilitarian octagon hull with amber trim
     const grad = ctx.createLinearGradient(-15, 0, 15, 0);

@@ -258,6 +258,12 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
           workingPoi = null;
           setProgressPct(0);
         }
+      } else if (nearest && nearest.kind === "riftPocket") {
+        // Issue #10: unlike every other POI kind, a Rift Pocket isn't a proximity-
+        // timer collection — approaching it just surfaces the dive-depth panel (see
+        // the JSX below); the actual "collection" happens by winning the fight.
+        workingPoi = null;
+        setProgressPct(0);
       } else if (nearest && nearest.kind === "wreck") {
         if (workingPoi?.id !== nearest.id) {
           workingPoi = nearest;
@@ -439,6 +445,24 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
             </div>
           </div>
         )}
+        {nearPoi && nearPoi.kind === "riftPocket" && (() => {
+          const tiers = (nearPoi.data?.riftTiers as Record<"shallow" | "deep" | "abyssal", string> | undefined) ?? {
+            shallow: "riftDiveShallow", deep: "riftDiveDeep", abyssal: "riftDiveAbyssal",
+          };
+          return (
+            <div className="panel accent scanline" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", minWidth: 260, textAlign: "center", ["--accent" as any]: "var(--violet)" }}>
+              <div style={{ fontSize: "0.85rem", marginBottom: "0.15rem", fontWeight: 700 }}>{nearPoi.name}</div>
+              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "0.55rem" }}>
+                The rift is stable enough to enter. Choose how deep.
+              </div>
+              <div style={{ display: "flex", gap: "0.4rem", justifyContent: "center", flexWrap: "wrap" }}>
+                <button className="btn" onClick={() => onEngage(tiers.shallow, nearPoi.id)}>Shallow Dive</button>
+                <button className="btn" onClick={() => onEngage(tiers.deep, nearPoi.id)}>Deep Dive</button>
+                <button className="btn danger" onClick={() => onEngage(tiers.abyssal, nearPoi.id)}>Abyssal Dive</button>
+              </div>
+            </div>
+          );
+        })()}
         {isBounty && nearPoi && (
           <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", fontSize: "0.72rem", color: "var(--amber)", background: "rgba(3,5,9,0.7)", padding: "0.3rem 0.7rem", borderRadius: 999, border: "1px solid var(--amber)" }}>
             Bounty contact — repeatable
@@ -446,7 +470,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
         )}
       </div>
       <div style={{ padding: "0.5rem 1rem", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-        Drag/tap to fly, or WASD / arrow keys. Approach stations, fields, wrecks, and contacts to interact.
+        Drag/tap to fly, or WASD / arrow keys. Approach stations, fields, wrecks, rifts, and contacts to interact.
       </div>
     </div>
   );
@@ -470,6 +494,29 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, ex: number, ey: number
     drawAsteroidRocks(ctx, poi.id, remaining > 0, now);
   } else if (poi.kind === "wreck") {
     drawWreckArt(ctx, poi.id, now);
+  } else if (poi.kind === "riftPocket") {
+    // Issue #10: a swirling void portal, not a wreck — the map's own signal that
+    // this POI leads somewhere else entirely rather than sitting still to be mined.
+    const t = now / 1000;
+    for (let ring = 0; ring < 3; ring++) {
+      const rr = 12 + ring * 7 + Math.sin(t * 1.4 + ring) * 2;
+      ctx.globalAlpha = 0.5 - ring * 0.12;
+      ctx.strokeStyle = "#b478ff";
+      ctx.shadowColor = "#b478ff";
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rr, rr * 0.6, t * 0.8 + ring, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, 10);
+    coreGrad.addColorStop(0, "#0a0416");
+    coreGrad.addColorStop(1, "#b478ff");
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 9, 0, Math.PI * 2);
+    ctx.fill();
   } else if (poi.kind === "patrol") {
     const bounty = !!poi.data?.bounty;
     const baseColor = bounty ? "255,159,77" : "255,92,92";

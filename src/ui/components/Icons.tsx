@@ -246,6 +246,7 @@ export const FACTION_COLOR: Record<FactionId, string> = {
   swarm: "#8cff9e",
   constructs: "#9fb8cc",
   hollow: "#e8d9ff",
+  riftEchoes: "#b478ff",
 };
 
 export function FactionEmblem({ faction, size = 16 }: { faction: FactionId; size?: number }) {

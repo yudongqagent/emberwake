@@ -92,6 +92,15 @@ derelicts, and patrols — see `docs/architecture.md` for the map model.
   Mayeth civilization, now stirring again in the deepest Rifts. Consumes Origin itself
   rather than fighting over it. The true endgame threat, revealed gradually across
   Acts IV–V. Deliberately kept somewhat ambiguous rather than over-explained.
+- **Rift Echoes** — encountered only inside Origin Rift Pockets (the "extradimensional
+  battlefield," playable from Act III on), not the normal-space map. Fractured,
+  unstable fragments that flicker in and out of phase mid-fight — foreshadowing of the
+  true Hollow, not the Hollow itself; the "Hollow Echo" bounty naming elsewhere is the
+  same connective thread. Per
+  `docs/story/research-notes-extradimensional.md`, the *premise* — a special warship
+  periodically diving into alternate space to harvest Source Points and grow stronger —
+  is directly sourced from the novel; the Rift Echoes themselves are original invention
+  layered on that confirmed mechanic, not sourced.
 
 ## Named crew (story-unlocked)
 

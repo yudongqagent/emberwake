@@ -154,6 +154,63 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     xp: 360,
   },
 
+  // --- Issue #10 (2026-08-23 playtest): the extradimensional battlefield (异空间战场).
+  // Per docs/story/research-notes-extradimensional.md, the novel's confirmed core loop
+  // is a special warship periodically entering alternate space to harvest a resource
+  // and grow stronger from it — Emberwake's Origin Rift Pocket POI already adapts that
+  // premise, but until now it was just a passive resource pickup (kind: "wreck"), not
+  // its own distinct combat zone. These three depth tiers ARE that zone — reachable via
+  // the same Origin Rift Pocket POI (now kind: "riftPocket", see SystemView.tsx), with
+  // reward scaling standing in for the novel's confirmed "3x/5x/even 100x" source-point
+  // self-select ability (not a literal 100x — that would break the resource economy).
+  // Faction "riftEchoes" is original invention layered on the confirmed mechanic (per
+  // the research notes) — foreshadowing fragments of Act V's Hollow, thematically
+  // continuous with the "Hollow Echo" bounty naming already in this file, but
+  // mechanically distinct: see Phase Flicker and Rift Anchor in Combat.tsx, neither of
+  // which any other faction doctrine has. Deliberately kept outside
+  // BOUNTY_ENCOUNTER_DEFS below despite being repeatable — that array's "Origin Essence
+  // stays story-only" rule doesn't apply here, extending the same precedent the
+  // existing (pre-rewrite) Rift Pocket wreck already set by granting essence on a
+  // throttled respawn rather than an unthrottled farm.
+  {
+    id: "riftDiveShallow",
+    name: "Rift Dive — Shallow",
+    faction: "riftEchoes",
+    isBoss: false,
+    enemies: [
+      { name: "Rift Flicker", hull: 75, damage: 11, block: 2, evasion: 0.15 },
+      { name: "Rift Flicker", hull: 75, damage: 11, block: 2, evasion: 0.15 },
+    ],
+    rewards: { salvage: 90, sourcePoints: 60, originEssence: 20 },
+    xp: 45,
+  },
+  {
+    id: "riftDiveDeep",
+    name: "Rift Dive — Deep",
+    faction: "riftEchoes",
+    isBoss: false,
+    enemies: [
+      { name: "Rift Warden", hull: 210, damage: 17, block: 8, evasion: 0.12 },
+      { name: "Rift Flicker", hull: 95, damage: 13, block: 2, evasion: 0.18 },
+      { name: "Rift Flicker", hull: 95, damage: 13, block: 2, evasion: 0.18 },
+    ],
+    rewards: { salvage: 190, sourcePoints: 140, originEssence: 55 },
+    xp: 95,
+  },
+  {
+    id: "riftDiveAbyssal",
+    name: "Rift Dive — Abyssal",
+    faction: "riftEchoes",
+    isBoss: true,
+    enemies: [
+      { name: "Rift Sovereign", hull: 460, damage: 25, block: 14, evasion: 0.1 },
+      { name: "Rift Warden", hull: 230, damage: 18, block: 8, evasion: 0.14 },
+      { name: "Rift Flicker", hull: 110, damage: 15, block: 3, evasion: 0.2 },
+    ],
+    rewards: { salvage: 380, sourcePoints: 300, originEssence: 130 },
+    xp: 190,
+  },
+
   // --- Act IV: Deep Origin — Mayeth Construct doctrine (heavy block, precise, no evasion).
   {
     id: "firstFleetDefenseDrones",

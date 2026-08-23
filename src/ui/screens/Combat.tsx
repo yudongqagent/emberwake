@@ -55,6 +55,7 @@ const FACTION_PREFERRED_RANGE: Partial<Record<FactionId, RangeBand>> = {
   swanreach: "long",
   hollow: "mid",
   lionsheart: "mid",
+  riftEchoes: "mid",
 };
 const RANGE_TARGET_DISTANCE: Record<RangeBand, number> = { close: 100, mid: 250, long: 420 };
 /** World-units/sec an enemy closes/opens distance at — deliberately slower than the
@@ -85,6 +86,10 @@ interface EnemyState {
   blockDebuffSec?: number;
   /** Reaver's Cut: takes +25% damage from the player. Real-time seconds remaining. */
   vulnerableSec?: number;
+  /** Issue #10: Rift Echoes doctrine, axis 1 (Phase Flicker) — while true this enemy
+   * is out of the fight both ways: player attacks against it auto-miss, and it skips
+   * its own attack timer, until it flickers back. See combatTick. */
+  phased?: boolean;
 }
 
 /** Per-enemy real-time attack/charge/regen clocks — kept in a ref (not React state)
@@ -95,6 +100,9 @@ interface EnemyTimer {
   charging: boolean;
   chargeRemaining: number;
   regenAccum: number;
+  /** Rift Echoes only (see EnemyState.phased) — unused (stays false) for every other faction. */
+  phased: boolean;
+  phaseRemaining: number;
 }
 
 interface Popup {
@@ -204,6 +212,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // plating itself. A distinct status-effect category from anything else in combat.
   const [corrodedBlock, setCorrodedBlock] = useState(0);
   const bossPhaseRef = useRef(false);
+  // Issue #10: Rift Echoes doctrine, axis 2 (Rift Anchor). Unlike Swarm's Hive
+  // Retaliation (allies get stronger as the group thins), a Rift Echo dying breaks
+  // the pocket's stability further — every surviving Echo becomes easier to hit hard
+  // for the rest of the fight. A reversal of the usual "fewer allies, more danger"
+  // pattern, set once and never cleared (see the reactive effect keyed on [enemies]).
+  const riftAnchoredRef = useRef(false);
   // Named-ship signature abilities (issues #3/#4 — see data/namedShips.ts): each one
   // is a distinct mechanical axis, not a bigger number. namedAbilityCooldown mirrors
   // crewCooldowns' per-instance pattern, just for the single flagship ability slot.
@@ -312,8 +326,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // Explosion burst the moment an enemy's hull crosses to zero.
   const prevHullsRef = useRef<number[]>(enemies.map((e) => e.hull));
   useEffect(() => {
+    let anyDiedThisUpdate = false;
     enemies.forEach((e, i) => {
       if (prevHullsRef.current[i] > 0 && e.hull <= 0) {
+        anyDiedThisUpdate = true;
         const pos = arenaRef.current.enemyPos[i];
         if (pos) {
           spawnBurst(pos.x, pos.y, "255,180,90", 30, 140);
@@ -324,6 +340,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         playSfx("explosion");
       }
     });
+    // Issue #10: Rift Anchor — the first Rift Echo to die breaks the pocket's
+    // stability for the rest of the fight, permanently boosting the player's damage
+    // against every survivor (see fireModuleImpl's riftAnchorMult).
+    if (anyDiedThisUpdate && encounter.faction === "riftEchoes" && !riftAnchoredRef.current && enemies.some((e) => e.hull > 0)) {
+      riftAnchoredRef.current = true;
+      pushLog("The rift's stability breaks — the survivors are exposed, and your weapons hit them harder.");
+    }
     prevHullsRef.current = enemies.map((e) => e.hull);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enemies]);
@@ -447,6 +470,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         charging: false,
         chargeRemaining: 0,
         regenAccum: 0,
+        phased: false,
+        // Staggered per-enemy so a multi-enemy Rift fight doesn't flicker in unison.
+        phaseRemaining: 1.8 + Math.random() * 1.6,
       };
     }
     return enemyTimersRef.current[i];
@@ -675,6 +701,24 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         }
       }
 
+      // Issue #10: Rift Echoes doctrine, axis 1 (Phase Flicker). Each enemy cycles
+      // solid/phased on its own independent clock — while phased it's out of the
+      // fight both ways: unhittable, and it skips its own attack. This is the
+      // mode's real tactical texture: focus whichever Echo is currently solid
+      // instead of just target-locking the whole fight onto one enemy.
+      if (encounter.faction === "riftEchoes") {
+        timer.phaseRemaining -= dt;
+        if (timer.phaseRemaining <= 0) {
+          timer.phased = !timer.phased;
+          timer.phaseRemaining = timer.phased ? 1.6 : 2.2 + Math.random() * 1.2;
+          setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, phased: timer.phased } : e)));
+          pushLog(timer.phased
+            ? `${enemy.name} flickers out of phase — attacks will pass through it.`
+            : `${enemy.name} phases back into reach.`);
+        }
+        if (timer.phased) return;
+      }
+
       if (timer.charging) {
         timer.chargeRemaining -= dt;
         if (timer.chargeRemaining <= 0) {
@@ -752,6 +796,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const def = moduleDefById(mod.defId);
     const target = enemies[targetIdx];
     if (!target || target.hull <= 0) return;
+    // Issue #10: Rift Echoes' Phase Flicker — a phased target is out of reach
+    // entirely; block the shot (and don't burn the weapon's cooldown for nothing)
+    // rather than let it fire and silently miss, so the player retargets instead.
+    if (target.phased) {
+      pushLog(`${target.name} is phased — the shot finds nothing there.`);
+      return;
+    }
 
     const enemyPos = arenaRef.current.enemyPos[targetIdx] ?? enemySlot(targetIdx, enemies.length);
     const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
@@ -779,7 +830,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const surgeMult = hasSurgeEngine && distanceSinceLastShotRef.current > 150 ? 1.25 : 1;
     // Nightfall Vow's Alpha Strike: doubles this one shot, at the cost of that
     // weapon's cooldown locking out 2 extra turns (see the cooldown-set below).
-    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult * (wasAlphaStrike ? 2 : 1) * overloadMult * surgeMult);
+    // Issue #10: Rift Anchor — once any Rift Echo has died this fight, every
+    // survivor takes +50% from the player for the rest of it (see the reactive
+    // effect keyed on [enemies]).
+    const riftAnchorMult = encounter.faction === "riftEchoes" && riftAnchoredRef.current ? 1.5 : 1;
+    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult * (wasAlphaStrike ? 2 : 1) * overloadMult * surgeMult * riftAnchorMult);
     distanceSinceLastShotRef.current = 0;
     const nextEnemies = [...enemies];
     if (dmg > 0) {
@@ -1607,6 +1662,7 @@ const FACTION_HULL_COLOR_RGB: Record<string, string> = {
   bauhinia: "185,140,255",
   constructs: "159,184,204",
   hollow: "232,217,255",
+  riftEchoes: "180,120,255",
 };
 
 function drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]) {
@@ -1685,9 +1741,25 @@ function drawEnemyShip(
   }
 
   ctx.scale(squash.sx, squash.sy);
+  // Issue #10: Phase Flicker — a phased Rift Echo fades to a translucent, fast-jittering
+  // silhouette so "you can't hit this right now" reads at a glance, not just from the log.
+  if (enemy.phased) {
+    ctx.globalAlpha = 0.35 + 0.15 * Math.sin(now / 60);
+    ctx.translate((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
+  }
   drawEnemyHull(ctx, faction, 1.5, now);
   ctx.restore();
 
+  if (enemy.phased) {
+    ctx.save();
+    ctx.fillStyle = "#b478ff";
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.shadowColor = "#b478ff";
+    ctx.shadowBlur = 8;
+    ctx.fillText("PHASED", pos.x, pos.y + 62);
+    ctx.restore();
+  }
   if (enemy.charging) {
     ctx.save();
     ctx.fillStyle = "#ff5c5c";
