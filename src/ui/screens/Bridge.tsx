@@ -6,6 +6,7 @@ import { crewDefById } from "../../data/crew";
 import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, AptitudeIcon, LevelIcon, LocationIcon, CrewRoleIcon, NavIcon } from "../components/Icons";
 import { StatReadout, Bar, hullBarKind } from "../components/StatBlock";
+import { BridgeViewscreen } from "../components/BridgeViewscreen";
 
 export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void }) {
   const ship = flagship.value;
@@ -17,6 +18,7 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", height: "100%", overflowY: "auto", padding: "1rem" }}>
+      <BridgeViewscreen systemName={currentSystem.value.name} galaxyName={currentGalaxy.value.name} />
       <div className="panel scanline" style={{ padding: "1.25rem" }}>
         <div className="title" style={{ fontSize: "1.5rem" }}>Emberwake</div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--text-mid)", marginTop: "0.4rem" }}>

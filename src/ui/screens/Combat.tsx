@@ -11,6 +11,7 @@ import type { CrewRole, FactionId, ResourceType } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
 import { ResourceIcon, RESOURCE_LABEL } from "../components/Icons";
+import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing } from "../render/shipArt";
 
 const REF_W = 900;
 const REF_H = 520;
@@ -110,6 +111,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   });
   const projectilesRef = useRef<Projectile[]>([]);
   const particlesRef = useRef<Particle[]>([]);
+  const explosionsRef = useRef<{ x: number; y: number; start: number }[]>([]);
   const shakeRef = useRef(0);
   const vpRef = useRef<ReturnType<typeof attachResponsiveCanvas> | null>(null);
   const enemiesRef = useRef(enemies);
@@ -132,7 +134,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     enemies.forEach((e, i) => {
       if (prevHullsRef.current[i] > 0 && e.hull <= 0) {
         const pos = arenaRef.current.enemyPos[i];
-        if (pos) spawnBurst(pos.x, pos.y, "255,180,90", 26, 130);
+        if (pos) {
+          spawnBurst(pos.x, pos.y, "255,180,90", 30, 140);
+          spawnBurst(pos.x, pos.y, "255,226,93", 14, 70);
+          explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
+        }
         playSfx("explosion");
       }
     });
@@ -444,7 +450,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // screen shake decay
       shakeRef.current = Math.max(0, shakeRef.current - dt * 30);
 
-      draw(ctx, vp, arena, player, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current);
+      explosionsRef.current = explosionsRef.current.filter((e) => now - e.start < 500);
+
+      const thrusting = Math.hypot(player.vx, player.vy) > 12;
+      draw(ctx, vp, arena, { ...player, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current);
     }
 
     const interval = setInterval(() => step(performance.now()), 16);
@@ -586,7 +595,7 @@ function draw(
   ctx: CanvasRenderingContext2D,
   vp: ReturnType<typeof attachResponsiveCanvas>,
   arena: { player: ArenaPoint; enemyPos: ArenaPoint[] },
-  player: { angle: number },
+  player: { angle: number; thrusting: boolean },
   enemies: EnemyState[],
   targetIdx: number,
   stars: { x: number; y: number; r: number; a: number }[],
@@ -595,6 +604,7 @@ function draw(
   shake: number,
   projectiles: Projectile[],
   particles: Particle[],
+  explosions: { x: number; y: number; start: number }[],
 ) {
   vp.beginFrame(ctx);
   const { scale, offsetX, offsetY } = vp.transform();
@@ -604,6 +614,13 @@ function draw(
   bg.addColorStop(1, "#040308");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, vp.displayW, vp.displayH);
+
+  const nebula = ctx.createRadialGradient(vp.displayW * 0.75, vp.displayH * 0.25, 0, vp.displayW * 0.75, vp.displayH * 0.25, vp.displayW * 0.5);
+  nebula.addColorStop(0, `rgba(${FACTION_HULL_COLOR_RGB[faction] ?? "255,159,77"},0.1)`);
+  nebula.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = nebula;
+  ctx.fillRect(0, 0, vp.displayW, vp.displayH);
+
   for (const s of stars) {
     ctx.globalAlpha = s.a;
     ctx.fillStyle = "#e8d9ff";
@@ -631,6 +648,11 @@ function draw(
 
   drawProjectiles(ctx, projectiles);
   drawParticles(ctx, particles);
+  for (const ex of explosions) {
+    ctx.save();
+    drawExplosionRing(ctx, ex.x, ex.y, now - ex.start, 500);
+    ctx.restore();
+  }
 
   enemies.forEach((e, i) => {
     if (e.hull <= 0) return;
@@ -639,30 +661,23 @@ function draw(
     drawEnemyShip(ctx, pos, faction, now + i * 500, i === targetIdx, e);
   });
 
-  drawPlayerShip(ctx, arena.player, player.angle);
+  drawPlayerShip(ctx, arena.player, player.angle, now, player.thrusting);
   ctx.restore();
 }
 
+const FACTION_HULL_COLOR_RGB: Record<string, string> = {
+  reavers: "255,92,92",
+  lionsheart: "93,214,255",
+  swarm: "140,255,158",
+  swanreach: "255,184,77",
+  bauhinia: "185,140,255",
+  constructs: "159,184,204",
+  hollow: "232,217,255",
+};
+
 function drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]) {
   for (const p of projectiles) {
-    const x = p.fromX + (p.toX - p.fromX) * p.t;
-    const y = p.fromY + (p.toY - p.fromY) * p.t;
-    ctx.save();
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 10;
-    ctx.strokeStyle = p.color;
-    ctx.lineWidth = 2.5;
-    const trailX = p.fromX + (p.toX - p.fromX) * Math.max(0, p.t - 0.12);
-    const trailY = p.fromY + (p.toY - p.fromY) * Math.max(0, p.t - 0.12);
-    ctx.beginPath();
-    ctx.moveTo(trailX, trailY);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(x, y, 2.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    drawWeaponBeam(ctx, p.fromX, p.fromY, p.toX, p.toY, p.t, p.color);
   }
 }
 
@@ -677,26 +692,11 @@ function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]) {
   ctx.globalAlpha = 1;
 }
 
-function drawPlayerShip(ctx: CanvasRenderingContext2D, pos: ArenaPoint, angle: number) {
+function drawPlayerShip(ctx: CanvasRenderingContext2D, pos: ArenaPoint, angle: number, now: number, thrusting: boolean) {
   ctx.save();
   ctx.translate(pos.x, pos.y);
   ctx.rotate(angle);
-  ctx.shadowColor = "#4be8ff";
-  ctx.shadowBlur = 16;
-  const grad = ctx.createLinearGradient(-12, 0, 18, 0);
-  grad.addColorStop(0, "#1c7d94");
-  grad.addColorStop(1, "#8ff3ff");
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(20, 0);
-  ctx.lineTo(-13, -12);
-  ctx.lineTo(-5, 0);
-  ctx.lineTo(-13, 12);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.7)";
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+  drawPlayerHull(ctx, 1.7, now, thrusting);
   ctx.restore();
 }
 
@@ -716,117 +716,18 @@ function drawEnemyShip(
     ctx.strokeStyle = `rgba(255,226,93,${pulse})`;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(0, 0, 30, 0, Math.PI * 2);
+    ctx.arc(0, 0, 40, 0, Math.PI * 2);
     ctx.stroke();
   }
 
-  const colors: Record<string, string> = {
-    reavers: "#ff5c5c",
-    lionsheart: "#5dd6ff",
-    swarm: "#8cff9e",
-    swanreach: "#ffb84d",
-    bauhinia: "#b98cff",
-    constructs: "#9fb8cc",
-    hollow: "#e8d9ff",
-  };
-  const color = colors[faction] ?? "#ff9f4d";
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = color;
-  ctx.strokeStyle = "rgba(255,255,255,0.5)";
-  ctx.lineWidth = 1;
-
-  if (faction === "swarm") {
-    const pulse = 1 + 0.08 * Math.sin(now / 260);
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const r = (i % 2 === 0 ? 15 : 9) * pulse;
-      const x = Math.cos(a) * r, y = Math.sin(a) * r;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  } else if (faction === "lionsheart") {
-    ctx.beginPath();
-    ctx.moveTo(-18, 0);
-    ctx.lineTo(10, -9);
-    ctx.lineTo(18, 0);
-    ctx.lineTo(10, 9);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  } else if (faction === "reavers") {
-    ctx.beginPath();
-    ctx.moveTo(-16, -13);
-    ctx.lineTo(14, -5);
-    ctx.lineTo(20, 0);
-    ctx.lineTo(14, 5);
-    ctx.lineTo(-16, 13);
-    ctx.lineTo(-8, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  } else if (faction === "constructs") {
-    // cold, geometric, precise — a rotating hexagonal shell around a fixed core
-    ctx.save();
-    ctx.rotate((now / 4000) % (Math.PI * 2));
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = (Math.PI / 3) * i;
-      const x = Math.cos(a) * 17, y = Math.sin(a) * 17;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    ctx.beginPath();
-    ctx.arc(0, 0, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.fill();
-  } else if (faction === "hollow") {
-    // color-drained, glitchy — a flickering, slightly displaced double-outline
-    const glitchX = (Math.random() - 0.5) * 3;
-    const glitchY = (Math.random() - 0.5) * 3;
-    ctx.globalAlpha = 0.5 + 0.3 * Math.sin(now / 140);
-    ctx.beginPath();
-    ctx.moveTo(-15 + glitchX, -15 + glitchY);
-    ctx.lineTo(15 + glitchX, -6 + glitchY);
-    ctx.lineTo(15 + glitchX, 6 + glitchY);
-    ctx.lineTo(-15 + glitchX, 15 + glitchY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = "rgba(255,255,255,0.4)";
-    ctx.beginPath();
-    ctx.moveTo(-15 - glitchX, -15 - glitchY);
-    ctx.lineTo(15 - glitchX, -6 - glitchY);
-    ctx.lineTo(15 - glitchX, 6 - glitchY);
-    ctx.lineTo(-15 - glitchX, 15 - glitchY);
-    ctx.closePath();
-    ctx.stroke();
-  } else {
-    // bauhinia / swanreach / default: utilitarian octagon hull
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const a = (Math.PI / 4) * i;
-      const x = Math.cos(a) * 15, y = Math.sin(a) * 15;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  }
+  drawEnemyHull(ctx, faction, 1.5, now);
   ctx.restore();
 
   // HP bar
-  const w = 44;
+  const w = 54;
   const frac = Math.max(0, enemy.hull / enemy.maxHull);
   ctx.save();
-  ctx.translate(pos.x - w / 2, pos.y - 34);
+  ctx.translate(pos.x - w / 2, pos.y - 46);
   ctx.fillStyle = "rgba(5,8,16,0.7)";
   ctx.fillRect(0, 0, w, 5);
   ctx.fillStyle = frac > 0.5 ? "#5dffb0" : frac > 0.2 ? "#ffb84d" : "#ff5c5c";
@@ -840,6 +741,6 @@ function drawEnemyShip(
   ctx.fillStyle = "rgba(234,246,255,0.8)";
   ctx.font = "11px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(enemy.name + (enemy.regen ? " ⟳" : ""), pos.x, pos.y - 40);
+  ctx.fillText(enemy.name + (enemy.regen ? " ⟳" : ""), pos.x, pos.y - 52);
   ctx.restore();
 }

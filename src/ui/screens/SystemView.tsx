@@ -11,6 +11,15 @@ import {
 import type { Poi, ResourceType } from "../../data/types";
 import { playSfx } from "../../audio/engine";
 import { attachResponsiveCanvas } from "../../engine/viewport";
+import { encounterById } from "../../data/encounters";
+import {
+  drawPlayerHull,
+  drawEnemyHull,
+  drawStationArt,
+  drawAsteroidRocks,
+  drawWreckArt,
+  drawDerelictArt,
+} from "../render/shipArt";
 
 const REF_W = 1000;
 const REF_H = 600;
@@ -341,7 +350,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       }
       ctx2d.globalAlpha = 1;
 
-      drawPlayer(ctx2d, player);
+      drawPlayer(ctx2d, player, now, Math.hypot(player.vx, player.vy) > 12);
       ctx2d.restore();
     }
     // A fixed-interval tick (rather than requestAnimationFrame) keeps the loop running
@@ -416,26 +425,11 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   );
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, p: { x: number; y: number; angle: number }) {
+function drawPlayer(ctx: CanvasRenderingContext2D, p: { x: number; y: number; angle: number }, now: number, thrusting: boolean) {
   ctx.save();
   ctx.translate(p.x, p.y);
   ctx.rotate(p.angle);
-  ctx.shadowColor = "#4be8ff";
-  ctx.shadowBlur = 14;
-  const grad = ctx.createLinearGradient(-10, 0, 14, 0);
-  grad.addColorStop(0, "#1c7d94");
-  grad.addColorStop(1, "#8ff3ff");
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(15, 0);
-  ctx.lineTo(-10, -9);
-  ctx.lineTo(-4, 0);
-  ctx.lineTo(-10, 9);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.6)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  drawPlayerHull(ctx, 1.05, now, thrusting);
   ctx.restore();
 }
 
@@ -443,51 +437,12 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, ex: number, ey: number
   ctx.save();
   ctx.translate(ex, ey);
   if (poi.kind === "station") {
-    const pulse = 0.85 + 0.15 * Math.sin(now / 500);
-    ctx.shadowColor = "#ffb84d";
-    ctx.shadowBlur = 10 * pulse;
-    ctx.strokeStyle = "#ffb84d";
-    ctx.fillStyle = "rgba(255,184,77,0.14)";
-    ctx.lineWidth = 2;
-    drawHex(ctx, 26);
-    ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    drawHex(ctx, 14);
-    ctx.strokeStyle = "rgba(255,220,160,0.8)";
-    ctx.stroke();
+    drawStationArt(ctx, 30, now);
   } else if (poi.kind === "asteroidField") {
     const remaining = effectiveRemaining(poi);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = remaining > 0 ? "#9fb8cc" : "#3a4553";
-    for (let i = 0; i < 7; i++) {
-      const ang = (i / 7) * Math.PI * 2;
-      const r = 18 + (i % 3) * 6;
-      ctx.beginPath();
-      ctx.arc(Math.cos(ang) * r, Math.sin(ang) * r, 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    if (remaining <= 0) {
-      ctx.fillStyle = "rgba(160,180,200,0.55)";
-      ctx.font = "10px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("recharging…", 0, 40);
-    }
+    drawAsteroidRocks(ctx, poi.id, remaining > 0, now);
   } else if (poi.kind === "wreck") {
-    const pulse = 0.5 + 0.5 * Math.sin(now / 340);
-    ctx.shadowColor = "#b98cff";
-    ctx.shadowBlur = 8 + pulse * 6;
-    ctx.strokeStyle = "#b98cff";
-    ctx.fillStyle = "rgba(185,140,255,0.12)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, -20);
-    ctx.lineTo(18, 0);
-    ctx.lineTo(0, 20);
-    ctx.lineTo(-18, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    drawWreckArt(ctx, poi.id, now);
   } else if (poi.kind === "patrol") {
     const bounty = !!poi.data?.bounty;
     const baseColor = bounty ? "255,159,77" : "255,92,92";
@@ -497,26 +452,18 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, ex: number, ey: number
     ctx.beginPath();
     ctx.arc(0, 0, poi.radius, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.shadowColor = `rgb(${baseColor})`;
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = `rgb(${baseColor})`;
-    ctx.beginPath();
-    ctx.moveTo(0, -12);
-    ctx.lineTo(10, 0);
-    ctx.lineTo(0, 12);
-    ctx.lineTo(-10, 0);
-    ctx.closePath();
-    ctx.fill();
+    let faction = "reavers";
+    const encounterId = poi.data?.encounterId as string | undefined;
+    if (encounterId) {
+      try {
+        faction = encounterById(encounterId).faction;
+      } catch {
+        // unknown encounter id — keep the reavers fallback
+      }
+    }
+    drawEnemyHull(ctx, faction, 1.05, now);
   } else if (poi.kind === "derelict") {
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "#5d7285";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-16, -10);
-    ctx.lineTo(16, 6);
-    ctx.moveTo(-10, 12);
-    ctx.lineTo(14, -8);
-    ctx.stroke();
+    drawDerelictArt(ctx, poi.id, now);
   }
   ctx.restore();
 
@@ -542,16 +489,4 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, ex: number, ey: number
   ctx.textAlign = "center";
   ctx.fillText(poi.name, ex, ey + poi.radius + 16);
   ctx.restore();
-}
-
-function drawHex(ctx: CanvasRenderingContext2D, r: number) {
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const ang = (Math.PI / 3) * i - Math.PI / 6;
-    const x = Math.cos(ang) * r;
-    const y = Math.sin(ang) * r;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
 }
