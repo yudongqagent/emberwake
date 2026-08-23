@@ -7,6 +7,14 @@ Origin Essence — a dark mirror of the player's own economy.
 Galaxy: **Fractured Veil**. Systems used: Veil's Edge, the Chrysalis Expanse,
 Queenspire.
 
+**Novel grounding:** see `docs/story/research-notes-act3.md`. Mixed result — the
+Rift-diving mechanic itself is a genuine, strong match (confirmed across every
+synopsis source as the novel's actual core loop: a special ship type periodically
+entering alternate/pocket space to harvest the game's central resource). Everything
+else this act adds on top of that — the Swarm as mirror-economy antagonist, Tiger
+Shark's alliance, the Broodmother, the ancient-threat cliffhanger — stays unconfirmed
+after real search effort and is annotated per chapter as original invention.
+
 ---
 
 ## Chapter 1 — Into the Veil
@@ -30,6 +38,12 @@ Queenspire.
 **Systems/Unlocks:** Rift-dive expedition POI type, first real chance at higher-yield
 Origin Essence outside of scripted boss fights.
 
+**Novel grounding:** strong match — this is a direct adaptation of the novel's actual
+core progression loop (see act notes above). The Cinder's new line making the
+resonance explicit ("this is what Whisper was always built to do") is grounded; the
+"genuinely dangerous/hostile territory" framing on top of it is original elaboration,
+not itself sourced.
+
 ---
 
 ## Chapter 2 — Hive Signal
@@ -49,6 +63,11 @@ Origin Essence outside of scripted boss fights.
 **Choices & Consequences:** None major — lore chapter.
 
 **Systems/Unlocks:** None mechanical.
+
+**Novel grounding:** no confirmed source for the Swarm as a civilization-scale
+mirror-economy harvester. Only a single, low-confidence, uncorroborated fragment
+surfaced for an insect-related enemy elsewhere in the novel — kept as original
+invention.
 
 ---
 
@@ -75,6 +94,10 @@ Ch.1.
 
 **Systems/Unlocks:** Conditional path to fifth named crew recruit.
 
+**Novel grounding:** no confirmed source — no available material addresses Baron
+Blackstone's or any pirate leader's later fate. A genuine research gap, not a
+confirmed absence; kept as original invention.
+
 ---
 
 ## Chapter 4 — The Arthaine Contract
@@ -98,6 +121,11 @@ recruited/relevant — reacts personally to hearing this about her father).
 **Choices & Consequences:** None major — sets up Act IV Ch.3.
 
 **Systems/Unlocks:** None mechanical.
+
+**Novel grounding:** same pattern as Act IV Ch.3 (see `docs/story/research-notes-
+act4.md`) — Arthur's scheming here is part of the same thread, general
+recurring-antagonist-betrayal pattern is real (Baron Blackstone's persistence across
+arcs, ch. 132 "背叛与突变"), the specific Swarm-collusion beat is not sourced.
 
 ---
 
@@ -124,6 +152,9 @@ recruited/relevant — reacts personally to hearing this about her father).
 **Systems/Unlocks:** Conditional recruitment of Tiger Shark (sixth named crew slot),
 major Origin Essence toward a Dreadnought-class refit.
 
+**Novel grounding:** no confirmed source for the Broodmother or her "fleeing
+something deeper" reveal. Kept as original invention.
+
 ---
 
 ## Chapter 6 — Origin Tide (Act III finale)
@@ -145,3 +176,10 @@ standard system)
 
 **Systems/Unlocks:** Dreadnought-class refit (12 slots), Deep Origin galaxy
 coordinates acquired — **Act III complete.**
+
+**Novel grounding:** genre-plausible, thematically supported by real ingredients — a
+"福音文明" (Gospel Civilization) and a Dyson-sphere-scale civilization are confirmed
+chapter titles around ch. 380-382, alongside earlier ancient-ruins content. But no
+source confirms these are ever revealed as the force driving the early antagonists —
+the specific causal reveal here is original synthesis on real atmospheric elements,
+not a sourced beat.

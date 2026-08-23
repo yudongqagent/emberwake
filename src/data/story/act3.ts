@@ -14,6 +14,7 @@ export const ACT3_SCENES: StoryScene[] = [
       { speaker: "Kade Ren", text: "You've gone tense. You don't do tense." },
       { speaker: "The Cinder", text: "I don't like this region. I can't tell you why yet — only that I've felt its edges before." },
       { speaker: "", text: "Sensors flag something new: a pocket-dimension bloom, an Origin Rift, close enough to reach. And past it, a Swarm foothold, dug in and waiting." },
+      { speaker: "The Cinder", text: "This is what Whisper was always built to do, Kade — slip into a Rift, take what it offers, come back stronger. You've been doing the small version of this since Amaranth Belt. This is the real scale of it." },
       { speaker: "The Cinder", text: "Rifts run richer here than anywhere you've mined. And that foothold isn't going anywhere on its own. Time to find out what real Swarm doctrine looks like." },
     ],
     onCompleteFlags: ["act3.intoTheVeil.cleared"],
