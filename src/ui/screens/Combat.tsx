@@ -21,6 +21,26 @@ const REF_W = 900;
 const REF_H = 520;
 const PROJECTILE_DURATION = 0.3;
 
+/** Issue #9 (docs/design-principles.md Player-Tested Anti-Patterns #7): before this,
+ * enemies only bobbed in place around a fixed slot — range band was something the
+ * player set once and forgot, not a contested space. Each faction now actively
+ * closes to (or holds) the distance its doctrine wants, so staying put has a real
+ * cost and repositioning is a continuous tactical choice, not a one-time setup step. */
+const FACTION_PREFERRED_RANGE: Partial<Record<FactionId, RangeBand>> = {
+  reavers: "close",
+  swarm: "close",
+  constructs: "long",
+  bauhinia: "long",
+  swanreach: "long",
+  hollow: "mid",
+  lionsheart: "mid",
+};
+const RANGE_TARGET_DISTANCE: Record<RangeBand, number> = { close: 100, mid: 250, long: 420 };
+/** World-units/sec an enemy closes/opens distance at — deliberately slower than the
+ * player's own speed (see computeSpeed), so the player can always out-position them
+ * with attention, but standing still lets the enemy dictate the range instead. */
+const ENEMY_REPOSITION_SPEED = 70;
+
 interface EnemyState {
   name: string;
   maxHull: number;
@@ -354,10 +374,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // boss-phase, so it's a genuinely distinct axis from Reaver frenzy/boss enrage.
       const deadHiveAllies = encounter.faction === "swarm" ? regenerated.filter((e) => e.hull <= 0).length : 0;
       const hiveBonus = 1 + 0.15 * deadHiveAllies;
-      const dmgMultiplier = (wasCharging[i] ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus;
       const enemyPos = arenaRef.current.enemyPos[i] ?? enemySlot(i, regenerated.length);
       const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
       const band = rangeBandFromDistance(dist);
+      // A charge telegraph is a real spatial tell, not just a stat flag: burning
+      // distance to long range during the warning turn negates the charged bonus
+      // entirely, instead of the multiplier landing no matter where the player is.
+      const chargeDodged = wasCharging[i] && band === "long";
+      const dmgMultiplier = (wasCharging[i] && !chargeDodged ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus;
       const evasion = Math.min(0.6, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
       // Iron Verdict's Fortify: armor block doubles for its duration — a defense
       // multiplier, not a bigger flat block number, so it scales with whatever's
@@ -412,7 +436,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           setPlayerShakeToken((t) => t + 1);
           triggerHitStop(wasCharging[i] ? 100 : 45);
           hitPulseRef.current.player = performance.now();
-          pushLog(`${enemy.name}${wasCharging[i] ? "'s charged strike" : ""}${deadHiveAllies > 0 ? " (hive-enraged)" : ""} hits Whisper for ${result.damageDealt}.`);
+          pushLog(`${enemy.name}${wasCharging[i] ? (chargeDodged ? "'s charged strike (blunted by range)" : "'s charged strike") : ""}${deadHiveAllies > 0 ? " (hive-enraged)" : ""} hits Whisper for ${result.damageDealt}.`);
 
           // Construct doctrine: a precise EMP pulse on hit has a chance to lock out
           // one of the player's own weapons for a turn — the mirror of the player's
@@ -839,6 +863,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     window.addEventListener("keyup", onKeyUp);
 
     const player = { vx: 0, vy: 0, angle: 0 };
+    // Persistent per-enemy "chase" X position — separate from the fixed Y lane and
+    // the decorative bob, so an enemy that closed distance last frame stays closed
+    // this frame instead of snapping back to its spawn slot.
+    const enemyChaseX: number[] = [];
+    const preferredRange = FACTION_PREFERRED_RANGE[encounter.faction] ?? "mid";
+    const preferredDistance = RANGE_TARGET_DISTANCE[preferredRange];
 
     function step(now: number) {
       const frozen = now < hitStopUntilRef.current;
@@ -892,14 +922,26 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       }
       if (Math.hypot(player.vx, player.vy) > 8) player.angle = Math.atan2(player.vy, player.vx);
 
-      // enemy gentle bob around their assigned slot
+      // Enemies actively close to (or hold) their faction's preferred range instead
+      // of just bobbing in place — see FACTION_PREFERRED_RANGE. A dead enemy stops
+      // repositioning (no point chasing after it's destroyed).
       const liveEnemies = enemiesRef.current;
-      arena.enemyPos = liveEnemies.map((_, i) => {
-        const base = enemySlot(i, liveEnemies.length);
+      arena.enemyPos = liveEnemies.map((enemy, i) => {
+        const slot = enemySlot(i, liveEnemies.length);
+        if (enemyChaseX[i] === undefined) enemyChaseX[i] = slot.x;
+        if (!combatOver && enemy.hull > 0) {
+          const dist = Math.hypot(arena.player.x - enemyChaseX[i], arena.player.y - slot.y) || 1;
+          const diff = dist - preferredDistance;
+          if (Math.abs(diff) > 8) {
+            const step = Math.sign(diff) * Math.min(Math.abs(diff), ENEMY_REPOSITION_SPEED * dt);
+            const dirX = (arena.player.x - enemyChaseX[i]) / dist;
+            enemyChaseX[i] = Math.max(60, Math.min(REF_W - 40, enemyChaseX[i] + dirX * step));
+          }
+        }
         const seed = i * 1.7;
         return {
-          x: base.x + Math.sin(now / 900 + seed) * 14,
-          y: base.y + Math.cos(now / 760 + seed * 1.3) * 18,
+          x: enemyChaseX[i] + Math.sin(now / 900 + seed) * 10,
+          y: slot.y + Math.cos(now / 760 + seed * 1.3) * 14,
         };
       });
 
