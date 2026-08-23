@@ -7,6 +7,11 @@ Cruiser-class refit and the jump lanes out of Bauhinia Reach opening.
 Galaxy: **Bauhinia Reach**. Systems used: Amaranth Belt, Bauhinia Prime, Kestrel's
 Rest, Thornwake, Coldreach Anchorage.
 
+**Novel grounding:** see `docs/story/research-notes-act1.md` for full sourcing.
+Emberwake keeps its own original cast/setting names (per `docs/world-bible.md`'s
+adapt-don't-translate rule) — the grounding is in which specific novel beats each
+chapter's plot traces to, noted per chapter below.
+
 ---
 
 ## Chapter 1 — Cold Wake
@@ -25,6 +30,16 @@ Rest, Thornwake, Coldreach Anchorage.
   Salvage. Scan a drifting derelict hull fragment — first taste of Aptitude.
 - Kade doesn't explain the reincarnation to anyone yet. Internal-monologue framing only
   (the player is inside his knowledge, not broadcasting it).
+- A distress call interrupts the mining tutorial: an independent claim-crew's
+  extractor rig has seized, venting atmosphere. Kade/the Cinder use Scan to find the
+  safe vent line and save them — a small, stakes-bearing complication grafted onto
+  what was otherwise pure tutorial.
+
+**Novel grounding:** the twenty-years-earlier rebirth-into-command opening matches
+《我的战舰能升级》's own 時光回溯 (Time Rewind) / 我，就是指揮官 (I Am the Commander)
+beats structurally — intentional, not changed. The distress-call complication is
+adapted from 礦場變故 (Incident at the Mine), ch. 15 of the comic adaptation — Ch.1
+previously had no equivalent and was flagged as a content-depth gap in research.
 
 **Characters:** Kade Ren, the Cinder.
 
@@ -43,6 +58,11 @@ Rest, Thornwake, Coldreach Anchorage.
   to it triggers first combat: a small Shark Reaver raiding party is shaking down the
   outpost.
 - Combat tutorial: range bands, weapon firing, basic module use.
+- The Cinder flags that the raid was too clean — precisely timed at the fuel depot,
+  no probing — implying a third party fed the Reavers the timing. Not resolved here;
+  planted as a thread for later payoff (candidate: ties into the Ch.6 Arthaine
+  political-rival angle, or a black-market contact if the player takes the bribe
+  path).
 - After the fight, dock at Kestrel's Rest. Meet **Ori Vashti**, the outpost's engineer,
   who patched *Whisper* together years ago in the timeline Kade remembers — she doesn't
   know him yet. She's lost a ship of her own to the Reavers before and is done losing
@@ -54,6 +74,12 @@ Rest, Thornwake, Coldreach Anchorage.
 
 **Systems/Unlocks:** First combat, first named crew recruit, docking/station
 interaction pattern established.
+
+**Novel grounding:** the planted hidden-third-party thread adapts 黃雀在後 ("the
+mantis stalks the cicada, unaware of the oriole behind it" — a hidden party
+exploiting two others' conflict), ch. 12 of the comic adaptation. Kept as a seed/flag
+rather than a full reveal — resolving it fully here would be a larger scope change
+than one grounding pass should take.
 
 ---
 
@@ -70,10 +96,13 @@ interaction pattern established.
 - The station's Shipwright's Dock is introduced alongside the Trade screen — Kade's
   first look at drawing additional ship instances, though Source Points are far too
   scarce this early to spend on it yet.
-- **Dowager Marchioness Yifei Lin** intervenes, recognizing promise in Kade (or
-  remembering a version of him — left ambiguous whether she senses something). Offers
-  patronage: she'll sponsor his docking rights and early operations in exchange for
-  results against the Reavers, who are hurting her territories' shipping.
+- **Dowager Marchioness Yifei Lin** intervenes — not on instinct alone, but by having
+  Kade's service record pulled and re-checked in front of him: the Kestrel's Rest
+  engagement is real, and there's no prior registration anywhere in the Reach to
+  explain how a nobody flies like that. She sponsors him on the strength of that
+  contradiction, not just promise (left ambiguous whether she also senses something
+  more). Offers patronage: she'll sponsor his docking rights and early operations in
+  exchange for results against the Reavers, who are hurting her territories' shipping.
 
 **Characters:** Kade, Yifei Lin (introduced, becomes ongoing patron), unnamed Arthaine
 functionary.
@@ -83,6 +112,12 @@ choices will play against.
 
 **Systems/Unlocks:** Trade screen, Faction Favor introduced (Bauhinia Principality
 track begins, nudged by Lin's patronage).
+
+**Novel grounding:** the record-verification beat adapts 血脈確認 (Bloodline
+Confirmation), ch. 21 of the comic adaptation — Kade's prior "recognizing promise"
+framing was vague and untraceable to any specific beat; this sharpens it into an
+explicit legitimacy-check while keeping the ambiguity about whether Lin senses more
+than the paperwork shows.
 
 ---
 
@@ -107,6 +142,11 @@ track begins, nudged by Lin's patronage).
 **Choices & Consequences:** None major — this is a lore/tone chapter.
 
 **Systems/Unlocks:** Lock (module trait selection), Insight resource introduced.
+
+**Novel grounding:** independently arrived at the same shape as 前世的重現？(A
+Recurrence of a Past Life?), ch. 24 of the comic adaptation — a déjà-vu/future-echo
+beat recurring early in the story. No content change made here; documented so the
+resonance is traceable rather than looking accidental.
 
 ---
 
