@@ -162,6 +162,9 @@ resonance is traceable rather than looking accidental.
 - Victory yields the act's first meaningful Origin Essence and reveals **Bosun
   "Ratchet" Koi**, a washed-out ex-Principality Navy gunner being held prisoner by the
   Reavers for refusing to fight for them. He joins the crew.
+- Salvaged manifests reveal the base wasn't just raiding at random — it had been
+  extorting the Sky Tiger trade convoy's mining shipments for months, and this
+  victory ends that supply line for good.
 - With enough Origin Essence banked, the Destroyer-class refit becomes available back
   at Bauhinia Prime or any friendly station.
 
@@ -173,6 +176,10 @@ not killed on-screen — left ambiguous for a possible later callback).
 **Systems/Unlocks:** Destroyer-class refit available (6 slots), Origin Essence resource
 meaningfully introduced, second named crew recruit.
 
+**Novel grounding:** the Sky Tiger convoy reveal adapts 天虎商隊的落幕 (Tiger Caravan's
+Downfall), ch. 17 of the comic adaptation — chosen deliberately because it resonates
+with the game's own pre-existing "Tiger Shark" naming without requiring a rename.
+
 ---
 
 ## Chapter 6 — House Rules
@@ -183,6 +190,10 @@ meaningfully introduced, second named crew recruit.
 - Sir Arthur Arthaine appears in person for the first time — cold, precise, openly
   contemptuous of Kade's rapid rise under Lin's sponsorship. He revokes *Whisper*'s
   docking license on a manufactured technicality, forcing a choice.
+- Arthaine directly contests the Ch.3 record-verification Lin used to sponsor Kade —
+  not denying it happened, promising to find a contradiction of his own. A political
+  antagonist attacking the same legitimacy question the story already raised, not a
+  new unrelated grievance.
 - **Choice point:** (a) go through official channels and let Lin fight it politically
   (slower, builds Bauhinia Faction Favor, keeps things clean), (b) pay a bribe through
   an underworld fixer to route around it (faster, costs Salvage, opens a thread with a
@@ -200,6 +211,13 @@ meaningfully introduced, second named crew recruit.
 sets a persistent flag (`arthaineConflictStyle: political | bribed | public`).
 
 **Systems/Unlocks:** None mechanical — pure narrative branch.
+
+**Novel grounding:** Arthaine's cold, title-driven antagonism and his direct
+contesting of a legitimacy claim echoes the shape of 黑石男爵 (Baron Blackstone), the
+named antagonist introduced ch. 26 of the comic adaptation, and the domain-holding
+male-heir conflict implied by 迴歸男爵領前的隱患 (Hidden Dangers Before Returning to
+the Baron's Domain), ch. 20. Kept as tonal/structural resonance, not a rename — House
+Arthaine was already established before this pass.
 
 ---
 
@@ -226,3 +244,11 @@ undamaged) is tracked lightly and referenced in flavor text later — not a hard
 
 **Systems/Unlocks:** Cruiser-class refit (8 slots), jump lanes to Lionsheart Expanse
 and Swanreach Combine unlocked — **Act I complete.**
+
+**Novel grounding:** Kade's closing line, explicitly contrasting the salvage-grade
+hull he arrived in against the Cruiser he leaves in, adapts 別了，礦星 (Farewell, Mine
+Star), ch. 22, and 新的起點 (A New Beginning), ch. 25 — the source novel's own
+beat for closing its opening volume (矿星/Mine Star) and opening the next. Bauhinia
+Reach maps loosely onto that opening volume's setting; the jump-lanes-open ending was
+already structurally right, this just gives it a sourced line instead of a generic
+one.

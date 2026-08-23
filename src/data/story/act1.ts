@@ -92,7 +92,9 @@ export const ACT1_SCENES: StoryScene[] = [
     requiredFlag: "act1.tigersReach.combatDone",
     hiddenAfterFlag: "act1.tigersReach.cleared",
     lines: [
-      { speaker: "", text: "The Reaver forward base burns. In the brig, a Principality Navy washout, mid-court-martial by the look of his restraints." },
+      { speaker: "", text: "The Reaver forward base burns. Manifests salvaged from the wreck show the base wasn't just raiding — it was living off a single fat target for months: the Sky Tiger trade convoy's mining shipments, extorted route by route until the convoy stopped running altogether." },
+      { speaker: "The Cinder", text: "Sky Tiger's not coming back to this lane, Kade. Whatever this base was living on, it just ran out." },
+      { speaker: "", text: "In the brig, a Principality Navy washout, mid-court-martial by the look of his restraints." },
       { speaker: "Bosun \"Ratchet\" Koi", text: "You're either here to finish the job or you're the strangest rescue I've ever seen. Which is it?" },
       { speaker: "Kade Ren", text: "Depends. You still know which end of a cannon does the work?" },
       { speaker: "Ratchet Koi", text: "Refused to fire on a refugee convoy. Navy called it insubordination. Reavers called it an opportunity to make an example of me. I call it Tuesday." },
@@ -113,6 +115,7 @@ export const ACT1_SCENES: StoryScene[] = [
       { speaker: "", text: "Sir Arthur Arthaine, in the flesh, waiting at the docking spire." },
       { speaker: "Sir Arthur Arthaine", text: "A salvage captain, dining out on the Marchioness's charity and a lucky raid. Your docking license is revoked, pending review. The review will take some time." },
       { speaker: "Kade Ren", text: "You have a reason, or is contempt enough of one for you?" },
+      { speaker: "Sir Arthur Arthaine", text: "Records can be re-checked as easily as they were checked the first time. The Marchioness found a contradiction she liked. I intend to find one she doesn't." },
       { speaker: "Sir Arthur Arthaine", text: "I have exactly the reasons I need. Enjoy the paperwork, Captain." },
     ],
     choices: [
@@ -146,6 +149,7 @@ export const ACT1_SCENES: StoryScene[] = [
       { speaker: "Tiger Shark", text: "Could. Won't — not yet. Enjoy the outpost, Captain. This isn't finished." },
       { speaker: "", text: "She breaks off. Kestrel's Rest is secure — for now." },
       { speaker: "Yifei Lin", text: "Origin Essence enough for a Cruiser-class refit, and I've cleared you for the jump lanes out of the Reach. The rest of the galaxy's been waiting." },
+      { speaker: "Kade Ren", text: "Twenty years ago I left the Reach in a hull barely worth salvaging. I'm not leaving it the same way twice." },
       { speaker: "The Cinder", text: "Act I, complete. There's further to go — and further galaxies than this one, in time." },
     ],
     onCompleteFlags: ["act1.emberRising.cleared", "campaign.act1.complete"],
