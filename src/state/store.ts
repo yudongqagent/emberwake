@@ -18,6 +18,7 @@ import { ACT5_SCENES } from "../data/story/act5";
 import { encounterById } from "../data/encounters";
 import { CREW_DEFS } from "../data/crew";
 import { applyXp, computeMaxHull } from "../engine/ships";
+import { drawModule } from "../engine/modules";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -341,12 +342,19 @@ export function effectiveMaxHull(ship: Parameters<typeof computeMaxHull>[0]): nu
   return Math.round(computeMaxHull(ship) * (1 + bonus));
 }
 
+/** Issue #2 (docs/design-principles.md Player-Tested Anti-Patterns #2): a fully
+ * predictable reward is necessary for pacing but never enough for excitement — this
+ * is the random layer on top of the deterministic mission payout. Bosses roll higher
+ * since they're already the bigger, rarer moment. */
+const BONUS_DROP_CHANCE = 0.25;
+const BOSS_BONUS_DROP_CHANCE = 0.5;
+
 export function resolveCombatVictory(
   encounterId: string,
   poiId: string | null,
   victoryFlag?: string,
   salvageAlloyBonusFraction: number = 0,
-): { leveledUp: boolean; newLevel: number; rewards: Partial<Record<ResourceType, number>> } {
+): { leveledUp: boolean; newLevel: number; rewards: Partial<Record<ResourceType, number>>; bonusDrop: ModuleInstance | null } {
   const enc = encounterById(encounterId);
   const rewards = { ...enc.rewards };
   // Crew passives: Ori Vashti (+8% alloy), Kessa Vray (+15% salvage/alloy), and each
@@ -358,6 +366,9 @@ export function resolveCombatVictory(
   if (rewards.alloy) rewards.alloy = Math.round(rewards.alloy * (1 + alloyBonus));
   if (rewards.insight && insightBonus > 0) rewards.insight = Math.round(rewards.insight * (1 + insightBonus));
   grant(rewards);
+  const dropChance = enc.isBoss ? BOSS_BONUS_DROP_CHANCE : BONUS_DROP_CHANCE;
+  const bonusDrop = Math.random() < dropChance ? drawModule() : null;
+  if (bonusDrop) state.value = { ...state.value, modules: [...state.value.modules, bonusDrop] };
   let leveledUp = false;
   let newLevel = flagship.value?.level ?? 1;
   if (flagship.value) {
@@ -370,7 +381,7 @@ export function resolveCombatVictory(
   if (poiId) setPoiRuntime(poiId, { cleared: true, clearedAt: Date.now() });
   if (victoryFlag) setFlags([victoryFlag]);
   persist();
-  return { leveledUp, newLevel, rewards };
+  return { leveledUp, newLevel, rewards, bonusDrop };
 }
 
 export function resolveCombatDefeat() {

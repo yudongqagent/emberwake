@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { encounterById } from "../../data/encounters";
 import { moduleDefById } from "../../data/modules";
-import { computeModuleDamage, computeCritChance } from "../../engine/modules";
+import { computeModuleDamage, computeModuleBlock, computeCritChance } from "../../engine/modules";
+import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, rangeBandFromDistance, CRIT_MULTIPLIER, type RangeBand } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend } from "../../state/store";
 import { crewDefById } from "../../data/crew";
 import { namedShipDefById } from "../../data/namedShips";
 import { playSfx } from "../../audio/engine";
-import type { FactionId, ResourceType } from "../../data/types";
+import type { FactionId, ResourceType, ModuleInstance } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
 import { ResourceIcon, RESOURCE_LABEL } from "../components/Icons";
@@ -130,6 +131,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [popups, setPopups] = useState<Popup[]>([]);
   const [playerShakeToken, setPlayerShakeToken] = useState(0);
   const [rewardsEarned, setRewardsEarned] = useState<Partial<Record<ResourceType, number>> | null>(null);
+  const [bonusDrop, setBonusDrop] = useState<ModuleInstance | null>(null);
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [levelUpHullGain, setLevelUpHullGain] = useState(0);
   const [displayRange, setDisplayRange] = useState<RangeBand>("mid");
@@ -484,6 +486,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       playSfx("victory");
       const outcome = resolveCombatVictory(encounterId, poiId, victoryFlag, yieldBonusFraction);
       setRewardsEarned(outcome.rewards);
+      if (outcome.bonusDrop) {
+        setBonusDrop(outcome.bonusDrop);
+        playSfx("draw");
+      }
       if (outcome.leveledUp) {
         const hullBefore = computeMaxHull(ship);
         const hullAfter = computeMaxHull({ ...ship, level: outcome.newLevel });
@@ -1065,6 +1071,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               ))}
             </div>
           )}
+          {bonusDrop && (() => {
+            const def = moduleDefById(bonusDrop.defId);
+            return (
+              <div className="panel accent pop-in scanline" style={{ padding: "0.8rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: `var(--rarity-${bonusDrop.rarity})` }}>
+                <div className="eyebrow" style={{ color: `var(--rarity-${bonusDrop.rarity})` }}>Bonus Drop!</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginTop: "0.4rem" }}>
+                  <span style={{ fontWeight: 700 }}>{def.name}</span>
+                  <ModuleRarityTag rarity={bonusDrop.rarity} />
+                </div>
+                <div style={{ fontSize: "0.76rem", color: "var(--text-mid)", marginTop: "0.3rem" }}>
+                  {def.baseDamage !== undefined && `Dmg ${computeModuleDamage(bonusDrop)}`}
+                  {def.baseBlock !== undefined && `Block ${computeModuleBlock(bonusDrop)}`}
+                </div>
+              </div>
+            );
+          })()}
           <button className="btn primary" onClick={() => onResolve("victory")}>Continue</button>
         </div>
       )}
