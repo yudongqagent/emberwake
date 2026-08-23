@@ -232,6 +232,8 @@ export const FACTION_COLOR: Record<FactionId, string> = {
   swanreach: "#ffb84d",
   reavers: "#ff5c5c",
   swarm: "#8cff9e",
+  constructs: "#9fb8cc",
+  hollow: "#e8d9ff",
 };
 
 export function FactionEmblem({ faction, size = 16 }: { faction: FactionId; size?: number }) {

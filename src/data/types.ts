@@ -10,7 +10,9 @@ export type FactionId =
   | "lionsheart"
   | "swanreach"
   | "reavers"
-  | "swarm";
+  | "swarm"
+  | "constructs"
+  | "hollow";
 
 export type HullClassId =
   | "corvette"

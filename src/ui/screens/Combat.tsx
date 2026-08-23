@@ -726,6 +726,8 @@ function drawEnemyShip(
     swarm: "#8cff9e",
     swanreach: "#ffb84d",
     bauhinia: "#b98cff",
+    constructs: "#9fb8cc",
+    hollow: "#e8d9ff",
   };
   const color = colors[faction] ?? "#ff9f4d";
   ctx.shadowColor = color;
@@ -765,6 +767,46 @@ function drawEnemyShip(
     ctx.lineTo(-8, 0);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
+  } else if (faction === "constructs") {
+    // cold, geometric, precise — a rotating hexagonal shell around a fixed core
+    ctx.save();
+    ctx.rotate((now / 4000) % (Math.PI * 2));
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i;
+      const x = Math.cos(a) * 17, y = Math.sin(a) * 17;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fill();
+  } else if (faction === "hollow") {
+    // color-drained, glitchy — a flickering, slightly displaced double-outline
+    const glitchX = (Math.random() - 0.5) * 3;
+    const glitchY = (Math.random() - 0.5) * 3;
+    ctx.globalAlpha = 0.5 + 0.3 * Math.sin(now / 140);
+    ctx.beginPath();
+    ctx.moveTo(-15 + glitchX, -15 + glitchY);
+    ctx.lineTo(15 + glitchX, -6 + glitchY);
+    ctx.lineTo(15 + glitchX, 6 + glitchY);
+    ctx.lineTo(-15 + glitchX, 15 + glitchY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.beginPath();
+    ctx.moveTo(-15 - glitchX, -15 - glitchY);
+    ctx.lineTo(15 - glitchX, -6 - glitchY);
+    ctx.lineTo(15 - glitchX, 6 - glitchY);
+    ctx.lineTo(-15 - glitchX, 15 - glitchY);
+    ctx.closePath();
     ctx.stroke();
   } else {
     // bauhinia / swanreach / default: utilitarian octagon hull

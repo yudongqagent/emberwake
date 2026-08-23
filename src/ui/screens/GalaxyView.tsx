@@ -19,12 +19,12 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {galaxies.length > 1 && (
-        <div style={{ display: "flex", gap: "0.4rem", padding: "0.75rem 1rem 0" }}>
+        <div style={{ display: "flex", gap: "0.4rem", padding: "0.75rem 1rem 0", overflowX: "auto", height: "2.6rem", flex: "none" }}>
           {galaxies.map((g) => (
             <button
               key={g.id}
               className={`btn ${g.id === viewingId ? "primary" : ""}`}
-              style={{ flex: 1, fontSize: "0.7rem" }}
+              style={{ flex: "none", whiteSpace: "nowrap", fontSize: "0.7rem", padding: "0.55em 0.9em" }}
               onClick={() => setViewingId(g.id)}
             >
               {g.name}

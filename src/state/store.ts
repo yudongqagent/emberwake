@@ -5,8 +5,14 @@ import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi } from "../dat
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
 import { LIONSHEART_EXPANSE } from "../data/galaxies/lionsheartExpanse";
 import { SWANREACH_COMBINE } from "../data/galaxies/swanreachCombine";
+import { FRACTURED_VEIL } from "../data/galaxies/fracturedVeil";
+import { DEEP_ORIGIN } from "../data/galaxies/deepOrigin";
+import { UMBRAL_LINE } from "../data/galaxies/umbralLine";
 import { ACT1_SCENES } from "../data/story/act1";
 import { ACT2_SCENES } from "../data/story/act2";
+import { ACT3_SCENES } from "../data/story/act3";
+import { ACT4_SCENES } from "../data/story/act4";
+import { ACT5_SCENES } from "../data/story/act5";
 import { encounterById } from "../data/encounters";
 import { CREW_DEFS } from "../data/crew";
 import { drawShip, applyXp, computeMaxHull } from "../engine/ships";
@@ -14,8 +20,15 @@ import { drawModule } from "../engine/modules";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
-export const GALAXIES: GalaxyDef[] = [BAUHINIA_REACH, LIONSHEART_EXPANSE, SWANREACH_COMBINE];
-export const STORY_SCENES: StoryScene[] = [...ACT1_SCENES, ...ACT2_SCENES];
+export const GALAXIES: GalaxyDef[] = [
+  BAUHINIA_REACH,
+  LIONSHEART_EXPANSE,
+  SWANREACH_COMBINE,
+  FRACTURED_VEIL,
+  DEEP_ORIGIN,
+  UMBRAL_LINE,
+];
+export const STORY_SCENES: StoryScene[] = [...ACT1_SCENES, ...ACT2_SCENES, ...ACT3_SCENES, ...ACT4_SCENES, ...ACT5_SCENES];
 
 export const state = signal<GameState>(loadGame() ?? createInitialState());
 

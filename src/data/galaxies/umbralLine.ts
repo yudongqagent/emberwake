@@ -1,0 +1,61 @@
+import type { GalaxyDef } from "../types";
+
+export const UMBRAL_LINE: GalaxyDef = {
+  id: "umbralLine",
+  name: "Umbral Line",
+  unlockFlag: "act4.deepOrigin.cleared",
+  systems: [
+    {
+      id: "umbralLine",
+      galaxyId: "umbralLine",
+      name: "the Umbral Line",
+      x: 500,
+      y: 350,
+      controllingFaction: "hollow",
+      pois: [
+        {
+          id: "umbralDebrisDrift",
+          kind: "asteroidField",
+          name: "Umbral Debris Drift",
+          x: 150,
+          y: 150,
+          radius: 55,
+          requiresFlag: "act5.callingTheReach.cleared",
+          data: { yieldType: "salvage", remaining: 6, regenSeconds: 22 },
+        },
+        {
+          id: "umbralEchoBounty",
+          kind: "patrol",
+          name: "Hollow Echo Patrol",
+          x: 150,
+          y: 470,
+          radius: 85,
+          requiresFlag: "act5.echoes.cleared",
+          data: { encounterId: "bountyHollowEchoes", respawnSeconds: 100, bounty: true },
+        },
+        {
+          id: "hollowCoreFinalBattle",
+          kind: "patrol",
+          name: "the Hollow, Gathered",
+          x: 650,
+          y: 300,
+          radius: 110,
+          requiresFlag: "act5.secondIgnition.cleared",
+          hiddenAfterFlag: "act5.secondIgnitionEpilogue.combatDone",
+          data: { encounterId: "secondIgnitionFinale", victoryFlag: "act5.secondIgnitionEpilogue.combatDone" },
+        },
+        {
+          id: "hollowsWake",
+          kind: "wreck",
+          name: "the Hollow's Wake",
+          x: 780,
+          y: 460,
+          radius: 60,
+          requiresFlag: "act5.secondIgnitionEpilogue.combatDone",
+          data: { rewards: { originEssence: 100, insight: 30 }, respawnSeconds: 240 },
+        },
+      ],
+    },
+  ],
+  lanes: [],
+};
