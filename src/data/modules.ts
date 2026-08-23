@@ -112,6 +112,69 @@ export const MODULE_DEFS: ModuleDef[] = [
       { id: "regen", label: "Field Repair", description: "Small hull repair to the fleet." },
     ],
   },
+  {
+    id: "railgun",
+    type: "weapon",
+    name: "Railgun",
+    baseRarity: "mk3",
+    powerDraw: 4,
+    cooldown: 2,
+    baseDamage: 34,
+    traitPool: [
+      { id: "execute", label: "Execute", description: "+50% damage against a target below 25% hull — a finisher, not a raw damage lead." },
+      { id: "pierce", label: "+Pierce", description: "Ignores a portion of enemy armor." },
+    ],
+  },
+  {
+    id: "flakBattery",
+    type: "weapon",
+    name: "Flak Battery",
+    baseRarity: "mk2",
+    powerDraw: 3,
+    cooldown: 1,
+    baseDamage: 12,
+    traitPool: [
+      { id: "aoe", label: "Splash", description: "Also hits every other living enemy for reduced damage — trades single-target power for group control." },
+      { id: "crit", label: "+Crit", description: "Higher chance to strike a critical hit." },
+    ],
+  },
+  {
+    id: "ablativePlating",
+    type: "armor",
+    name: "Ablative Plating",
+    baseRarity: "mk3",
+    powerDraw: 2,
+    cooldown: null,
+    baseBlock: 6,
+    traitPool: [
+      { id: "absorb", label: "Absorb", description: "Fully negates the first hit taken each fight — weaker steady-state block, traded for one guaranteed no-damage exchange." },
+      { id: "hullBonus", label: "+Hull", description: "Increases maximum hull integrity." },
+    ],
+  },
+  {
+    id: "inertialDampers",
+    type: "engine",
+    name: "Inertial Dampers",
+    baseRarity: "mk3",
+    powerDraw: 2,
+    cooldown: null,
+    traitPool: [
+      { id: "momentum", label: "Momentum", description: "Evasion climbs the longer you go without being hit this fight, and resets the moment you are." },
+      { id: "evasion", label: "+Evasion", description: "Harder to hit." },
+    ],
+  },
+  {
+    id: "purgeField",
+    type: "utility",
+    name: "Purge Field",
+    baseRarity: "mk3",
+    powerDraw: 2,
+    cooldown: 2,
+    traitPool: [
+      { id: "cleanse", label: "Cleanse", description: "Instantly clears corroded/stripped plating, restoring your armor to its equipped value." },
+      { id: "yieldBonus", label: "+Yield", description: "Bonus Salvage/Alloy from this fight." },
+    ],
+  },
 ];
 
 export function moduleDefById(id: string): ModuleDef {

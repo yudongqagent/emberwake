@@ -143,6 +143,20 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // plating itself. A distinct status-effect category from anything else in combat.
   const [corrodedBlock, setCorrodedBlock] = useState(0);
   const bossPhaseRef = useRef(false);
+  // Ablative Plating's Absorb: negates exactly the first hit landed each fight, then
+  // behaves like ordinary block for the rest of it — a ref because it must mutate
+  // synchronously mid-resolution, before any re-render, same pattern as bossPhaseRef.
+  const absorbRef = useRef(true);
+  const hasAbsorbArmor = equippedModuleList.some(
+    (m) => moduleDefById(m.defId).type === "armor" && m.traits.includes("absorb"),
+  );
+  // Inertial Dampers' Momentum: evasion rises with consecutive undamaged enemy turns,
+  // capped modestly so it augments rather than replaces the flat +evasion trait.
+  const [unhitStreak, setUnhitStreak] = useState(0);
+  const hasMomentum = equippedModuleList.some(
+    (m) => moduleDefById(m.defId).type === "engine" && m.traits.includes("momentum"),
+  );
+  const momentumBonus = hasMomentum ? Math.min(0.15, unhitStreak * 0.03) : 0;
 
   const capacity = computePowerCapacity(ship);
 
@@ -289,7 +303,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       }
     }
 
-    const baseEvasion = shipBaseEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus;
+    const baseEvasion = shipBaseEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus + momentumBonus;
     // Kaan Ferrous: "+10% evasion when at Long range" — only when he's assigned to the flagship.
     const kaanAssigned = assignedCrew.some((c) => c.defId === "kaanFerrous");
     let totalDamage = 0;
@@ -325,7 +339,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       const band = rangeBandFromDistance(dist);
       const evasion = Math.min(0.6, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
       const result = resolveAttack(enemy.damage * dmgMultiplier, Math.max(0, armorBlock - corrodedBlock), evasion, RANGE_MODIFIERS[band].incoming);
-      const dealt = shieldActive ? 0 : result.hit ? result.damageDealt : 0;
+      // Ablative Plating's Absorb: negates exactly the first hit of the fight,
+      // regardless of which enemy lands it — consumed the instant it's used.
+      const absorbedHit = hasAbsorbArmor && absorbRef.current && result.hit && result.damageDealt > 0;
+      if (absorbedHit) absorbRef.current = false;
+      const dealt = shieldActive || absorbedHit ? 0 : result.hit ? result.damageDealt : 0;
       if (dealt > 0) totalDamage += dealt;
 
       if (!result.hit && riposteActive && !riposteTriggered) {
@@ -355,6 +373,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 10, 90);
           addPopup("player", "DEFLECTED", "#8ff3ff");
           pushLog(`Construct Override deflects ${enemy.name}'s attack.`);
+        } else if (result.hit && absorbedHit) {
+          spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "180,220,255", 10, 90);
+          addPopup("player", "ABSORBED", "#b4dcff");
+          pushLog(`Ablative Plating absorbs ${enemy.name}'s hit completely.`);
         } else if (result.hit) {
           spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", wasCharging[i] ? 20 : 10, wasCharging[i] ? 130 : 90);
           addPopup("player", `-${result.damageDealt}`, "#ff5c5c", wasCharging[i]);
@@ -408,6 +430,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
     setCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
     setCrewCooldowns((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, Math.max(0, v - 1)])));
+    // Inertial Dampers' Momentum: a clean enemy turn (no damage taken, even if
+    // Ablative absorbed one) extends the streak; any damage resets it to zero.
+    if (hasMomentum) setUnhitStreak((s) => (totalDamage > 0 ? 0 : s + 1));
 
     const finalEnemies = regenerated;
     setTimeout(() => {
@@ -474,7 +499,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const vulnerable = (target.vulnerableTurns ?? 0) > 0;
     // Ratchet Koi: "+10% weapon damage when at Close range" — only when he's assigned.
     const ratchetBonus = band === "close" && assignedCrew.some((c) => c.defId === "ratchetKoi") ? 1.1 : 1;
-    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1));
+    // Railgun's Execute: a finisher axis, not a raw-damage lead — it does nothing
+    // against a healthy target and swings hard against a dying one.
+    const executeMult = mod.traits.includes("execute") && target.hull <= target.maxHull * 0.25 ? 1.5 : 1;
+    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult);
     const nextEnemies = [...enemies];
     if (dmg > 0) {
       const targetEvasion = (target.evasionDebuffTurns ?? 0) > 0 ? target.evasion * 0.5 : target.evasion;
@@ -563,8 +591,38 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           }
         }
       }
+
+      // Flak Battery's Splash: unlike Chain Arc (one random secondary target at 40%),
+      // this hits every other living enemy at once — weak against a lone boss, strong
+      // against the multi-enemy Swarm/Reaver formations. A group-control axis, not a
+      // bigger single-target number.
+      if (result.hit && mod.traits.includes("aoe")) {
+        nextEnemies.forEach((splashTarget, splashIdx) => {
+          if (splashIdx === targetIdx || splashTarget.hull <= 0) return;
+          const splashResult = resolveAttack(Math.round(dmg * 0.6), splashTarget.block, splashTarget.evasion, outgoingMult);
+          const splashPos = arenaRef.current.enemyPos[splashIdx] ?? enemySlot(splashIdx, enemies.length);
+          setTimeout(() => {
+            fireProjectile(impactPos, splashPos, "#8ff3ff", () => {
+              if (splashResult.hit) {
+                spawnBurst(splashPos.x, splashPos.y, "143,243,255", 8, 90);
+                addPopup(splashIdx, `-${splashResult.damageDealt}`, "#8ff3ff");
+              }
+            });
+          }, 90);
+          if (splashResult.hit) {
+            nextEnemies[splashIdx] = { ...splashTarget, hull: Math.max(0, splashTarget.hull - splashResult.damageDealt) };
+            pushLog(`Splash catches ${splashTarget.name} for ${splashResult.damageDealt}.`);
+          }
+        });
+      }
     } else {
       pushLog(`${def.name} activated.`);
+      // Purge Field's Cleanse: the only removal effect in combat — instantly clears
+      // Hollow's permanent Corrosion stack, restoring the ship's real armor value.
+      if (mod.traits.includes("cleanse") && corrodedBlock > 0) {
+        setCorrodedBlock(0);
+        pushLog(`Purge Field clears ${corrodedBlock} points of corroded plating.`);
+      }
     }
     const overchargePenalty = wasOvercharged ? 2 : 0;
     const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
