@@ -1,7 +1,9 @@
 import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
-import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi } from "../data/types";
+import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ShipInstance, ModuleInstance } from "../data/types";
+import { fabricatorCost } from "../data/modules";
+import { shipwrightCost } from "../data/hullClasses";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
 import { LIONSHEART_EXPANSE } from "../data/galaxies/lionsheartExpanse";
 import { SWANREACH_COMBINE } from "../data/galaxies/swanreachCombine";
@@ -166,6 +168,55 @@ export function drawModuleAction() {
   playSfx("draw");
   persist();
   return mod;
+}
+
+/** Adds an already-rolled ship instance (generated as a preview candidate the player
+ * chose to buy, not a fresh blind draw) — see ShipwrightTab's offer-showcase flow. */
+export function addShip(ship: ShipInstance) {
+  state.value = { ...state.value, ships: [...state.value.ships, ship] };
+  playSfx("draw");
+  persist();
+  return ship;
+}
+
+/** Adds an already-rolled module instance the player chose from the Fabricator's
+ * offer showcase (see addShip). */
+export function addModule(mod: ModuleInstance) {
+  state.value = { ...state.value, modules: [...state.value.modules, mod] };
+  playSfx("draw");
+  persist();
+  return mod;
+}
+
+/** Sells a module for a fraction of its Fabricator cost — used by both the manual
+ * Sell action and Modules screen's auto-sell-duplicates tool. */
+export function sellModule(moduleId: string) {
+  const mod = state.value.modules.find((m) => m.id === moduleId);
+  if (!mod) return;
+  const equippedElsewhere = state.value.ships.some((s) => s.equipped.includes(moduleId));
+  if (equippedElsewhere) return;
+  const refund = Math.round(fabricatorCost(mod.rarity) * 0.4);
+  state.value = {
+    ...state.value,
+    modules: state.value.modules.filter((m) => m.id !== moduleId),
+    resources: { ...state.value.resources, sourcePoints: state.value.resources.sourcePoints + refund },
+  };
+  persist();
+  return refund;
+}
+
+/** Sells a non-flagship ship for a fraction of its Shipwright cost. */
+export function sellShip(shipId: string) {
+  const ship = state.value.ships.find((s) => s.id === shipId);
+  if (!ship || ship.id === state.value.flagshipId) return;
+  const refund = Math.round(shipwrightCost(ship.hullClass, ship.rarity) * 0.4);
+  state.value = {
+    ...state.value,
+    ships: state.value.ships.filter((s) => s.id !== shipId),
+    resources: { ...state.value.resources, sourcePoints: state.value.resources.sourcePoints + refund },
+  };
+  persist();
+  return refund;
 }
 
 export function recruitGenericCrew(defId: string) {

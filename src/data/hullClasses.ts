@@ -1,4 +1,4 @@
-import type { HullClassDef, ShipRarity, Aptitude } from "./types";
+import type { HullClassDef, HullClassId, ShipRarity, Aptitude } from "./types";
 
 export const HULL_CLASSES: HullClassDef[] = [
   {
@@ -167,6 +167,14 @@ export const RARITY_MULTIPLIER: Record<ShipRarity, number> = {
   prototype: 3.04,
   ascendant: 4.01,
 };
+
+/** Shipwright showcase price for a rolled hull instance — scales with both hull tier
+ * and rarity, so a visibly better ship costs visibly more instead of every rarity at
+ * a given tier costing the same flat fee. */
+export function shipwrightCost(hullClassId: HullClassId, rarity: ShipRarity): number {
+  const def = hullClassById(hullClassId);
+  return Math.round((30 + def.order * 25) * RARITY_MULTIPLIER[rarity]);
+}
 
 export const RARITY_WEIGHTS: Record<ShipRarity, number> = {
   salvage: 42,

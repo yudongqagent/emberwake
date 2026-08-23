@@ -1,14 +1,18 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, flagship, spend, grant, canAfford, drawShipAction, drawModuleAction, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull } from "../../state/store";
-import { HULL_CLASSES, hullClassById } from "../../data/hullClasses";
+import { state, flagship, spend, grant, canAfford, addShip, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull } from "../../state/store";
+import { HULL_CLASSES, hullClassById, shipwrightCost } from "../../data/hullClasses";
 import { CREW_DEFS } from "../../data/crew";
-import { moduleDefById } from "../../data/modules";
+import { moduleDefById, fabricatorCost } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock } from "../../engine/modules";
+import { drawShip } from "../../engine/ships";
+import { computeMaxHull, computePowerCapacity, computeSpeed } from "../../engine/ships";
+import { drawModule } from "../../engine/modules";
 import { ShipRarityTag, ModuleRarityTag } from "../components/RarityTag";
-import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon } from "../components/Icons";
+import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon, HullIcon, PowerIcon, SpeedIcon } from "../components/Icons";
 import { RollQualityBadge } from "../components/StatBlock";
 import type { ShipInstance, ModuleInstance } from "../../data/types";
+import { pickOne } from "../../engine/rng";
 
 type Tab = "trade" | "shipwright" | "fabricator" | "recruit";
 
@@ -66,8 +70,8 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
         </div>
         <div style={{ padding: "0 1rem 1rem", overflowY: "auto" }}>
           {tab === "trade" && <TradeTab />}
-          {tab === "shipwright" && <ShipwrightTab onDraw={setDrawnShip} />}
-          {tab === "fabricator" && <FabricatorTab onDraw={setDrawnModule} />}
+          {tab === "shipwright" && <ShipwrightTab onBuy={setDrawnShip} />}
+          {tab === "fabricator" && <FabricatorTab onBuy={setDrawnModule} />}
           {tab === "recruit" && <RecruitTab />}
         </div>
       </div>
@@ -78,7 +82,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
         const curHull = cur ? effectiveMaxHull(cur) : 0;
         const delta = newHull - curHull;
         return (
-          <DrawReveal title="New Hull Drawn" accent={`var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
+          <DrawReveal title="Hull Acquired" accent={`var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
             <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{drawnShip.name}</div>
             <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{hullClassById(drawnShip.hullClass).name}</div>
             <ShipRarityTag rarity={drawnShip.rarity} showPips={false} />
@@ -114,7 +118,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
               : null
           : null;
         return (
-          <DrawReveal title="New Module Drawn" accent="var(--cyan)" onClose={() => setDrawnModule(null)}>
+          <DrawReveal title="Module Acquired" accent="var(--cyan)" onClose={() => setDrawnModule(null)}>
             <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{def.name}</div>
             <div style={{ color: "var(--text-mid)", margin: "0.4rem 0", textTransform: "capitalize" }}>{def.type}</div>
             <ModuleRarityTag rarity={drawnModule.rarity} />
@@ -200,72 +204,132 @@ function TradeTab() {
   );
 }
 
-function ShipwrightTab({ onDraw }: { onDraw: (s: ShipInstance) => void }) {
+const OFFER_COUNT = 4;
+
+function generateShipOffers(): ShipInstance[] {
+  const unlocked = HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag]);
+  return Array.from({ length: OFFER_COUNT }, () => drawShip(pickOne(unlocked).id));
+}
+
+/** Curated random showcase, not a blind pull: every candidate's rarity, stats, and
+ * cost are visible before spending anything, and the player picks the one they want
+ * (Player-Tested Anti-Patterns #4/#3 in docs/design-principles.md — a shown-then-
+ * chosen offer preserves agency and makes rarity unmistakable, instead of finding out
+ * what you got only after paying for it). */
+function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
+  const [offers, setOffers] = useState<ShipInstance[]>(() => generateShipOffers());
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
-      <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
-        Draw a new hull instance. Each draw is unique — Rarity is revealed now, Aptitude only once Scanned.
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
+          Today's hulls. Rarity and stats are visible now — pick the one you want.
+        </div>
+        <button className="btn ghost" style={{ fontSize: "0.7rem", padding: "0.4em 0.7em", flex: "none" }} onClick={() => setOffers(generateShipOffers())}>
+          Refresh
+        </button>
       </div>
-      {HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag]).map((h) => {
-        const cost = 30 + h.order * 25;
+      {offers.map((candidate, i) => {
+        const def = hullClassById(candidate.hullClass);
+        const cost = shipwrightCost(candidate.hullClass, candidate.rarity);
         return (
-          <Row key={h.id}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-              <div style={{ width: 32, height: 32, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(75,232,255,0.08)", border: "1px solid var(--line-bright)", flex: "none" }}>
-                <NavIcon name="fleet" size={16} color="var(--cyan)" />
-              </div>
+          <div key={i} className="panel compact" style={{ padding: "0.75rem 0.9rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
               <div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{h.name}</div>
-                <div style={{ color: "var(--text-dim)", fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                  {h.nameCn} · <ResourceIcon type="sourcePoints" size={11} /> {cost}
-                </div>
+                <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{def.name}</div>
+                <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{def.nameCn}</div>
               </div>
+              <ShipRarityTag rarity={candidate.rarity} showPips={false} />
             </div>
-            <button
-              className="btn primary"
-              disabled={!canAfford({ sourcePoints: cost })}
-              onClick={() => {
-                spend({ sourcePoints: cost });
-                onDraw(drawShipAction(h.id));
-              }}
-            >
-              Draw
-            </button>
-          </Row>
+            <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.6rem" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><HullIcon size={12} /> {computeMaxHull(candidate)}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><PowerIcon size={12} /> {computePowerCapacity(candidate)}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><SpeedIcon size={12} /> {computeSpeed(candidate)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem", color: "var(--text-mid)" }}>
+                <ResourceIcon type="sourcePoints" size={13} /> {cost}
+              </span>
+              <button
+                className="btn primary"
+                disabled={!canAfford({ sourcePoints: cost })}
+                onClick={() => {
+                  spend({ sourcePoints: cost });
+                  addShip(candidate);
+                  onBuy(candidate);
+                  setOffers((prev) => prev.map((o, idx) => (idx === i ? drawShip(pickOne(HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag])).id) : o)));
+                }}
+              >
+                Buy
+              </button>
+            </div>
+          </div>
         );
       })}
     </div>
   );
 }
 
-function FabricatorTab({ onDraw }: { onDraw: (m: ModuleInstance) => void }) {
-  const cost = 25;
+function generateModuleOffers(): ModuleInstance[] {
+  return Array.from({ length: OFFER_COUNT }, () => drawModule());
+}
+
+/** Same curated-showcase pattern as ShipwrightTab — see the comment there. */
+function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
+  const [offers, setOffers] = useState<ModuleInstance[]>(() => generateModuleOffers());
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
-        Draw a random module — type, rarity, and traits are rolled fresh each time.
-      </div>
-      <div className="panel" style={{ padding: "1.1rem", textAlign: "center" }}>
-        <div style={{ display: "flex", justifyContent: "center", gap: "1rem", marginBottom: "0.9rem" }}>
-          {(["weapon", "armor", "engine", "utility"] as const).map((t) => (
-            <div key={t} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.3rem" }}>
-              <ModuleTypeIcon type={t} size={22} />
-              <span className="eyebrow" style={{ fontSize: "0.55rem" }}>{t}</span>
-            </div>
-          ))}
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
+          Today's modules. Type, rarity, and traits are visible now — pick the one you want.
         </div>
-        <button
-          className="btn primary"
-          style={{ width: "100%" }}
-          disabled={!canAfford({ sourcePoints: cost })}
-          onClick={() => {
-            spend({ sourcePoints: cost });
-            onDraw(drawModuleAction());
-          }}
-        >
-          Draw Module — {cost} Source Points
+        <button className="btn ghost" style={{ fontSize: "0.7rem", padding: "0.4em 0.7em", flex: "none" }} onClick={() => setOffers(generateModuleOffers())}>
+          Refresh
         </button>
       </div>
+      {offers.map((candidate, i) => {
+        const def = moduleDefById(candidate.defId);
+        const cost = fabricatorCost(candidate.rarity);
+        return (
+          <div key={i} className="panel compact" style={{ padding: "0.75rem 0.9rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <ModuleTypeIcon type={def.type} size={16} />
+                <div>
+                  <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{def.name}</div>
+                  <div style={{ color: "var(--text-dim)", fontSize: "0.72rem", textTransform: "capitalize" }}>{def.type}</div>
+                </div>
+              </div>
+              <ModuleRarityTag rarity={candidate.rarity} />
+            </div>
+            <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+              {def.baseDamage !== undefined && <span style={{ color: "var(--red)" }}>Dmg {computeModuleDamage(candidate)}</span>}
+              {def.baseBlock !== undefined && <span style={{ color: "var(--cyan)" }}>Block {computeModuleBlock(candidate)}</span>}
+              {candidate.traits.map((t, ti) => (
+                <span key={ti} style={{ fontSize: "0.68rem", padding: "0.1em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
+                  {def.traitPool.find((tp) => tp.id === t)?.label ?? t}
+                </span>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem", color: "var(--text-mid)" }}>
+                <ResourceIcon type="sourcePoints" size={13} /> {cost}
+              </span>
+              <button
+                className="btn primary"
+                disabled={!canAfford({ sourcePoints: cost })}
+                onClick={() => {
+                  spend({ sourcePoints: cost });
+                  addModule(candidate);
+                  onBuy(candidate);
+                  setOffers((prev) => prev.map((o, idx) => (idx === i ? drawModule() : o)));
+                }}
+              >
+                Buy
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

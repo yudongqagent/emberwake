@@ -14,6 +14,13 @@ export const MODULE_RARITY_MULTIPLIER: Record<ModuleRarity, number> = {
   mk5: 3.04,
 };
 
+/** Fabricator showcase price for a rolled module — scales with rarity so a visibly
+ * better module costs visibly more, instead of every rarity costing the same flat
+ * fee (which made rarity invisible at the point of purchase). */
+export function fabricatorCost(rarity: ModuleRarity): number {
+  return Math.round(25 * MODULE_RARITY_MULTIPLIER[rarity]);
+}
+
 export const MODULE_DEFS: ModuleDef[] = [
   {
     id: "pulseCannon",
