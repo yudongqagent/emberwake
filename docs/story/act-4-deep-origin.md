@@ -7,6 +7,17 @@ refit (final tier) and the reveal of what's actually stirring in the deepest Rif
 Galaxy: **Deep Origin**. Systems used: the First Fleet Graveyard, Construct Anchor
 Zero.
 
+**Novel grounding:** see `docs/story/research-notes-act4.md`. Honest result: Act IV
+describes late-game material past what any available source indexes for this still-
+ongoing, 2700+-chapter novel (searchable coverage effectively ends around ch. 150-200).
+The novel's own core conceit — repeated "explore an unknown civilization, harvest its
+origin" episodes — genre-supports the Mayeth Constructs' *shape* (a real, confirmed
+pattern: ch. 72 "强人工智能"/Strong AI, ch. 100 "古代文明遗产"/Ancient Civilization
+Heritage, ch. 141 "深入遗迹"/Venturing Deep into Ruins are all real chapter titles),
+but none of Act IV's specific beats — the Cinder's origin reveal, Unit 7-Requiem, the
+containment superweapon, Arthur's three-way resolution — are confirmed sourced. Kept
+as original invention, annotated per chapter below.
+
 ---
 
 ## Chapter 1 — Ruins of the First Fleet
@@ -31,6 +42,11 @@ been before).
 **Systems/Unlocks:** Deep Origin galaxy fully open, Mayeth Construct enemy doctrine
 introduced (EMP, weak-point mechanics) at low stakes.
 
+**Novel grounding:** genre-level resonance only — the novel's confirmed recurring
+"explore an unknown civilization" pattern (ch. 100 "古代文明遗产," ch. 141 "深入遗迹")
+supports dormant-ruins exploration as a shape, but no source confirms a Mayeth-
+Constructs-equivalent specifically. Kept as original invention.
+
 ---
 
 ## Chapter 2 — Ghost Protocol
@@ -52,6 +68,11 @@ introduced (EMP, weak-point mechanics) at low stakes.
 **Choices & Consequences:** None major.
 
 **Systems/Unlocks:** Seventh named crew recruit (unique, non-conditional).
+
+**Novel grounding:** no confirmed source — a recruited AI/robotic ally with its own
+agenda was searched for specifically (ch. 72's "强人工智能"/Strong AI reads as an
+*encountered*, not recruited, AI, and only at the title level). Unit 7-Requiem kept
+as original invention.
 
 ---
 
@@ -85,6 +106,14 @@ Arthaine (if recruited).
 
 **Choices & Consequences:** Three-way branch as above, read by Act V epilogue.
 
+**Novel grounding:** the general shape (a recurring antagonist noble's scheming
+finally exposed) is real and well-sourced *as a pattern* — Baron Blackstone's faction
+persists across arcs via named agents (Blackstone's Tiger, Blackstone's Fox), with an
+explicit "War of Revenge" beat (ch. 74), and a separate ch. 132 "背叛与突变"
+(Betrayal and Mutation) confirms betrayal is a recurring novel beat-type. But the
+specific three-way resolution choice, and Arthur's collusion with an external hostile
+power, are not sourced — kept as original invention layered on a real pattern.
+
 **Systems/Unlocks:** None mechanical — the campaign's second-highest-impact narrative
 choice after Act II Ch.5.
 
@@ -114,6 +143,12 @@ affecting only which line the Cinder uses in later chapters, not mechanics.
 
 **Systems/Unlocks:** None mechanical — the campaign's central lore reveal.
 
+**Novel grounding:** no confirmed source. Every synopsis describes 王动's system
+identically and neutrally (Scan/source-point-multiplier/trait-select) with no
+discussion of alien origin or hidden agenda — not ruled out (may exist deep in
+unindexed raw text past the ~ch.200 search ceiling), but not found. Kept as original
+invention — the campaign's central lore reveal is honestly this project's own.
+
 ---
 
 ## Chapter 5 — The Last Shipyard
@@ -137,6 +172,11 @@ affecting only which line the Cinder uses in later chapters, not mechanics.
 
 **Systems/Unlocks:** Major Origin Essence toward a Sovereign-class refit.
 
+**Novel grounding:** loose thematic cousin only — ch. 150 "弑神武器" (Godslaying
+Weapon) and ch. 151 "击杀神邸" (Slaying the God's Seat) suggest weapon-vs-god-tier-
+entity content exists, but nothing confirms the specific "built as a last-resort
+containment measure, and they lost anyway" framing. Kept as original invention.
+
 ---
 
 ## Chapter 6 — Deep Origin (Act IV finale)
@@ -156,6 +196,11 @@ affecting only which line the Cinder uses in later chapters, not mechanics.
 **Characters:** Kade, Unit 7-Requiem, the Cinder, current crew.
 
 **Choices & Consequences:** None new.
+
+**Novel grounding:** no confirmed source — see `docs/story/research-notes-act4.md`.
+The Hollow reveal here is the same original element documented for Act V; kept as
+intentional invention rather than force-fit to the loose ch. 150-151 "godslaying
+weapon" material.
 
 **Systems/Unlocks:** Sovereign-class refit (final tier, 16 slots), Umbral Line galaxy
 unlocked — **Act IV complete.**
