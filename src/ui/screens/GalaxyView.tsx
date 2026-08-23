@@ -15,16 +15,34 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
   const [viewingId, setViewingId] = useState(currentGalaxy.value.id);
   const galaxy = galaxies.find((g) => g.id === viewingId) ?? currentGalaxy.value;
   const objective = getNextObjective();
+  const [jumping, setJumping] = useState(false);
 
   function jump(systemId: string) {
-    if (systemId === current) return;
+    if (systemId === current || jumping) return;
     playSfx("jump");
-    travelToSystem(systemId);
-    onNavigate("system");
+    setJumping(true);
+    // A real transition with motion, not an instant screen swap — see
+    // docs/visual-standards.md §3 ("Jump/travel/dock").
+    setTimeout(() => {
+      travelToSystem(systemId);
+      onNavigate("system");
+    }, 320);
   }
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative" }}>
+      {jumping && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 10,
+            pointerEvents: "none",
+            background: "radial-gradient(circle at 50% 50%, rgba(75,232,255,0.9), rgba(75,232,255,0.1) 40%, transparent 70%)",
+            animation: "warpFlash 320ms ease-in forwards",
+          }}
+        />
+      )}
       {galaxies.length > 1 && (
         <div style={{ display: "flex", gap: "0.4rem", padding: "0.75rem 1rem 0", overflowX: "auto", height: "2.6rem", flex: "none" }}>
           {galaxies.map((g) => (

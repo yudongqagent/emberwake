@@ -148,6 +148,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const projectilesRef = useRef<Projectile[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const explosionsRef = useRef<{ x: number; y: number; start: number }[]>([]);
+  /** Squash-and-stretch pulse timestamps — see docs/visual-standards.md §3. */
+  const hitPulseRef = useRef<{ enemy: Record<number, number>; player: number }>({ enemy: {}, player: 0 });
   const shakeRef = useRef(0);
   /** Freeze-frame juice on meaningful impacts — see docs/visual-standards.md §3.
    * A timestamp; while performance.now() is under it, the sim clock stalls for a
@@ -344,6 +346,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           playSfx("hit");
           setPlayerShakeToken((t) => t + 1);
           triggerHitStop(wasCharging[i] ? 100 : 45);
+          hitPulseRef.current.player = performance.now();
           pushLog(`${enemy.name}${wasCharging[i] ? "'s charged strike" : ""} hits Whisper for ${result.damageDealt}.`);
         } else {
           pushLog(`${enemy.name} misses.`);
@@ -428,6 +431,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : "143,243,255", result.crit ? 22 : 12, result.crit ? 150 : 110);
           addPopup(targetIdx, `${result.crit ? "CRIT " : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : "#8ff3ff", result.crit);
           triggerHitStop(result.crit ? 90 : 35);
+          hitPulseRef.current.enemy[targetIdx] = performance.now();
           if (result.crit) setPlayerShakeToken((t) => t + 1);
         }
       });
@@ -668,7 +672,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       explosionsRef.current = explosionsRef.current.filter((e) => now - e.start < 500);
 
       const thrusting = Math.hypot(player.vx, player.vy) > 12;
-      draw(ctx, vp, arena, { ...player, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current);
+      draw(ctx, vp, arena, { ...player, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, hitPulseRef.current);
     }
 
     const interval = setInterval(() => step(performance.now()), 16);
@@ -877,6 +881,7 @@ function draw(
   projectiles: Projectile[],
   particles: Particle[],
   explosions: { x: number; y: number; start: number }[],
+  hitPulse: { enemy: Record<number, number>; player: number },
 ) {
   vp.beginFrame(ctx);
   const { scale, offsetX, offsetY } = vp.transform();
@@ -930,11 +935,22 @@ function draw(
     if (e.hull <= 0) return;
     const pos = arena.enemyPos[i];
     if (!pos) return;
-    drawEnemyShip(ctx, pos, faction, now + i * 500, i === targetIdx, e);
+    drawEnemyShip(ctx, pos, faction, now + i * 500, i === targetIdx, e, pulseScale(now, hitPulse.enemy[i]));
   });
 
-  drawPlayerShip(ctx, arena.player, player.angle, now, player.thrusting);
+  drawPlayerShip(ctx, arena.player, player.angle, now, player.thrusting, pulseScale(now, hitPulse.player));
   ctx.restore();
+}
+
+/** A brief squash-and-stretch pulse decaying from a hit timestamp — see
+ * docs/visual-standards.md §3. Returns {sx, sy} scale factors, 1/1 once decayed. */
+function pulseScale(now: number, hitAt: number | undefined): { sx: number; sy: number } {
+  if (!hitAt) return { sx: 1, sy: 1 };
+  const age = now - hitAt;
+  const duration = 180;
+  if (age < 0 || age > duration) return { sx: 1, sy: 1 };
+  const decay = 1 - age / duration;
+  return { sx: 1 + 0.22 * decay, sy: 1 - 0.16 * decay };
 }
 
 const FACTION_HULL_COLOR_RGB: Record<string, string> = {
@@ -964,10 +980,18 @@ function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[]) {
   ctx.globalAlpha = 1;
 }
 
-function drawPlayerShip(ctx: CanvasRenderingContext2D, pos: ArenaPoint, angle: number, now: number, thrusting: boolean) {
+function drawPlayerShip(
+  ctx: CanvasRenderingContext2D,
+  pos: ArenaPoint,
+  angle: number,
+  now: number,
+  thrusting: boolean,
+  squash: { sx: number; sy: number } = { sx: 1, sy: 1 },
+) {
   ctx.save();
   ctx.translate(pos.x, pos.y);
   ctx.rotate(angle);
+  ctx.scale(squash.sx, squash.sy);
   drawPlayerHull(ctx, 1.7, now, thrusting);
   ctx.restore();
 }
@@ -979,6 +1003,7 @@ function drawEnemyShip(
   now: number,
   targeted: boolean,
   enemy: EnemyState,
+  squash: { sx: number; sy: number } = { sx: 1, sy: 1 },
 ) {
   ctx.save();
   ctx.translate(pos.x, pos.y);
@@ -1013,6 +1038,7 @@ function drawEnemyShip(
     ctx.stroke();
   }
 
+  ctx.scale(squash.sx, squash.sy);
   drawEnemyHull(ctx, faction, 1.5, now);
   ctx.restore();
 

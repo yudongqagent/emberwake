@@ -7,7 +7,7 @@ import { computeModuleDamage, computeModuleBlock, lockTrait } from "../../engine
 import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon } from "../components/Icons";
-import { Bar, RollQualityBadge } from "../components/StatBlock";
+import { Bar, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 import type { ModuleType, ModuleInstance } from "../../data/types";
 
 const TYPE_ORDER: ModuleType[] = ["weapon", "armor", "engine", "utility"];
@@ -52,7 +52,7 @@ export function Modules() {
             <span className="eyebrow">Power Draw</span>
           </div>
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, color: overdrawn ? "var(--red)" : "var(--text-hi)" }}>
-            {usedPower} / {capacity}
+            <AnimatedFraction current={usedPower} max={capacity} />
           </span>
         </div>
         <div style={{ marginTop: "0.5rem" }}>

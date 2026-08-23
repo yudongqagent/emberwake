@@ -354,6 +354,12 @@ h1, h2, h3 {
   animation: shakeAnim 0.32s ease-in-out;
 }
 
+@keyframes warpFlash {
+  0% { opacity: 0; transform: scale(0.4); }
+  35% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
 @keyframes floatUp {
   0% { transform: translate(-50%, 0); opacity: 1; }
   100% { transform: translate(-50%, -34px); opacity: 0; }
