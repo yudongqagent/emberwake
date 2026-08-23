@@ -65,12 +65,21 @@ export function canAfford(costs: Partial<Record<ResourceType, number>>): boolean
   return Object.entries(costs).every(([k, v]) => state.value.resources[k as ResourceType] >= (v ?? 0));
 }
 
+/** Every other mutating action in this file (addShip, addModule, sellModule,
+ * repairFlagship, recruitGenericCrew, resolveCombatVictory...) calls persist()
+ * internally. spend/grant didn't, which meant every caller had to remember to
+ * persist afterward themselves — several didn't (StationPanel's Trade exchanges,
+ * the Shipwright/Fabricator refresh cost), so spending resources only took effect
+ * in memory until some *other* action happened to save next. A page refresh before
+ * that made the spend free. Fixed at the root instead of patching each call site,
+ * since the next new call site would just repeat the same mistake. */
 export function spend(costs: Partial<Record<ResourceType, number>>) {
   const resources = { ...state.value.resources };
   for (const [k, v] of Object.entries(costs)) {
     resources[k as ResourceType] -= v ?? 0;
   }
   state.value = { ...state.value, resources };
+  persist();
 }
 
 export function grant(rewards: Partial<Record<ResourceType, number>>) {
@@ -79,6 +88,7 @@ export function grant(rewards: Partial<Record<ResourceType, number>>) {
     resources[k as ResourceType] = (resources[k as ResourceType] ?? 0) + (v ?? 0);
   }
   state.value = { ...state.value, resources };
+  persist();
 }
 
 function setFlags(flags: string[]) {

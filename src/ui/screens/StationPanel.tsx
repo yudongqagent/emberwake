@@ -252,16 +252,39 @@ function generateShipOffers(): ShipInstance[] {
  * (Player-Tested Anti-Patterns #4/#3 in docs/design-principles.md — a shown-then-
  * chosen offer preserves agency and makes rarity unmistakable, instead of finding out
  * what you got only after paying for it). */
+/** Issue #9 (2026-08 playtest, docs/design-principles.md Player-Tested
+ * Anti-Patterns #4): a free, unlimited Refresh let a player just reroll until they
+ * got something great, which quietly turned the curated showcase back into the
+ * blind-pull problem it was built to fix — the showcase itself needs its own
+ * economy, or "choose from a shown list" has no more real tension than "keep
+ * spinning until you like the result." Cost escalates per refresh within one visit
+ * (resets when the tab remounts) so a first look is still cheap but fishing for a
+ * perfect roll isn't free. */
+function refreshCost(count: number): number {
+  return 10 + count * 15;
+}
+
 function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
   const [offers, setOffers] = useState<ShipInstance[]>(() => generateShipOffers());
+  const [refreshCount, setRefreshCount] = useState(0);
+  const cost = refreshCost(refreshCount);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
           Today's hulls. Rarity and stats are visible now — pick the one you want.
         </div>
-        <button className="btn ghost" style={{ fontSize: "0.7rem", padding: "0.4em 0.7em", flex: "none" }} onClick={() => setOffers(generateShipOffers())}>
-          Refresh
+        <button
+          className="btn ghost"
+          style={{ fontSize: "0.7rem", padding: "0.4em 0.7em", flex: "none", display: "flex", alignItems: "center", gap: "0.3rem" }}
+          disabled={!canAfford({ sourcePoints: cost })}
+          onClick={() => {
+            spend({ sourcePoints: cost });
+            setOffers(generateShipOffers());
+            setRefreshCount((c) => c + 1);
+          }}
+        >
+          Refresh <ResourceIcon type="sourcePoints" size={11} /> {cost}
         </button>
       </div>
       {offers.map((candidate, i) => {
@@ -318,14 +341,25 @@ function generateModuleOffers(): ModuleInstance[] {
 /** Same curated-showcase pattern as ShipwrightTab — see the comment there. */
 function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
   const [offers, setOffers] = useState<ModuleInstance[]>(() => generateModuleOffers());
+  const [refreshCount, setRefreshCount] = useState(0);
+  const cost = refreshCost(refreshCount);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
           Today's modules. Type, rarity, and traits are visible now — pick the one you want.
         </div>
-        <button className="btn ghost" style={{ fontSize: "0.7rem", padding: "0.4em 0.7em", flex: "none" }} onClick={() => setOffers(generateModuleOffers())}>
-          Refresh
+        <button
+          className="btn ghost"
+          style={{ fontSize: "0.7rem", padding: "0.4em 0.7em", flex: "none", display: "flex", alignItems: "center", gap: "0.3rem" }}
+          disabled={!canAfford({ sourcePoints: cost })}
+          onClick={() => {
+            spend({ sourcePoints: cost });
+            setOffers(generateModuleOffers());
+            setRefreshCount((c) => c + 1);
+          }}
+        >
+          Refresh <ResourceIcon type="sourcePoints" size={11} /> {cost}
         </button>
       </div>
       {offers.map((candidate, i) => {
