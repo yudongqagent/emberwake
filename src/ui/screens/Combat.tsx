@@ -137,6 +137,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [guaranteedCrit, setGuaranteedCrit] = useState(false);
   const [riposteArmed, setRiposteArmed] = useState(false);
   const [shieldedNextTurn, setShieldedNextTurn] = useState(false);
+  // Hollow doctrine, axis 2: Corrosion. Unlike the decaying-per-round debuffs crew
+  // abilities apply (evasionDebuffTurns/blockDebuffTurns), this is permanent for the
+  // rest of the fight — Hollow attacks don't just drain resources, they eat the
+  // plating itself. A distinct status-effect category from anything else in combat.
+  const [corrodedBlock, setCorrodedBlock] = useState(0);
   const bossPhaseRef = useRef(false);
 
   const capacity = computePowerCapacity(ship);
@@ -308,12 +313,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // Reaver doctrine: Frenzy. Below 30% hull, a Reaver stops fighting defensively
       // and goes all-in — a real threshold distinct from boss enrage (50%, isBoss-only).
       const frenzied = encounter.faction === "reavers" && enemy.hull <= enemy.maxHull * 0.3;
-      const dmgMultiplier = (wasCharging[i] ? 2 : 1) * (frenzied ? 1.4 : 1);
+      // Swarm doctrine: Hive Retaliation. A downed hive-mate doesn't weaken the
+      // swarm, it enrages what's left — every dead ally adds +15% damage to each
+      // surviving Swarm attacker. Trigger is ally-death-count, not self-hull or
+      // boss-phase, so it's a genuinely distinct axis from Reaver frenzy/boss enrage.
+      const deadHiveAllies = encounter.faction === "swarm" ? regenerated.filter((e) => e.hull <= 0).length : 0;
+      const hiveBonus = 1 + 0.15 * deadHiveAllies;
+      const dmgMultiplier = (wasCharging[i] ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus;
       const enemyPos = arenaRef.current.enemyPos[i] ?? enemySlot(i, regenerated.length);
       const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
       const band = rangeBandFromDistance(dist);
       const evasion = Math.min(0.6, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
-      const result = resolveAttack(enemy.damage * dmgMultiplier, armorBlock, evasion, RANGE_MODIFIERS[band].incoming);
+      const result = resolveAttack(enemy.damage * dmgMultiplier, Math.max(0, armorBlock - corrodedBlock), evasion, RANGE_MODIFIERS[band].incoming);
       const dealt = shieldActive ? 0 : result.hit ? result.damageDealt : 0;
       if (dealt > 0) totalDamage += dealt;
 
@@ -351,7 +362,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           setPlayerShakeToken((t) => t + 1);
           triggerHitStop(wasCharging[i] ? 100 : 45);
           hitPulseRef.current.player = performance.now();
-          pushLog(`${enemy.name}${wasCharging[i] ? "'s charged strike" : ""} hits Whisper for ${result.damageDealt}.`);
+          pushLog(`${enemy.name}${wasCharging[i] ? "'s charged strike" : ""}${deadHiveAllies > 0 ? " (hive-enraged)" : ""} hits Whisper for ${result.damageDealt}.`);
 
           // Construct doctrine: a precise EMP pulse on hit has a chance to lock out
           // one of the player's own weapons for a turn — the mirror of the player's
@@ -376,6 +387,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               spend({ [pool]: actualDrain } as Partial<Record<ResourceType, number>>);
               addPopup("player", `-${actualDrain} ${RESOURCE_LABEL[pool]}`, "#e8d9ff");
               pushLog(`${enemy.name} drains ${actualDrain} ${RESOURCE_LABEL[pool]} straight from Whisper's stores.`);
+            }
+            // Hollow doctrine, axis 2: Corrosion. A permanent (not decaying) block
+            // reduction for the rest of the fight — it's eating the plating, not just
+            // stunning or stealing from it.
+            if (armorBlock - corrodedBlock > 0) {
+              setCorrodedBlock((c) => c + 1);
+              pushLog(`${enemy.name}'s touch corrodes Whisper's plating — armor weakened for the rest of the fight.`);
             }
           }
         } else {
