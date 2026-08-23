@@ -175,12 +175,27 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [fortifyTurns, setFortifyTurns] = useState(0);
   const [bloodscentTurns, setBloodscentTurns] = useState(0);
   const bloodscentTargetRef = useRef<number | null>(null);
+  // Shared with the physics loop below so Displacement Charge (fired from
+  // fireModuleImpl) can shove an enemy's chase position directly, not just read it.
+  const enemyChaseXRef = useRef<number[]>([]);
+  // Ion Disruptor's Overload: a per-module shot counter, keyed by module instance id
+  // so two Ion Disruptors equipped at once track independently.
+  const overloadCountersRef = useRef<Record<string, number>>({});
+  // Vector Drive's Surge: distance covered since the last shot fired, any weapon —
+  // an engine-wide bonus, not a per-weapon one, so it accumulates regardless of what
+  // eventually spends it.
+  const distanceSinceLastShotRef = useRef(0);
   // Ablative Plating's Absorb: negates exactly the first hit landed each fight, then
   // behaves like ordinary block for the rest of it — a ref because it must mutate
   // synchronously mid-resolution, before any re-render, same pattern as bossPhaseRef.
   const absorbRef = useRef(true);
   const hasAbsorbArmor = equippedModuleList.some(
     (m) => moduleDefById(m.defId).type === "armor" && m.traits.includes("absorb"),
+  );
+  // Kinetic Reflector's Reflect: the only module that punishes an enemy for hitting
+  // you, instead of just mitigating what you take.
+  const hasReflectArmor = equippedModuleList.some(
+    (m) => moduleDefById(m.defId).type === "armor" && m.traits.includes("reflect"),
   );
   // Inertial Dampers' Momentum: evasion rises with consecutive undamaged enemy turns,
   // capped modestly so it augments rather than replaces the flat +evasion trait.
@@ -397,6 +412,16 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (absorbedHit) absorbRef.current = false;
       const dealt = shieldActive || absorbedHit ? 0 : result.hit ? result.damageDealt : 0;
       if (dealt > 0) totalDamage += dealt;
+      // Kinetic Reflector's Reflect: a fraction of whatever the block actually
+      // absorbed strikes back — computed from the same pre-block raw damage
+      // resolveAttack itself derives internally, so it stays in lockstep with the
+      // real formula instead of drifting out of sync with it.
+      let reflectDmg = 0;
+      if (hasReflectArmor && result.hit && !absorbedHit && !shieldActive) {
+        const preBlockRaw = Math.max(1, Math.round(enemy.damage * dmgMultiplier * RANGE_MODIFIERS[band].incoming));
+        const blockedAmount = Math.max(0, preBlockRaw - result.damageDealt);
+        reflectDmg = Math.round(blockedAmount * 0.3);
+      }
 
       if (!result.hit && riposteActive && !riposteTriggered) {
         riposteTriggered = true;
@@ -437,6 +462,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           triggerHitStop(wasCharging[i] ? 100 : 45);
           hitPulseRef.current.player = performance.now();
           pushLog(`${enemy.name}${wasCharging[i] ? (chargeDodged ? "'s charged strike (blunted by range)" : "'s charged strike") : ""}${deadHiveAllies > 0 ? " (hive-enraged)" : ""} hits Whisper for ${result.damageDealt}.`);
+          if (reflectDmg > 0) {
+            spawnBurst(enemyPos.x, enemyPos.y, "255,143,102", 8, 90);
+            addPopup(i, `-${reflectDmg}`, "#ff8f66");
+            pushLog(`Kinetic Reflector throws ${reflectDmg} back at ${enemy.name}.`);
+          }
 
           // Construct doctrine: a precise EMP pulse on hit has a chance to lock out
           // one of the player's own weapons for a turn — the mirror of the player's
@@ -474,7 +504,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           pushLog(phaseShiftBlocksThis ? `Phase Shift — ${enemy.name}'s attack passes through nothing.` : `${enemy.name} misses.`);
         }
       });
-      return wasCharging[i] ? { ...enemy, charging: false } : enemy;
+      const afterCharge = wasCharging[i] ? { ...enemy, charging: false } : enemy;
+      return reflectDmg > 0 ? { ...afterCharge, hull: Math.max(0, afterCharge.hull - reflectDmg) } : afterCharge;
     });
     if (riposteTriggered) setRiposteArmed(false);
 
@@ -563,9 +594,19 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // Railgun's Execute: a finisher axis, not a raw-damage lead — it does nothing
     // against a healthy target and swings hard against a dying one.
     const executeMult = mod.traits.includes("execute") && target.hull <= target.maxHull * 0.25 ? 1.5 : 1;
+    // Ion Disruptor's Overload: every 3rd shot from THIS module instance hits double —
+    // an automatic charge-up rhythm, distinct from Alpha Strike's manual one-shot arm.
+    const overloadShotCount = mod.traits.includes("overload") ? (overloadCountersRef.current[mod.id] ?? 0) + 1 : 0;
+    const overloadMult = overloadShotCount > 0 && overloadShotCount % 3 === 0 ? 2 : 1;
+    // Vector Drive's Surge: a real burst of movement since the last shot (any
+    // weapon) charges the next one — rewards actually using the positioning game,
+    // not just picking a lane and holding it.
+    const hasSurgeEngine = equippedModuleList.some((m) => moduleDefById(m.defId).type === "engine" && m.traits.includes("surge"));
+    const surgeMult = hasSurgeEngine && distanceSinceLastShotRef.current > 150 ? 1.25 : 1;
     // Nightfall Vow's Alpha Strike: doubles this one shot, at the cost of that
     // weapon's cooldown locking out 2 extra turns (see the cooldown-set below).
-    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult * (wasAlphaStrike ? 2 : 1));
+    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult * (wasAlphaStrike ? 2 : 1) * overloadMult * surgeMult);
+    distanceSinceLastShotRef.current = 0;
     const nextEnemies = [...enemies];
     if (dmg > 0) {
       const targetEvasion = (target.evasionDebuffTurns ?? 0) > 0 ? target.evasion * 0.5 : target.evasion;
@@ -678,6 +719,29 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           }
         });
       }
+
+      // Twin-Linked Cannon's Volley: a second, fully independent hit-or-miss roll at
+      // the same target — unlike Chain Arc/Splash (which only fire off a successful
+      // first hit and spread to OTHER targets), this always fires and stays on the
+      // same one, trading peak burst for a second real chance to land.
+      if (mod.traits.includes("volley") && nextEnemies[targetIdx].hull > 0) {
+        const volleyTarget = nextEnemies[targetIdx];
+        const volleyResult = resolveAttack(dmg, effectiveBlock, targetEvasion, outgoingMult);
+        setTimeout(() => {
+          fireProjectile(playerPos, impactPos, "#8ff3ff", () => {
+            if (volleyResult.hit) {
+              spawnBurst(impactPos.x, impactPos.y, "143,243,255", 10, 90);
+              addPopup(targetIdx, `-${volleyResult.damageDealt}`, "#8ff3ff");
+            }
+          });
+        }, 120);
+        if (volleyResult.hit) {
+          nextEnemies[targetIdx] = { ...volleyTarget, hull: Math.max(0, volleyTarget.hull - volleyResult.damageDealt) };
+          pushLog(`Volley's second shot hits ${volleyTarget.name} for ${volleyResult.damageDealt}.`);
+        } else {
+          pushLog(`Volley's second shot misses ${volleyTarget.name}.`);
+        }
+      }
     } else {
       pushLog(`${def.name} activated.`);
       // Purge Field's Cleanse: the only removal effect in combat — instantly clears
@@ -686,11 +750,20 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         setCorrodedBlock(0);
         pushLog(`Purge Field clears ${corrodedBlock} points of corroded plating.`);
       }
+      // Displacement Charge's Displace: shoves the target to whichever horizontal
+      // extreme is farthest from Whisper right now — the only module that moves an
+      // enemy instead of the player, buying breathing room without you spending it.
+      if (mod.traits.includes("displace") && target.hull > 0) {
+        const awayX = arenaRef.current.player.x < REF_W / 2 ? REF_W - 40 : 60;
+        enemyChaseXRef.current[targetIdx] = awayX;
+        pushLog(`Displacement Charge shoves ${target.name} out to long range.`);
+      }
     }
     const overchargePenalty = wasOvercharged ? 2 : 0;
     const alphaStrikePenalty = wasAlphaStrike ? 2 : 0;
     const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
     setCooldowns((prev) => ({ ...prev, [moduleId]: Math.max(0, (def.cooldown ?? 0) + overchargePenalty + alphaStrikePenalty - cooldownReduction) }));
+    if (overloadShotCount > 0) overloadCountersRef.current[mod.id] = overloadShotCount >= 3 ? 0 : overloadShotCount;
     if (wasOvercharged) setOvercharged(false);
     if (wasGuaranteedCrit) setGuaranteedCrit(false);
     if (wasAlphaStrike) setAlphaStrikeArmed(false);
@@ -868,8 +941,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const player = { vx: 0, vy: 0, angle: 0 };
     // Persistent per-enemy "chase" X position — separate from the fixed Y lane and
     // the decorative bob, so an enemy that closed distance last frame stays closed
-    // this frame instead of snapping back to its spawn slot.
-    const enemyChaseX: number[] = [];
+    // this frame instead of snapping back to its spawn slot. Lives in a ref (not a
+    // local array) so Displacement Charge can push it from outside this effect.
+    const enemyChaseX = enemyChaseXRef.current;
     const preferredRange = FACTION_PREFERRED_RANGE[encounter.faction] ?? "mid";
     const preferredDistance = RANGE_TARGET_DISTANCE[preferredRange];
 
@@ -915,8 +989,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // goes non-finite, drop the velocity and pointer target and hold the last
       // good position instead of propagating the corruption.
       if (Number.isFinite(nextX) && Number.isFinite(nextY)) {
+        const prevX = arena.player.x;
+        const prevY = arena.player.y;
         arena.player.x = Math.max(24, Math.min(REF_W - 24, nextX));
         arena.player.y = Math.max(24, Math.min(REF_H - 24, nextY));
+        distanceSinceLastShotRef.current += Math.hypot(arena.player.x - prevX, arena.player.y - prevY);
       } else {
         reportError("Combat.step (player position)", new Error(`non-finite position: vx=${player.vx} vy=${player.vy}`));
         player.vx = 0;
