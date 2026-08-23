@@ -3,8 +3,8 @@ import { encounterById } from "../../data/encounters";
 import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeCritChance } from "../../engine/modules";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, rangeBandFromDistance, type RangeBand } from "../../engine/combat";
-import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount } from "../../state/store";
+import { RANGE_MODIFIERS, resolveAttack, rangeBandFromDistance, CRIT_MULTIPLIER, type RangeBand } from "../../engine/combat";
+import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend } from "../../state/store";
 import { crewDefById } from "../../data/crew";
 import { playSfx } from "../../audio/engine";
 import type { FactionId, ResourceType } from "../../data/types";
@@ -304,7 +304,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         return { ...enemy, charging: true };
       }
 
-      const dmgMultiplier = wasCharging[i] ? 2 : 1;
+      // Reaver doctrine: Frenzy. Below 30% hull, a Reaver stops fighting defensively
+      // and goes all-in — a real threshold distinct from boss enrage (50%, isBoss-only).
+      const frenzied = encounter.faction === "reavers" && enemy.hull <= enemy.maxHull * 0.3;
+      const dmgMultiplier = (wasCharging[i] ? 2 : 1) * (frenzied ? 1.4 : 1);
       const enemyPos = arenaRef.current.enemyPos[i] ?? enemySlot(i, regenerated.length);
       const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
       const band = rangeBandFromDistance(dist);
@@ -348,6 +351,32 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           triggerHitStop(wasCharging[i] ? 100 : 45);
           hitPulseRef.current.player = performance.now();
           pushLog(`${enemy.name}${wasCharging[i] ? "'s charged strike" : ""} hits Whisper for ${result.damageDealt}.`);
+
+          // Construct doctrine: a precise EMP pulse on hit has a chance to lock out
+          // one of the player's own weapons for a turn — the mirror of the player's
+          // own EMP Burst "disable" trait, from the enemy's side.
+          if (encounter.faction === "constructs" && Math.random() < 0.3) {
+            const targetable = equippedModules.filter((m) => moduleDefById(m.defId).cooldown !== null);
+            if (targetable.length > 0) {
+              const jammed = targetable[Math.floor(Math.random() * targetable.length)];
+              const jammedDef = moduleDefById(jammed.defId);
+              setCooldowns((prev) => ({ ...prev, [jammed.id]: Math.max(prev[jammed.id] ?? 0, 1) }));
+              pushLog(`${enemy.name}'s EMP pulse jams ${jammedDef.name} — it won't answer next turn.`);
+            }
+          }
+          // Hollow doctrine: it doesn't just damage the hull, it drains what's inside
+          // it — a real punishment axis distinct from hull damage (see the design
+          // intent in docs/story, never wired until now).
+          if (encounter.faction === "hollow") {
+            const drain = Math.max(1, Math.round(result.damageDealt * 0.25));
+            const pool: ResourceType = state.value.resources.insight > 0 ? "insight" : "sourcePoints";
+            const actualDrain = Math.min(drain, state.value.resources[pool]);
+            if (actualDrain > 0) {
+              spend({ [pool]: actualDrain } as Partial<Record<ResourceType, number>>);
+              addPopup("player", `-${actualDrain} ${RESOURCE_LABEL[pool]}`, "#e8d9ff");
+              pushLog(`${enemy.name} drains ${actualDrain} ${RESOURCE_LABEL[pool]} straight from Whisper's stores.`);
+            }
+          }
         } else {
           pushLog(`${enemy.name} misses.`);
         }
@@ -423,7 +452,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       const blockMult = blockBroken ? 0 : Math.min(mod.traits.includes("pierce") ? 0.5 : 1, undercut ? 0.5 : 1);
       const effectiveBlock = Math.round(target.block * blockMult);
       const critChance = wasGuaranteedCrit ? 1 : computeCritChance(mod, comboCount, shipBaseCrit);
-      const result = resolveAttack(dmg, effectiveBlock, targetEvasion, outgoingMult, undefined, critChance);
+      const rawResult = resolveAttack(dmg, effectiveBlock, targetEvasion, outgoingMult, undefined, critChance);
+      // Bauhinia/Swanreach doctrine: Point Defense. Utilitarian military-industrial
+      // hulls run point-defense grids that specifically blunt precision hits — a crit
+      // against them lands at a reduced multiplier instead of the full 1.75x.
+      const pointDefense = rawResult.crit && (encounter.faction === "bauhinia" || encounter.faction === "swanreach");
+      const result = pointDefense
+        ? { ...rawResult, damageDealt: Math.max(1, Math.round((rawResult.damageDealt / CRIT_MULTIPLIER) * 1.2)) }
+        : rawResult;
       const playerPos = { ...arenaRef.current.player };
       const impactPos = { ...enemyPos };
       fireProjectile(playerPos, impactPos, result.crit ? "#ffe25d" : "#8ff3ff", () => {
@@ -444,8 +480,21 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (result.hit) {
         const critNote = wasGuaranteedCrit ? " — Focus Fire's mark guarantees the critical hit on" : result.crit ? " lands a CRITICAL hit on" : " hits";
         pushLog(`${def.name}${critNote} ${target.name} for ${result.damageDealt}.`);
+        if (pointDefense) pushLog(`${target.name}'s point-defense grid blunts the critical strike.`);
       } else {
         pushLog(`${def.name} missed ${target.name}.`);
+        // Lionsheart doctrine: Honor Duel. A duelist culture doesn't let a wasted
+        // swing go unanswered — a wild miss draws an immediate free counter.
+        if (encounter.faction === "lionsheart" && hitTarget.hull > 0) {
+          const counterDmg = Math.round(target.damage * 0.5);
+          setTimeout(() => {
+            setPlayerHull((h) => Math.max(0, h - counterDmg));
+            addPopup("player", `-${counterDmg}`, "#5dd6ff");
+            spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "93,214,255", 10, 90);
+            playSfx("hit");
+          }, 180);
+          pushLog(`${target.name} answers the missed swing with an honor riposte for ${counterDmg}.`);
+        }
       }
 
       // EMP-style traits: a chance to disable the target's next attack, or strip
