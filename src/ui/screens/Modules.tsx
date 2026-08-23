@@ -1,12 +1,12 @@
 import { useState } from "preact/hooks";
-import { state, flagship, equipModule, spend, canAfford } from "../../state/store";
+import { state, flagship, equipModule, spend, canAfford, sellModule } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
 import { computePowerCapacity } from "../../engine/ships";
-import { moduleDefById } from "../../data/modules";
-import { computeModuleDamage, computeModuleBlock, lockTrait } from "../../engine/modules";
+import { moduleDefById, fabricatorCost, MODULE_RARITY_ORDER } from "../../data/modules";
+import { computeModuleDamage, computeModuleBlock, lockTrait, qualityMultiplier } from "../../engine/modules";
 import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
-import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon } from "../components/Icons";
+import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon, ResourceIcon } from "../components/Icons";
 import { Bar, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 import type { ModuleType, ModuleInstance } from "../../data/types";
 
@@ -105,6 +105,8 @@ export function Modules() {
         })}
       </div>
 
+      <InventoryPanel inventory={inventory} />
+
       {pickerSlot !== null && (
         <PickerModal
           type={layout.find((l) => l.index === pickerSlot)!.type}
@@ -118,6 +120,96 @@ export function Modules() {
       )}
     </div>
   );
+}
+
+/** Issue #7 (docs/design-principles.md Player-Tested Anti-Patterns #5): QoL has to
+ * scale with content volume. More rarities and more Fabricator draws means modules
+ * pile up fast — this keeps the best copy of each archetype and clears the rest in
+ * one click, instead of forcing manual cleanup one item at a time. */
+function InventoryPanel({ inventory }: { inventory: ModuleInstance[] }) {
+  const [lastSale, setLastSale] = useState<{ count: number; refund: number } | null>(null);
+
+  const duplicateIdsToSell = findDuplicatesToSell(inventory);
+  const duplicateRefund = duplicateIdsToSell.reduce((sum, id) => {
+    const mod = inventory.find((m) => m.id === id);
+    return sum + (mod ? Math.round(fabricatorCost(mod.rarity) * 0.4) : 0);
+  }, 0);
+
+  if (inventory.length === 0 && !lastSale) return null;
+
+  return (
+    <div className="panel" style={{ padding: "0.9rem 1rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span className="eyebrow">Inventory — {inventory.length} unequipped</span>
+        {duplicateIdsToSell.length > 0 && (
+          <button
+            className="btn ghost"
+            style={{ fontSize: "0.68rem", padding: "0.35em 0.65em" }}
+            onClick={() => {
+              duplicateIdsToSell.forEach((id) => sellModule(id));
+              setLastSale({ count: duplicateIdsToSell.length, refund: duplicateRefund });
+            }}
+          >
+            Auto-Sell {duplicateIdsToSell.length} Duplicates — +{duplicateRefund} <ResourceIcon type="sourcePoints" size={11} />
+          </button>
+        )}
+      </div>
+      {lastSale && (
+        <div style={{ fontSize: "0.72rem", color: "var(--green)" }}>
+          Sold {lastSale.count} duplicate{lastSale.count === 1 ? "" : "s"} for {lastSale.refund} Source Points.
+        </div>
+      )}
+      {inventory.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          {inventory.map((m) => {
+            const def = moduleDefById(m.defId);
+            const refund = Math.round(fabricatorCost(m.rarity) * 0.4);
+            return (
+              <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.35rem 0", borderBottom: "1px solid var(--line)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                  <ModuleTypeIcon type={def.type} size={14} />
+                  <span style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{def.name}</span>
+                  <ModuleRarityTag rarity={m.rarity} />
+                </div>
+                <button
+                  className="btn ghost"
+                  style={{ fontSize: "0.66rem", padding: "0.3em 0.55em", flex: "none" }}
+                  onClick={() => {
+                    sellModule(m.id);
+                    setLastSale({ count: 1, refund });
+                  }}
+                >
+                  Sell +{refund}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** For every module archetype with 2+ unequipped copies, keeps the single best one
+ * (highest rarity, then highest quality roll) and returns the ids of the rest. */
+function findDuplicatesToSell(inventory: ModuleInstance[]): string[] {
+  const byDefId = new Map<string, ModuleInstance[]>();
+  for (const m of inventory) {
+    const list = byDefId.get(m.defId) ?? [];
+    list.push(m);
+    byDefId.set(m.defId, list);
+  }
+  const toSell: string[] = [];
+  for (const group of byDefId.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => {
+      const rarityDiff = MODULE_RARITY_ORDER.indexOf(b.rarity) - MODULE_RARITY_ORDER.indexOf(a.rarity);
+      if (rarityDiff !== 0) return rarityDiff;
+      return qualityMultiplier(b.quality ?? 0.5) - qualityMultiplier(a.quality ?? 0.5);
+    });
+    toSell.push(...sorted.slice(1).map((m) => m.id));
+  }
+  return toSell;
 }
 
 function LockRow({ moduleId, traits }: { moduleId: string; traits: string[] }) {

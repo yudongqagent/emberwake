@@ -1,5 +1,5 @@
-import { state, flagship, setActiveFlagship, scanShipAction, effectiveMaxHull } from "../../state/store";
-import { hullClassById } from "../../data/hullClasses";
+import { state, flagship, setActiveFlagship, scanShipAction, effectiveMaxHull, sellShip } from "../../state/store";
+import { hullClassById, shipwrightCost } from "../../data/hullClasses";
 import { computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { ShipRarityTag } from "../components/RarityTag";
 import { playSfx } from "../../audio/engine";
@@ -76,6 +76,16 @@ export function Fleet() {
               <button className="btn primary" disabled={isActive} onClick={() => setActiveFlagship(ship.id)}>
                 {isActive ? "Active Flagship" : "Set as Flagship"}
               </button>
+              {!isActive && (
+                <button
+                  className="btn danger"
+                  style={{ marginLeft: "auto" }}
+                  onClick={() => sellShip(ship.id)}
+                  title={`Sell for ${Math.round(shipwrightCost(ship.hullClass, ship.rarity) * 0.4)} Source Points`}
+                >
+                  Sell +{Math.round(shipwrightCost(ship.hullClass, ship.rarity) * 0.4)}
+                </button>
+              )}
             </div>
           </div>
         );
