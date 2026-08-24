@@ -13,10 +13,11 @@ import { Ascension } from "./ui/screens/Ascension";
 import { StoryOverlay } from "./ui/screens/StoryOverlay";
 import { Combat } from "./ui/screens/Combat";
 import { RiftInterlude } from "./ui/screens/RiftInterlude";
-import type { StoryScene, ResourceType } from "./data/types";
+import { RiftDropReveal } from "./ui/screens/RiftDropReveal";
+import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWave, riftWaveHaul, addHaul } from "./data/rift";
 import { registerRuntimeEncounter } from "./data/encounters";
-import { grant } from "./state/store";
+import { grant, grantRiftDrop } from "./state/store";
 import { setMuted, isMuted } from "./audio/engine";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
@@ -74,6 +75,7 @@ export function App() {
   const [combat, setCombat] = useState<PendingCombat | PendingStoryEncounter | null>(null);
   const [muted, setMutedState] = useState(isMuted());
   const [riftRun, setRiftRun] = useState<RiftRun | null>(null);
+  const [riftDrop, setRiftDrop] = useState<ModuleInstance | null>(null);
 
   function launchRiftWave(depth: number) {
     const wave = registerRuntimeEncounter(generateRiftWave(depth));
@@ -85,9 +87,12 @@ export function App() {
     launchRiftWave(1);
   }
 
-  /** Banks the run's haul and ends it. */
+  /** Banks the run's haul and ends it, including the run's single module reward —
+   * the rift is the only place mk4/mk5 gear exists (see grantRiftDrop). */
   function extractFromRift() {
-    if (riftRun) grant(riftRun.haul);
+    if (!riftRun) return;
+    grant(riftRun.haul);
+    setRiftDrop(grantRiftDrop(riftRun.depth));
     setRiftRun(null);
   }
 
@@ -137,6 +142,18 @@ export function App() {
       </button>
     </div>
   );
+
+  // The rift's module reward, revealed after extraction. Shown on its own rather
+  // than folded into the haul list because it's the mechanically distinctive part:
+  // mk4/mk5 gear has no other source in the game.
+  if (riftDrop) {
+    return (
+      <ErrorBoundary label={t("rift.title")}>
+        <RiftDropReveal drop={riftDrop} onClose={() => setRiftDrop(null)} />
+        <ErrorToast />
+      </ErrorBoundary>
+    );
+  }
 
   if (riftRun && riftRun.awaitingChoice && !combat) {
     return (

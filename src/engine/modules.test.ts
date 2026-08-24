@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { qualityMultiplier } from "./modules";
-import { MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER } from "../data/modules";
+import { qualityMultiplier, drawModule, riftDropRarityFloor } from "./modules";
+import { MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, MARKET_MAX_RARITY, fabricatorCost } from "../data/modules";
 
 // Player-Tested Anti-Patterns #6 (docs/design-principles.md): tier gaps must be
 // verified, not assumed. A worst-roll module of tier N+1 must always beat a
@@ -14,6 +14,51 @@ describe("module rarity tier gaps (no overlap between adjacent tiers)", () => {
       const loBest = MODULE_RARITY_MULTIPLIER[lo] * qualityMultiplier(1);
       const hiWorst = MODULE_RARITY_MULTIPLIER[hi] * qualityMultiplier(0);
       expect(hiWorst, `${hi} (worst roll) should exceed ${lo} (best roll)`).toBeGreaterThan(loBest);
+    }
+  });
+});
+
+// Section B (2026-08-24 player brief): "市场上买的模组应该要么品质一般，要么非常
+// 贵；真正稀有的模组应该来自异空间战场". Two invariants worth guarding, because
+// both are the kind of rule a future call site breaks silently:
+//   1. no purchasable/ordinary source ever yields mk4+
+//   2. the rift's depth floor actually delivers top tier
+describe("module economy sourcing (section B)", () => {
+  it("the market ceiling never yields a top-tier module, over many draws", () => {
+    const topTier = new Set(["mk4", "mk5"]);
+    for (let i = 0; i < 800; i++) {
+      const m = drawModule(undefined, { maxRarity: MARKET_MAX_RARITY });
+      expect(topTier.has(m.rarity), `market draw produced ${m.rarity}, which must be rift-only`).toBe(false);
+    }
+  });
+
+  it("the rift floor rises with depth and reaches the top tiers", () => {
+    expect(riftDropRarityFloor(1)).toBe("mk2");
+    expect(riftDropRarityFloor(2)).toBe("mk3");
+    expect(riftDropRarityFloor(4)).toBe("mk4");
+    expect(riftDropRarityFloor(7)).toBe("mk5");
+  });
+
+  it("a deep rift run always drops at or above its floor", () => {
+    for (let i = 0; i < 400; i++) {
+      const m = drawModule(undefined, { minRarity: riftDropRarityFloor(7) });
+      expect(m.rarity, "a depth-7 rift drop must be mk5").toBe("mk5");
+    }
+    for (let i = 0; i < 400; i++) {
+      const m = drawModule(undefined, { minRarity: riftDropRarityFloor(4) });
+      expect(["mk4", "mk5"]).toContain(m.rarity);
+    }
+  });
+
+  it("market pricing is non-linear — each tier costs much more than the last power step justifies", () => {
+    const order = ["mk1", "mk2", "mk3"] as const;
+    for (let i = 0; i < order.length - 1; i++) {
+      const priceRatio = fabricatorCost(order[i + 1]) / fabricatorCost(order[i]);
+      const powerRatio = MODULE_RARITY_MULTIPLIER[order[i + 1]] / MODULE_RARITY_MULTIPLIER[order[i]];
+      expect(
+        priceRatio,
+        `${order[i]}→${order[i + 1]}: price should climb faster than power (a market shortcut must be a real sacrifice)`,
+      ).toBeGreaterThan(powerRatio * 1.5);
     }
   });
 });

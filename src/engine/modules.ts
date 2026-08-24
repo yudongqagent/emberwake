@@ -2,12 +2,33 @@ import type { ModuleInstance, ModuleRarity } from "../data/types";
 import { MODULE_DEFS, MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, moduleDefById } from "../data/modules";
 import { pickOne, randomId, rollQuality } from "./rng";
 
-function rollModuleRarity(baseRarity: ModuleRarity): ModuleRarity {
+/** Section B (2026-08-24): a draw is now bounded by where it came from. `maxRarity`
+ * caps the market (see MARKET_MAX_RARITY) so mk4/mk5 are unpurchasable at any
+ * price; `minRarity` is the rift's depth-scaled floor, which is what makes the
+ * Extradimensional Battlefield the actual source of top-tier gear rather than
+ * just a faster one. */
+function rollModuleRarity(
+  baseRarity: ModuleRarity,
+  opts: { minRarity?: ModuleRarity; maxRarity?: ModuleRarity } = {},
+): ModuleRarity {
   const baseIdx = MODULE_RARITY_ORDER.indexOf(baseRarity);
   const roll = Math.random();
   const bump = roll > 0.92 ? 2 : roll > 0.7 ? 1 : 0;
-  const idx = Math.min(MODULE_RARITY_ORDER.length - 1, baseIdx + bump);
-  return MODULE_RARITY_ORDER[idx];
+  const ceiling = opts.maxRarity ? MODULE_RARITY_ORDER.indexOf(opts.maxRarity) : MODULE_RARITY_ORDER.length - 1;
+  const floor = opts.minRarity ? MODULE_RARITY_ORDER.indexOf(opts.minRarity) : 0;
+  // Floor wins over ceiling if they conflict — a guaranteed rift reward should
+  // never be silently downgraded by a caller's cap.
+  const idx = Math.max(floor, Math.min(ceiling, baseIdx + bump));
+  return MODULE_RARITY_ORDER[Math.min(MODULE_RARITY_ORDER.length - 1, idx)];
+}
+
+/** How good a module the rift hands out, by the deepest wave cleared in the run.
+ * mk4 and mk5 exist ONLY here — no shop stocks them at any price. */
+export function riftDropRarityFloor(depth: number): ModuleRarity {
+  if (depth >= 7) return "mk5";
+  if (depth >= 4) return "mk4";
+  if (depth >= 2) return "mk3";
+  return "mk2";
 }
 
 /** A roll of 0 gives 88% of the rarity's baseline stat, 0.5 (neutral) gives exactly
@@ -20,9 +41,12 @@ export function qualityMultiplier(roll: number): number {
   return 0.88 + roll * 0.24;
 }
 
-export function drawModule(defId?: string): ModuleInstance {
+export function drawModule(
+  defId?: string,
+  opts: { minRarity?: ModuleRarity; maxRarity?: ModuleRarity } = {},
+): ModuleInstance {
   const def = defId ? moduleDefById(defId) : pickOne(MODULE_DEFS);
-  const rarity = rollModuleRarity(def.baseRarity);
+  const rarity = rollModuleRarity(def.baseRarity, opts);
   const traitCount = 1 + Math.floor(Math.random() * Math.min(3, def.traitPool.length));
   const traits = shuffle(def.traitPool.map((t) => t.id)).slice(0, traitCount);
   const quality = rollQuality(MODULE_RARITY_ORDER.indexOf(rarity), MODULE_RARITY_ORDER.length);

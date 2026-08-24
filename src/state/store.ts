@@ -2,7 +2,7 @@ import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
 import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId, ShipInstance } from "../data/types";
-import { fabricatorCost } from "../data/modules";
+import { fabricatorCost, MARKET_MAX_RARITY } from "../data/modules";
 import { hullClassById, ascensionRequirementsMet } from "../data/hullClasses";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
 import { LIONSHEART_EXPANSE } from "../data/galaxies/lionsheartExpanse";
@@ -23,7 +23,7 @@ import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
 import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
-import { drawModule } from "../engine/modules";
+import { drawModule, riftDropRarityFloor } from "../engine/modules";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -404,7 +404,9 @@ export function resolveCombatVictory(
   if (rewards.insight && insightBonus > 0) rewards.insight = Math.round(rewards.insight * (1 + insightBonus));
   grant(rewards);
   const dropChance = enc.isBoss ? BOSS_BONUS_DROP_CHANCE : BONUS_DROP_CHANCE;
-  const bonusDrop = Math.random() < dropChance ? drawModule() : null;
+  // Section B: ordinary combat drops are capped at the market ceiling too —
+  // otherwise farming trash encounters would quietly out-supply the rift.
+  const bonusDrop = Math.random() < dropChance ? drawModule(undefined, { maxRarity: MARKET_MAX_RARITY }) : null;
   if (bonusDrop) state.value = { ...state.value, modules: [...state.value.modules, bonusDrop] };
   let leveledUp = false;
   let newLevel = flagship.value?.level ?? 1;
@@ -479,6 +481,18 @@ export function giftCapturedShip(shipId: string) {
   };
   grant({ salvage: 150, sourcePoints: 80 });
   persist();
+}
+
+/** Section B (2026-08-24 brief): the Extradimensional Battlefield is the ONLY
+ * source of mk4/mk5 modules — the market caps at MARKET_MAX_RARITY and ordinary
+ * combat drops are capped there too. The floor scales with how deep the run got
+ * (see riftDropRarityFloor), so depth buys gear quality, not just resources. */
+export function grantRiftDrop(deepestDepth: number): ModuleInstance {
+  const drop = drawModule(undefined, { minRarity: riftDropRarityFloor(deepestDepth) });
+  state.value = { ...state.value, modules: [...state.value.modules, drop] };
+  playSfx("draw");
+  persist();
+  return drop;
 }
 
 export function repairFlagship() {

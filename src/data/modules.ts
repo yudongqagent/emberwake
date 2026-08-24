@@ -14,11 +14,22 @@ export const MODULE_RARITY_MULTIPLIER: Record<ModuleRarity, number> = {
   mk5: 3.04,
 };
 
-/** Fabricator showcase price for a rolled module — scales with rarity so a visibly
- * better module costs visibly more, instead of every rarity costing the same flat
- * fee (which made rarity invisible at the point of purchase). */
+/** Section B of the 2026-08-24 player brief: "市场上买的模组应该要么品质一般，
+ * 要么非常贵（非线性定价）；真正稀有的模组应该来自异空间战场".
+ *
+ * MARKET_MAX_RARITY caps what the Fabricator will ever stock. mk4/mk5 are simply
+ * not purchasable at any price — they come out of the Extradimensional
+ * Battlefield (see engine/modules.ts's riftDropRarityFloor), which is the whole
+ * point: the rift has to be the route to top-tier gear, not a faster route to it. */
+export const MARKET_MAX_RARITY: ModuleRarity = "mk3";
+
+/** Deliberately non-linear (~2.7x per tier, against a ~1.32x power step), so
+ * buying up the market's ceiling is a real economic sacrifice rather than "save a
+ * bit longer". Previously this was 25 × the power multiplier — near-linear, which
+ * made the best purchasable module a trivially obvious buy.
+ *   mk1 20 · mk2 54 · mk3 146   (mk4/mk5 priced but unreachable — see above) */
 export function fabricatorCost(rarity: ModuleRarity): number {
-  return Math.round(25 * MODULE_RARITY_MULTIPLIER[rarity]);
+  return Math.round(20 * Math.pow(2.7, MODULE_RARITY_ORDER.indexOf(rarity)));
 }
 
 export const MODULE_DEFS: ModuleDef[] = [

@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, repairFlagship } from "../../state/store";
 import { CREW_DEFS } from "../../data/crew";
-import { moduleDefById, fabricatorCost } from "../../data/modules";
+import { moduleDefById, fabricatorCost, MARKET_MAX_RARITY } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, drawModule } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon, HullIcon } from "../components/Icons";
@@ -208,8 +208,10 @@ function refreshCost(count: number): number {
   return 10 + count * 15;
 }
 
+/** Section B: the market never stocks mk4/mk5 at any price — those come out of
+ * the Extradimensional Battlefield only (see engine/modules.ts). */
 function generateModuleOffers(): ModuleInstance[] {
-  return Array.from({ length: OFFER_COUNT }, () => drawModule());
+  return Array.from({ length: OFFER_COUNT }, () => drawModule(undefined, { maxRarity: MARKET_MAX_RARITY }));
 }
 
 /** Same curated-showcase pattern as ShipwrightTab — see the comment there. */
