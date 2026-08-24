@@ -48,19 +48,6 @@ export const CHORUS_DEEP: GalaxyDef = {
           requiresFlag: "act6.dysonSphereSystem.cleared",
           data: { encounterId: "bountyChoirStragglers", respawnSeconds: 100, bounty: true },
         },
-        {
-          id: "thresholdRiftPocket",
-          kind: "riftPocket",
-          name: "Origin Rift Pocket",
-          x: 780,
-          y: 460,
-          radius: 55,
-          requiresFlag: "act6.dysonSphereSystem.cleared",
-          data: {
-            riftTiers: { shallow: "riftDiveShallow", deep: "riftDiveDeep", abyssal: "riftDiveAbyssal" },
-            respawnSeconds: 150,
-          },
-        },
       ],
     },
     {

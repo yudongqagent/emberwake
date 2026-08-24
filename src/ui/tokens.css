@@ -335,6 +335,13 @@ h1, h2, h3 {
 }
 
 /* --- Screen transition --- */
+/* Console panels slide up over the live world view rather than cutting to a new
+   page — see ui/components/ConsoleOverlay.tsx. */
+@keyframes consoleIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes screenIn {
   0% { opacity: 0; transform: translateY(6px) scale(0.995); }
   100% { opacity: 1; transform: translateY(0) scale(1); }

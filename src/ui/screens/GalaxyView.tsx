@@ -59,7 +59,17 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
           ))}
         </div>
       )}
-      <div style={{ padding: "0.75rem 1rem" }} className="title">{localizedGalaxyName(galaxy)}</div>
+      {/* Back to the system view. Needed once the bottom nav bar was removed
+          (2026-08-24): the galaxy map is a place you travel FROM, and without
+          this the only exit was committing to a jump. */}
+      <div style={{ padding: "0.75rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+        <div className="title" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {localizedGalaxyName(galaxy)}
+        </div>
+        <button className="btn ghost" style={{ flex: "none" }} onClick={() => onNavigate("system")}>
+          {t("galaxy.backToSystem")}
+        </button>
+      </div>
       {objective && (
         <div style={{ margin: "0 1rem 0.5rem", fontSize: "0.8rem", color: "var(--amber)" }}>
           {t("galaxy.nextAt", { label: objective.label, system: objective.systemName })}

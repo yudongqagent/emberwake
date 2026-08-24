@@ -32,24 +32,6 @@ export const FRACTURED_VEIL: GalaxyDef = {
           data: { yieldType: "salvage", remaining: 6, regenSeconds: 22 },
         },
         {
-          // Issue #10 (2026-08-23 playtest): was kind "wreck" — a passive resource
-          // pickup with no combat and no distinct identity from an ordinary salvage
-          // wreck. Now its own zone: approaching it opens a dive-depth choice that
-          // launches a Combat encounter against the riftEchoes faction (see
-          // docs/story/research-notes-extradimensional.md for the sourcing).
-          id: "veilsEdgeRiftPocket",
-          kind: "riftPocket",
-          name: "Origin Rift Pocket",
-          x: 780,
-          y: 180,
-          radius: 55,
-          requiresFlag: "act3.intoTheVeil.cleared",
-          data: {
-            riftTiers: { shallow: "riftDiveShallow", deep: "riftDiveDeep", abyssal: "riftDiveAbyssal" },
-            respawnSeconds: 150,
-          },
-        },
-        {
           id: "veilsEdgeStragglerBounty",
           kind: "patrol",
           name: "Swarm Straggler Patrol",
@@ -87,21 +69,6 @@ export const FRACTURED_VEIL: GalaxyDef = {
           y: 150,
           radius: 55,
           data: { yieldType: "alloy", remaining: 6, regenSeconds: 22 },
-        },
-        {
-          // See veilsEdgeRiftPocket above — same issue #10 conversion from a passive
-          // wreck to its own dive zone.
-          id: "chrysalisRiftPocket",
-          kind: "riftPocket",
-          name: "Origin Rift Pocket",
-          x: 780,
-          y: 460,
-          radius: 55,
-          requiresFlag: "act3.hiveSignal.cleared",
-          data: {
-            riftTiers: { shallow: "riftDiveShallow", deep: "riftDiveDeep", abyssal: "riftDiveAbyssal" },
-            respawnSeconds: 150,
-          },
         },
         {
           id: "chrysalisScavengerBounty",

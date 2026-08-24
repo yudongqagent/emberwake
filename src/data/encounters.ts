@@ -480,7 +480,22 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
   },
 ];
 
+/** Encounters generated at runtime rather than authored — currently only the
+ * Extradimensional Battlefield's waves (see data/rift.ts), whose whole point is
+ * that the opposition is rolled fresh every dive instead of read off a table.
+ * Kept deliberately small: one entry is registered per wave and replaced by the
+ * next, so this never grows into a second, invisible content source. */
+const runtimeEncounters = new Map<string, EncounterDef>();
+
+export function registerRuntimeEncounter(def: EncounterDef): EncounterDef {
+  runtimeEncounters.clear();
+  runtimeEncounters.set(def.id, def);
+  return def;
+}
+
 export function encounterById(id: string): EncounterDef {
+  const runtime = runtimeEncounters.get(id);
+  if (runtime) return runtime;
   const bounty = BOUNTY_ENCOUNTER_DEFS.find((e) => e.id === id);
   if (bounty) return bounty;
   const def = ENCOUNTER_DEFS.find((e) => e.id === id);

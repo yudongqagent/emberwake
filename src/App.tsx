@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { availableScene, completeScene, currentSystem } from "./state/store";
 import { ResourceBar } from "./ui/components/ResourceBar";
-import { NavIcon, SoundIcon } from "./ui/components/Icons";
+import { SoundIcon } from "./ui/components/Icons";
 import { Bridge } from "./ui/screens/Bridge";
 import { GalaxyView } from "./ui/screens/GalaxyView";
 import { SystemView } from "./ui/screens/SystemView";
@@ -12,24 +12,39 @@ import { Crew } from "./ui/screens/Crew";
 import { Ascension } from "./ui/screens/Ascension";
 import { StoryOverlay } from "./ui/screens/StoryOverlay";
 import { Combat } from "./ui/screens/Combat";
-import type { StoryScene } from "./data/types";
+import { RiftInterlude } from "./ui/screens/RiftInterlude";
+import type { StoryScene, ResourceType } from "./data/types";
+import { generateRiftWave, riftWaveHaul, addHaul } from "./data/rift";
+import { registerRuntimeEncounter } from "./data/encounters";
+import { grant } from "./state/store";
 import { setMuted, isMuted } from "./audio/engine";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
 import { t } from "./i18n/strings";
 import { language, setLanguage } from "./i18n/language";
+import { ShipConsole, type ConsolePanelId } from "./ui/components/ShipConsole";
+import { ConsoleOverlay } from "./ui/components/ConsoleOverlay";
 
-type Screen = "bridge" | "system" | "galaxy" | "ascension" | "fleet" | "modules" | "crew";
+/** Only the two WORLD views remain screens — the places the ship actually is.
+ * Every ship system is a console panel overlaid on the live world instead (see
+ * ShipConsole/ConsoleOverlay), which is what let the bottom tab bar go away. */
+type Screen = "system" | "galaxy";
 
-const NAV_ITEMS: { id: Screen; labelKey: string }[] = [
-  { id: "bridge", labelKey: "nav.bridge" },
-  { id: "system", labelKey: "nav.system" },
-  { id: "galaxy", labelKey: "nav.galaxy" },
-  { id: "ascension", labelKey: "nav.ascension" },
-  { id: "fleet", labelKey: "nav.fleet" },
-  { id: "modules", labelKey: "nav.modules" },
-  { id: "crew", labelKey: "nav.crew" },
-];
+const PANEL_ACCENT: Record<ConsolePanelId, string> = {
+  bridge: "var(--cyan)",
+  ascension: "var(--green)",
+  modules: "var(--amber)",
+  crew: "var(--violet)",
+  fleet: "var(--text-mid)",
+};
+
+const PANEL_TITLE: Record<ConsolePanelId, string> = {
+  bridge: "nav.bridge",
+  ascension: "ascension.title",
+  modules: "nav.modules",
+  crew: "crew.roster",
+  fleet: "fleet.hangar",
+};
 
 interface PendingCombat {
   encounterId: string;
@@ -41,11 +56,40 @@ interface PendingStoryEncounter {
   encounterId: string;
 }
 
+/** An in-progress Extradimensional Battlefield run (see data/rift.ts). Held in
+ * component state, not the save: a run is a single sitting, and its haul is
+ * explicitly provisional until extraction — persisting a half-finished dive
+ * across reloads would quietly hand players a way to bank a losing run. */
+interface RiftRun {
+  depth: number;
+  haul: Partial<Record<ResourceType, number>>;
+  /** Set between waves, while the player decides to push deeper or pull out. */
+  awaitingChoice: boolean;
+}
+
 export function App() {
   const [screen, setScreen] = useState<Screen>("system");
+  const [panel, setPanel] = useState<ConsolePanelId | null>(null);
   const [docked, setDocked] = useState(false);
   const [combat, setCombat] = useState<PendingCombat | PendingStoryEncounter | null>(null);
   const [muted, setMutedState] = useState(isMuted());
+  const [riftRun, setRiftRun] = useState<RiftRun | null>(null);
+
+  function launchRiftWave(depth: number) {
+    const wave = registerRuntimeEncounter(generateRiftWave(depth));
+    setCombat({ encounterId: wave.id });
+  }
+
+  function enterRift() {
+    setRiftRun({ depth: 1, haul: {}, awaitingChoice: false });
+    launchRiftWave(1);
+  }
+
+  /** Banks the run's haul and ends it. */
+  function extractFromRift() {
+    if (riftRun) grant(riftRun.haul);
+    setRiftRun(null);
+  }
 
   const scene = availableScene(currentSystem.value.id);
 
@@ -94,6 +138,24 @@ export function App() {
     </div>
   );
 
+  if (riftRun && riftRun.awaitingChoice && !combat) {
+    return (
+      <ErrorBoundary label={t("rift.title")}>
+        <RiftInterlude
+          depth={riftRun.depth}
+          haul={riftRun.haul}
+          onDiveDeeper={() => {
+            const next = riftRun.depth + 1;
+            setRiftRun({ ...riftRun, depth: next, awaitingChoice: false });
+            launchRiftWave(next);
+          }}
+          onExtract={extractFromRift}
+        />
+        <ErrorToast />
+      </ErrorBoundary>
+    );
+  }
+
   if (combat) {
     const isPoiCombat = "poiId" in combat;
     return (
@@ -102,7 +164,19 @@ export function App() {
           encounterId={combat.encounterId}
           poiId={isPoiCombat ? combat.poiId : null}
           victoryFlag={isPoiCombat ? combat.victoryFlag : undefined}
-          onResolve={() => setCombat(null)}
+          onResolve={(result) => {
+            setCombat(null);
+            if (!riftRun) return;
+            if (result === "defeat") {
+              // The whole provisional haul is lost — that risk is what makes
+              // "one more wave" an actual decision rather than free money.
+              setRiftRun(null);
+              return;
+            }
+            setRiftRun((run) =>
+              run ? { ...run, haul: addHaul(run.haul, riftWaveHaul(run.depth)), awaitingChoice: true } : run,
+            );
+          }}
         />
         <ErrorToast />
       </ErrorBoundary>
@@ -113,10 +187,11 @@ export function App() {
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {navBar}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+        {/* The world view. It stays mounted under every console panel — opening
+            a ship system no longer swaps the page out from under the player. */}
         <div key={screen} className="screen-enter" style={{ position: "absolute", inset: 0 }}>
-          <ErrorBoundary label={t(NAV_ITEMS.find((n) => n.id === screen)?.labelKey ?? "nav.system")}>
-            {screen === "bridge" && <Bridge onNavigate={(s) => setScreen(s as Screen)} />}
-            {screen === "galaxy" && <GalaxyView onNavigate={(s) => setScreen(s as Screen)} />}
+          <ErrorBoundary label={t(screen === "galaxy" ? "nav.galaxy" : "nav.system")}>
+            {screen === "galaxy" && <GalaxyView onNavigate={() => setScreen("system")} />}
             {screen === "system" && (
               <SystemView
                 onNavigate={(s) => setScreen(s as Screen)}
@@ -124,12 +199,41 @@ export function App() {
                 onEngage={(encounterId, poiId, victoryFlag) => setCombat({ encounterId, poiId, victoryFlag })}
               />
             )}
-            {screen === "ascension" && <Ascension />}
-            {screen === "fleet" && <Fleet />}
-            {screen === "modules" && <Modules />}
-            {screen === "crew" && <Crew />}
           </ErrorBoundary>
         </div>
+
+        {/* In-world console cluster, replacing the old bottom tab bar. Hidden
+            while another overlay already owns the screen, so panels never stack. */}
+        {!docked && !scene && (
+          <ShipConsole active={panel} onSelect={(id) => setPanel(panel === id ? null : id)} />
+        )}
+
+        {panel && (
+          <ErrorBoundary label={t(PANEL_TITLE[panel])}>
+            <ConsoleOverlay
+              title={t(PANEL_TITLE[panel])}
+              accent={PANEL_ACCENT[panel]}
+              onClose={() => setPanel(null)}
+            >
+              {panel === "bridge" && (
+                <Bridge
+                  onNavigate={(s) => {
+                    // The bridge's own shortcuts now open console panels, except
+                    // the galaxy map, which is a real place to travel to.
+                    if (s === "galaxy") { setPanel(null); setScreen("galaxy"); }
+                    else setPanel(s as ConsolePanelId);
+                  }}
+                  onEnterRift={() => { setPanel(null); enterRift(); }}
+                />
+              )}
+              {panel === "ascension" && <Ascension />}
+              {panel === "fleet" && <Fleet />}
+              {panel === "modules" && <Modules />}
+              {panel === "crew" && <Crew />}
+            </ConsoleOverlay>
+          </ErrorBoundary>
+        )}
+
         {docked && (
           <ErrorBoundary label={t("station.title")}>
             <StationPanel onClose={() => setDocked(false)} />
@@ -145,51 +249,6 @@ export function App() {
         )}
         <ErrorToast />
       </div>
-      <nav
-        style={{
-          display: "flex",
-          borderTop: "1px solid var(--line)",
-          background: "rgba(5,8,16,0.65)",
-          backdropFilter: "blur(8px)",
-          paddingBottom: "var(--safe-bottom)",
-          paddingLeft: "var(--safe-left)",
-          paddingRight: "var(--safe-right)",
-          position: "relative",
-          zIndex: 2,
-        }}
-      >
-        {NAV_ITEMS.map(({ id, labelKey }) => {
-          const active = screen === id;
-          return (
-            <button
-              key={id}
-              onClick={() => setScreen(id)}
-              style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "0.25rem",
-                padding: "0.55rem 0 0.45rem",
-                background: "transparent",
-                border: "none",
-                borderTop: active ? "2px solid var(--cyan)" : "2px solid transparent",
-                color: active ? "var(--cyan)" : "var(--text-dim)",
-                fontFamily: "var(--font-display)",
-                fontSize: "0.6rem",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.04em",
-                cursor: "pointer",
-                transition: "color 150ms ease",
-              }}
-            >
-              <NavIcon name={id} size={19} color={active ? "var(--cyan)" : "currentColor"} />
-              {t(labelKey)}
-            </button>
-          );
-        })}
-      </nav>
     </div>
   );
 }

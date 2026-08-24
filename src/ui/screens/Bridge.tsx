@@ -10,7 +10,7 @@ import { BridgeViewscreen } from "../components/BridgeViewscreen";
 import { t } from "../../i18n/strings";
 import { localizedCrewName, localizedHullClassDisplay, localizedSystemName, localizedGalaxyName } from "../../i18n/data";
 
-export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void }) {
+export function Bridge({ onNavigate, onEnterRift }: { onNavigate: (screen: string) => void; onEnterRift: () => void }) {
   const ship = flagship.value;
   const hullDef = ship ? hullClassById(ship.hullClass) : null;
   const crewCount = state.value.crew.length;
@@ -55,6 +55,45 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
           </button>
         </div>
       )}
+
+      {/* 异空间战场 — the Extradimensional Battlefield.
+          Corrected 2026-08-24: this is the Cinder's POWER, invoked from the
+          command chair at will, not a location on the star map. It deliberately
+          sits on the Bridge (the hub for what Kade/the ship can DO) rather than
+          in the nav rail alongside places you travel to. */}
+      <button
+        className="panel accent scanline"
+        onClick={() => { playSfx("jump"); onEnterRift(); }}
+        style={{
+          padding: "1.05rem 1.1rem", textAlign: "left", cursor: "pointer", width: "100%",
+          border: "1px solid var(--violet)", background: "rgba(185,140,255,0.07)",
+          ["--accent" as any]: "var(--violet)", display: "block",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ minWidth: 0 }}>
+            <div className="eyebrow" style={{ color: "var(--violet)" }}>{t("rift.power")}</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 800, marginTop: "0.15rem", fontFamily: "var(--font-display)" }}>
+              {t("rift.title")}
+            </div>
+            <div style={{ color: "var(--text-mid)", fontSize: "0.78rem", marginTop: "0.25rem", lineHeight: 1.45 }}>
+              {t("rift.bridgeBlurb")}
+            </div>
+          </div>
+          <div
+            style={{
+              width: 46, height: 46, borderRadius: "50%", flex: "none",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid var(--violet)",
+              background: "radial-gradient(circle, rgba(185,140,255,0.35), transparent 70%)",
+              color: "var(--violet)", fontSize: "1.3rem",
+            }}
+            aria-hidden="true"
+          >
+            ◈
+          </div>
+        </div>
+      </button>
 
       {ship && hullDef && (
         <div className="panel" style={{ padding: "1.1rem" }}>
