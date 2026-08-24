@@ -9,6 +9,7 @@ import { SWANREACH_COMBINE } from "../../data/galaxies/swanreachCombine";
 import { FRACTURED_VEIL } from "../../data/galaxies/fracturedVeil";
 import { DEEP_ORIGIN } from "../../data/galaxies/deepOrigin";
 import { UMBRAL_LINE } from "../../data/galaxies/umbralLine";
+import { CHORUS_DEEP } from "../../data/galaxies/chorusDeep";
 import { MODULES_ZH } from "./modules";
 import { CREW_ZH } from "./crew";
 import { NAMED_SHIPS_ZH } from "./namedShips";
@@ -79,7 +80,7 @@ describe("module/crew/named-ship translation overlays stay in sync with English 
   });
 
   it("every galaxy, system, and POI has a Chinese name", () => {
-    const galaxies = [BAUHINIA_REACH, LIONSHEART_EXPANSE, SWANREACH_COMBINE, FRACTURED_VEIL, DEEP_ORIGIN, UMBRAL_LINE];
+    const galaxies = [BAUHINIA_REACH, LIONSHEART_EXPANSE, SWANREACH_COMBINE, FRACTURED_VEIL, DEEP_ORIGIN, UMBRAL_LINE, CHORUS_DEEP];
     for (const galaxy of galaxies) {
       expect(GALAXY_NAMES_ZH[galaxy.id], `galaxy "${galaxy.id}" has no Chinese name`).toBeDefined();
       for (const system of galaxy.systems) {

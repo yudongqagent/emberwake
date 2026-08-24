@@ -13,7 +13,8 @@ export type FactionId =
   | "swarm"
   | "constructs"
   | "hollow"
-  | "riftEchoes";
+  | "riftEchoes"
+  | "choir";
 
 export type HullClassId =
   | "corvette"
@@ -26,7 +27,9 @@ export type HullClassId =
   | "dreadnought"
   | "corsair"
   | "sovereign"
-  | "aegis";
+  | "aegis"
+  | "anthem"
+  | "sanctum";
 
 export type ShipRarity =
   | "salvage"

@@ -10,6 +10,7 @@ export const GALAXY_NAMES_ZH: Record<string, string> = {
   fracturedVeil: "破碎帷幕",
   deepOrigin: "深源",
   umbralLine: "暗影线",
+  chorusDeep: "合唱深域",
 };
 
 export const SYSTEM_NAMES_ZH: Record<string, string> = {
@@ -30,6 +31,8 @@ export const SYSTEM_NAMES_ZH: Record<string, string> = {
   firstFleetGraveyard: "初代舰队坟场",
   constructAnchorZero: "构装体零号锚点",
   umbralLine: "暗影线",
+  choirsThreshold: "合唱门阶",
+  dysonChoir: "戴森合唱环",
 };
 
 export const POI_NAMES_ZH: Record<string, string> = {
@@ -94,4 +97,13 @@ export const POI_NAMES_ZH: Record<string, string> = {
   umbralEchoBounty: "虚无回响巡逻队",
   hollowCoreFinalBattle: "「虚无」的聚集之地",
   hollowsWake: "「虚无」的尾迹",
+  // Chorus Deep
+  thresholdDebrisField: "门阶碎片场",
+  dysonSphereFirstContactPoi: "圣咏哨兵战线",
+  choirStragglerBounty: "圣咏散声诗节",
+  thresholdRiftPocket: "本源裂隙口袋",
+  choirDefenseGridPoi: "传令官的防御圣咏团",
+  dysonCoreDebrisRing: "戴森核心残骸环",
+  civilizationDisqualifiedPoi: "执礼者，飞升之姿",
+  choirArchiveWreck: "圣咏团的静默档案室",
 };

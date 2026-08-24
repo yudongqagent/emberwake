@@ -40,6 +40,11 @@ export const CREW_ZH: Record<string, CrewZh> = {
     passive: "全舰队最大船体+15%。",
     active: "构装体超驰 — 抵消一回合内的所有受到伤害。",
   },
+  velaCantor: {
+    name: "薇拉，圣咏团最后的领唱者",
+    passive: "全舰队从重大首领战获得的本源精华+12%。",
+    active: "断章破音 — 对所有存活敌人造成伤害，并打破圣咏团的共同共鸣。",
+  },
   recruitHelm: {
     name: "新兵",
     passive: "全舰队闪避+5%。",

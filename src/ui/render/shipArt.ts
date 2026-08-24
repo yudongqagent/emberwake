@@ -9,6 +9,7 @@ export const FACTION_HULL_COLOR: Record<string, string> = {
   constructs: "#9fb8cc",
   hollow: "#e8d9ff",
   riftEchoes: "#b478ff",
+  choir: "#ffd66b",
 };
 
 /** Deterministic 0..1 hash so per-entity "random" art (rock shapes, tumble phase) stays
@@ -346,6 +347,46 @@ export function drawEnemyHull(ctx: CanvasRenderingContext2D, faction: FactionId 
     ctx.beginPath();
     ctx.arc(0, 0, 2, 0, Math.PI * 2);
     ctx.fill();
+  } else if (faction === "choir") {
+    // Issue: player feedback (2026-08-23) — Act VI's Choir. Three concentric rings,
+    // each pulsing at its own slightly offset frequency (a visual chord, not a
+    // single tone) around a lens-shaped core — harmonics made visible, distinct
+    // from every other faction's silhouette-based identity.
+    const rings = [
+      { baseR: 8, freq: 260, phase: 0 },
+      { baseR: 13, freq: 340, phase: 1.4 },
+      { baseR: 18, freq: 420, phase: 2.8 },
+    ];
+    for (const r of rings) {
+      const pulse = 0.5 + 0.5 * Math.sin(now / r.freq + r.phase);
+      ctx.save();
+      ctx.globalAlpha = 0.25 + pulse * 0.35;
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(0, 0, r.baseR + pulse * 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // lens-shaped core "voice"
+    const coreGrad = ctx.createLinearGradient(-7, 0, 7, 0);
+    coreGrad.addColorStop(0, "#7a5c1a");
+    coreGrad.addColorStop(0.5, color);
+    coreGrad.addColorStop(1, "#fff6d9");
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.moveTo(-8, 0);
+    ctx.quadraticCurveTo(0, -6, 8, 0);
+    ctx.quadraticCurveTo(0, 6, -8, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
   } else {
     // bauhinia / swanreach / default: utilitarian octagon hull with amber trim
     const grad = ctx.createLinearGradient(-15, 0, 15, 0);

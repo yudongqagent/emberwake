@@ -37,6 +37,10 @@ export const ENCOUNTER_NAMES_ZH: Record<string, string> = {
   bountyRiftScavengers: "裂隙拾荒无人机",
   bountyConstructOutriders: "构装体游骑兵巡逻队",
   bountyHollowEchoes: "虚无回响巡逻队",
+  dysonSphereFirstContact: "门阶前的圣咏哨兵",
+  choirDefenseGrid: "传令官的防御圣咏",
+  civilizationDisqualifiedFinale: "执礼者的终章（第六幕终章）",
+  bountyChoirStragglers: "圣咏散声诗节",
 };
 
 export const ENEMY_NAMES_ZH: Record<string, string> = {
@@ -70,4 +74,8 @@ export const ENEMY_NAMES_ZH: Record<string, string> = {
   "Swarm Warrior": "虫群战士",
   "The Broodmother": "蜂后母体",
   "The Hollow": "「虚无」",
+  "Choir Acolyte": "圣咏见习者",
+  "Choir Cantor": "圣咏领唱者",
+  "Choir Herald": "圣咏传令官",
+  "The Conductor": "执礼者",
 };

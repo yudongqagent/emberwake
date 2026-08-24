@@ -58,6 +58,7 @@ const FACTION_PREFERRED_RANGE: Partial<Record<FactionId, RangeBand>> = {
   hollow: "mid",
   lionsheart: "mid",
   riftEchoes: "mid",
+  choir: "mid",
 };
 const RANGE_TARGET_DISTANCE: Record<RangeBand, number> = { close: 100, mid: 250, long: 420 };
 /** World-units/sec an enemy closes/opens distance at — deliberately slower than the
@@ -236,6 +237,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // computePowerCapacity) — leveling up makes the ultimate hit harder too.
   const [emberNovaCharge, setEmberNovaCharge] = useState(0);
   const EMBER_NOVA_MAX = 100;
+  // Act VI: the Choir's doctrine. Every landed Choir hit builds a shared "chorus" —
+  // at full resonance every living Choir enemy fires an empowered strike in the
+  // same instant, then the chorus resets. Killing enemies before it fills is the
+  // real counterplay (fewer voices, a weaker chord) — see combatTick and
+  // unleashChoralStrike. Only ever moves for encounter.faction === "choir".
+  const [choralResonance, setChoralResonance] = useState(0);
+  const CHORAL_RESONANCE_MAX = 100;
+  const choralResonanceRef = useRef(0);
+  choralResonanceRef.current = choralResonance;
   // Shared with the physics loop below so Displacement Charge (fired from
   // fireModuleImpl) can shove an enemy's chase position directly, not just read it.
   const enemyChaseXRef = useRef<number[]>([]);
@@ -627,10 +637,53 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // turn" — now evaluated per individual attack event instead of per batch,
       // since batches no longer exist. Any hit landed resets the streak to zero.
       if (hasMomentum) setUnhitStreak((s) => (dealt > 0 ? 0 : s + 1));
+      // Choral Resonance: every landed Choir hit builds the shared chorus, whether
+      // or not it was this particular attack that lands the killing blow on it —
+      // see unleashChoralStrike for what happens at full resonance.
+      if (dealt > 0 && encounter.faction === "choir") {
+        setChoralResonance((c) => {
+          const next = Math.min(CHORAL_RESONANCE_MAX, c + 18);
+          if (next >= CHORAL_RESONANCE_MAX) setTimeout(() => unleashChoralStrike(), 0);
+          return next;
+        });
+      }
     });
 
     if (charged) setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, charging: false } : e)));
     if (reflectDmg > 0) setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, hull: Math.max(0, e.hull - reflectDmg) } : e)));
+  }
+
+  /** Act VI: the Choir's doctrine at full Choral Resonance — every living Choir
+   * enemy strikes in the same instant. Deliberately simple and unmitigated beyond
+   * armor (same design choice as the player's own Ember Nova: a guaranteed, flat
+   * AoE rather than routing through every individual defensive mechanic's edge
+   * cases), so it reads as one unmistakable "the chord landed" moment. Fewer
+   * living Choir enemies means fewer voices in the strike — the real incentive to
+   * kill something before the chorus fills instead of spreading damage evenly. */
+  function unleashChoralStrike() {
+    if (statusRef.current !== "active") return;
+    const currentEnemies = enemiesRef.current;
+    if (!currentEnemies.some((e) => e.hull > 0)) return;
+    let total = 0;
+    currentEnemies.forEach((enemy, i) => {
+      if (enemy.hull <= 0) return;
+      const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, currentEnemies.length);
+      const raw = Math.round(enemy.damage * 1.6);
+      const dealt = Math.max(1, raw - armorBlock);
+      total += dealt;
+      fireProjectile(pos, arenaRef.current.player, "#ffd66b", () => {
+        spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,214,107", 14, 110);
+        addPopup("player", `-${dealt}`, "#ffd66b");
+      }, 1.4);
+    });
+    pushLog(t("combat.log.choralStrike", { dmg: total }));
+    playSfx("alarm");
+    shakeRef.current = 18;
+    triggerHitStop(110);
+    setChoralResonance(0);
+    setTimeout(() => {
+      setPlayerHull((prev) => Math.max(0, Math.min(maxHull, prev - total)));
+    }, PROJECTILE_DURATION * 1000 + 20);
   }
 
   /** Issue #8: the real-time heartbeat replacing the old turn drum. Runs on a fixed
@@ -1085,6 +1138,21 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         nextEnemies = enemies.map((e, i) => (i === targetIdx ? { ...e, evasionDebuffSec: 2 * TURN_SECONDS } : e));
         pushLog(t("combat.log.targetLock", { target: target.name }));
       }
+    } else if (abilityId === "chorusBreak") {
+      // Vela, Last Cantor of the Choir: the only ability that reaches into another
+      // faction's own mechanic directly — silences Choral Resonance instead of just
+      // outdamaging it, on top of a real hit for using it before the chord fills.
+      const dmg = Math.round(capacity * 0.3);
+      nextEnemies = enemies.map((e, i) => {
+        if (e.hull <= 0) return e;
+        const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
+        spawnBurst(pos.x, pos.y, "180,220,255", 10, 100);
+        addPopup(i, `-${dmg}`, "#8ff3ff");
+        return { ...e, hull: Math.max(0, e.hull - dmg) };
+      });
+      setChoralResonance(0);
+      pushLog(t("combat.log.chorusBreak", { dmg }));
+      playSfx("laser");
     }
     const cooldownValue = crewDefById(state.value.crew.find((c) => c.id === crewId)!.defId).activeCooldown;
     setCrewCooldowns((prev) => ({ ...prev, [crewId]: cooldownValue * TURN_SECONDS }));
@@ -1363,6 +1431,26 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           {" · "}{t("combat.power")} {capacity}
         </span>
       </div>
+
+      {encounter.faction === "choir" && (
+        <div style={{ padding: "0 1rem 0.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.66rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>
+            <span>{t("combat.choralResonance")}</span>
+            <span>{choralResonance}/{CHORAL_RESONANCE_MAX}</span>
+          </div>
+          <div style={{ height: 5, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${choralResonance}%`,
+                background: choralResonance >= 80 ? "var(--red)" : "#ffd66b",
+                boxShadow: choralResonance >= 80 ? "0 0 8px var(--red)" : "none",
+                transition: "width 150ms ease",
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {(guaranteedCrit || riposteArmed || shieldSec > 0 || alphaStrikeArmed || phaseShiftReady || fortifySec > 0 || bloodscentSec > 0) && (
         <div style={{ display: "flex", gap: "0.4rem", padding: "0 1rem 0.4rem", flexWrap: "wrap" }}>
@@ -1673,6 +1761,7 @@ const FACTION_HULL_COLOR_RGB: Record<string, string> = {
   constructs: "159,184,204",
   hollow: "232,217,255",
   riftEchoes: "180,120,255",
+  choir: "255,214,107",
 };
 
 function drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]) {

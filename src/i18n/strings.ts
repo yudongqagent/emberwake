@@ -141,6 +141,9 @@ const EN: StringTable = {
   "combat.log.enemyMiss": "{enemy} misses.",
   "combat.log.riftFlickerOut": "{enemy} flickers out of phase — attacks will pass through it.",
   "combat.log.riftFlickerIn": "{enemy} phases back into reach.",
+  "combat.log.choralStrike": "The chord lands — every Choir voice strikes at once for {dmg} total damage.",
+  "combat.log.chorusBreak": "Chorus Break silences the chord and deals {dmg} damage to every enemy.",
+  "combat.choralResonance": "Choral Resonance",
 
   // --- System / Galaxy ---
   "system.next": "▸ Next: {label} — jump to {system}",
@@ -393,6 +396,9 @@ const ZH: StringTable = {
   "combat.log.enemyMiss": "{enemy}未能命中。",
   "combat.log.riftFlickerOut": "{enemy}闪烁着脱离了相位——攻击将无法命中它。",
   "combat.log.riftFlickerIn": "{enemy}重新回到了可攻击范围。",
+  "combat.log.choralStrike": "和弦落下——圣咏团所有的声部同时出击，共造成{dmg}点伤害。",
+  "combat.log.chorusBreak": "断章破音打破了和弦，对所有敌人造成{dmg}点伤害。",
+  "combat.choralResonance": "圣咏共鸣",
 
   // --- 星域 / 星系 ---
   "system.next": "▸ 下一步：{label}——跳转至{system}",

@@ -4,11 +4,15 @@ import { ACT2_SCENES } from "../../data/story/act2";
 import { ACT3_SCENES } from "../../data/story/act3";
 import { ACT4_SCENES } from "../../data/story/act4";
 import { ACT5_SCENES } from "../../data/story/act5";
+import { ACT6_SCENES } from "../../data/story/act6";
 import { ACT1_SCENES_ZH } from "./act1";
 import { ACT2_SCENES_ZH } from "./act2";
 import { ACT3_SCENES_ZH } from "./act3";
 import { ACT4_SCENES_ZH } from "./act4";
 import { ACT5_SCENES_ZH } from "./act5";
+import { ACT6_SCENES_ZH } from "./act6";
+import { localizedScene } from "./index";
+import { language } from "../language";
 
 const ACTS = [
   { en: ACT1_SCENES, zh: ACT1_SCENES_ZH, name: "act1" },
@@ -16,6 +20,7 @@ const ACTS = [
   { en: ACT3_SCENES, zh: ACT3_SCENES_ZH, name: "act3" },
   { en: ACT4_SCENES, zh: ACT4_SCENES_ZH, name: "act4" },
   { en: ACT5_SCENES, zh: ACT5_SCENES_ZH, name: "act5" },
+  { en: ACT6_SCENES, zh: ACT6_SCENES_ZH, name: "act6" },
 ];
 
 // Issue #11: caught a real bug this way — a translated `choices` array that drops
@@ -48,6 +53,36 @@ describe("story translation overlays stay structurally in sync with the English 
         const overlay = zh[scene.id];
         if (!overlay) continue;
         expect(overlay.lines.length, `${name}/${scene.id}: line count mismatch`).toBe(scene.lines.length);
+      }
+    });
+
+    it(`${name}: every English scene has a Chinese translation (no silently-skipped scenes)`, () => {
+      for (const scene of en) {
+        expect(zh[scene.id], `${name}/${scene.id}: no Chinese translation at all`).toBeDefined();
+      }
+    });
+
+    // Issue #11 (2026-08-23): caught a second real bug this way — act6.ts's
+    // translation table existed, was fully correct, and passed every check above,
+    // but was never spread into story/index.ts's SCENE_OVERLAYS registry, so
+    // localizedScene() couldn't actually reach it at runtime — every Act VI scene
+    // silently rendered in English despite the translation file being complete.
+    // Only live-in-browser verification caught it; this test exists so the next
+    // act can't repeat the same mistake undetected.
+    it(`${name}: localizedScene() actually resolves the translation at runtime, not just the raw data table`, () => {
+      const prevLang = language.value;
+      language.value = "zh";
+      try {
+        for (const scene of en) {
+          const overlay = zh[scene.id];
+          if (!overlay?.chapterTitle) continue;
+          expect(
+            localizedScene(scene).chapterTitle,
+            `${name}/${scene.id}: translation data exists but localizedScene() didn't apply it — is this act's _ZH table spread into SCENE_OVERLAYS in story/index.ts?`,
+          ).toBe(overlay.chapterTitle);
+        }
+      } finally {
+        language.value = prevLang;
       }
     });
   }

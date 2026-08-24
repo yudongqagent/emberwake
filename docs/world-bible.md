@@ -42,6 +42,7 @@ agenda.
 | **Fractured Veil** | Chitin Swarm territory. Unstable pocket-dimension Rifts. | Act III |
 | **Deep Origin** | Ancient, dormant Mayeth Construct ruins and megastructures. | Act IV |
 | **Umbral Line** | Convergence zone where the true endgame threat stirs. | Act V |
+| **Chorus Deep** | A fully intact Dyson-sphere-scale megastructure, the Choir's last works. | Act VI |
 
 Each galaxy is a graph of systems connected by jump lanes. Within a system the player
 flies freely in continuous 2D space among planets, stations, asteroid/mining fields,
@@ -61,6 +62,8 @@ derelicts, and patrols — see `docs/architecture.md` for the map model.
 - **Deep Origin**: the First Fleet Graveyard (ruins entry), Construct Anchor Zero
   (Mayeth core facility).
 - **Umbral Line**: the Umbral Line itself — one vast convergence zone, finale setting.
+- **Chorus Deep**: Choir's Threshold (sentinel line, entry point), the Dyson Choir
+  (the megastructure's interior — the Conductor's seat).
 
 ## Factions
 
@@ -101,6 +104,15 @@ derelicts, and patrols — see `docs/architecture.md` for the map model.
   periodically diving into alternate space to harvest Source Points and grow stronger —
   is directly sourced from the novel; the Rift Echoes themselves are original invention
   layered on that confirmed mechanic, not sourced.
+- **The Choir** — an extinct civilization that built Chorus Deep's Dyson sphere to be
+  heard and judged worthy by something. Failed that judgment; its last intelligence
+  (**the Conductor**) still runs the failed verdict on a loop. The Hollow's victim,
+  not its cousin — the Cinder's working theory (Act VI) is that the Hollow began as a
+  standard the Choir was measured against, not a weapon. Per
+  `docs/story/research-notes-act6.md`, the ch.380-382 title sequence ("Dyson Sphere
+  System!" / "Gospel Civilization!" / "Civilization Disqualified!") is confirmed; the
+  Choir itself, the Conductor, and the causal link to the Hollow are original
+  invention layered on that confirmed sequence, not sourced.
 
 ## Named crew (story-unlocked)
 
@@ -113,6 +125,7 @@ derelicts, and patrols — see `docs/architecture.md` for the map model.
 | **Quartermaster Priya Osei** | Trade/Support | Act II, Ch.2 | Swanreach Combine. Runs the economics of the crew's operation. |
 | **Kessa "Tiger Shark" Vray** | Gunner/Raider | Act III, Ch.3 (recruitable) | Redemption arc. Optional recruit depending on earlier choices toward the Reavers. |
 | **Unit 7-Requiem** | Engineer/Unique | Act IV, Ch.2 | Rogue Mayeth Construct AI. Legend-tier unique crew; heavy lore payload tied to the Cinder's reveal. |
+| **Vela, Last Cantor of the Choir** | Tactician/Unique | Act VI, Ch.5 (recruitable) | Choir survivor/defector. Legend-tier; her active is the only ability in the game that reaches into another faction's own mechanic (Choral Resonance) directly. |
 
 ## Resource glossary
 
@@ -130,10 +143,12 @@ derelicts, and patrols — see `docs/architecture.md` for the map model.
 ## Ship Hull Classes
 
 Corvette-class (护卫舰) → Destroyer-class (驱逐舰) → Cruiser-class (巡洋舰) →
-Battleship-class (战列舰) → Dreadnought-class (歼星舰) → Sovereign-class (主宰舰). Each
-class jump requires both Origin Essence and a story-flagged refit event — see
-`docs/systems-design.md` for slot/stat details and `docs/story/` for exactly which
-chapter unlocks which class.
+Battleship-class (战列舰) → Dreadnought-class (歼星舰) → Sovereign-class (主宰舰) →
+Anthem-class (颂歌舰). Each class jump requires both Origin Essence and a
+story-flagged refit event — see `docs/systems-design.md` for slot/stat details and
+`docs/story/` for exactly which chapter unlocks which class. Anthem-class (order 6,
+Act VI) is reverse-engineered Choir hull tech, not a Mayeth/Principality design —
+see `docs/story/act-6-chorus-deep.md`.
 
 Ships themselves are drawn (like crew) and every drawn ship is a unique instance with
 its own rolled Rarity and hidden Aptitude — see `docs/systems-design.md` for the full

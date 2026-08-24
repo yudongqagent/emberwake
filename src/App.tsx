@@ -134,7 +134,10 @@ export function App() {
         )}
         {scene && !docked && (
           <ErrorBoundary label={t("story.title")}>
-            <StoryOverlay scene={scene} onComplete={handleSceneComplete} />
+            {/* key forces a full remount on scene change — otherwise lineIdx/
+                showChoices carry over from the previous scene, and a transition
+                into a shorter scene reads past the end of its lines array. */}
+            <StoryOverlay key={scene.id} scene={scene} onComplete={handleSceneComplete} />
           </ErrorBoundary>
         )}
         <ErrorToast />

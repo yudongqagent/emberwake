@@ -74,6 +74,18 @@ export const CREW_DEFS: CrewDef[] = [
     unlockFlag: "act4.ghostProtocol.cleared",
   },
   {
+    id: "velaCantor",
+    name: "Vela, Last Cantor of the Choir",
+    role: "tactician",
+    rarity: "legend",
+    named: true,
+    passive: "+12% Origin Essence from major boss fights, fleet-wide.",
+    active: "Chorus Break — deals damage to every living enemy and resets the Choir's collective resonance.",
+    abilityId: "chorusBreak",
+    activeCooldown: 5,
+    unlockFlag: "act6.dysonSphereSystem.cleared",
+  },
+  {
     id: "recruitHelm",
     name: "Recruit",
     role: "helm",

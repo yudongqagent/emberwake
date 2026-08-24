@@ -307,6 +307,52 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     rewards: { salvage: 800, sourcePoints: 500, alloy: 500, originEssence: 500 },
     xp: 700,
   },
+
+  // --- Act VI: Chorus Deep — the Choir (harmonic doctrine: see Choral Resonance in
+  // Combat.tsx). Per docs/story/research-notes-act6.md, grounded in the confirmed
+  // ch.380-382 arc ("Dyson Sphere System!" / "Gospel Civilization!" / "Civilization
+  // Disqualified!") — the specific enemy roster and doctrine are original invention
+  // layered on that confirmed premise, not sourced.
+  {
+    id: "dysonSphereFirstContact",
+    name: "Choir Sentinels at the Threshold",
+    faction: "choir",
+    isBoss: false,
+    enemies: [
+      { name: "Choir Acolyte", hull: 190, damage: 21, block: 9, evasion: 0.16 },
+      { name: "Choir Acolyte", hull: 190, damage: 21, block: 9, evasion: 0.16 },
+      { name: "Choir Acolyte", hull: 190, damage: 21, block: 9, evasion: 0.16 },
+    ],
+    rewards: { salvage: 380, sourcePoints: 220, alloy: 200, originEssence: 160 },
+    xp: 260,
+  },
+  {
+    id: "choirDefenseGrid",
+    name: "The Herald's Defense Choir",
+    faction: "choir",
+    isBoss: true,
+    enemies: [
+      { name: "Choir Herald", hull: 950, damage: 30, block: 18, evasion: 0.12 },
+      { name: "Choir Cantor", hull: 320, damage: 22, block: 12, evasion: 0.14 },
+      { name: "Choir Cantor", hull: 320, damage: 22, block: 12, evasion: 0.14 },
+    ],
+    rewards: { salvage: 680, sourcePoints: 420, alloy: 420, originEssence: 380 },
+    xp: 520,
+  },
+  {
+    id: "civilizationDisqualifiedFinale",
+    name: "The Conductor's Last Movement (Act VI Finale)",
+    faction: "choir",
+    isBoss: true,
+    enemies: [
+      { name: "The Conductor", hull: 1900, damage: 38, block: 26, evasion: 0.1 },
+      { name: "Choir Herald", hull: 1000, damage: 32, block: 20, evasion: 0.12 },
+      { name: "Choir Cantor", hull: 340, damage: 24, block: 13, evasion: 0.15 },
+      { name: "Choir Cantor", hull: 340, damage: 24, block: 13, evasion: 0.15 },
+    ],
+    rewards: { salvage: 1050, sourcePoints: 680, alloy: 680, originEssence: 700 },
+    xp: 950,
+  },
 ];
 
 // --- Bounties: repeatable, always-farmable encounters that respawn after a cooldown.
@@ -412,6 +458,18 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     enemies: [{ name: "Hollow Echo", hull: 120, damage: 14, block: 5, evasion: 0.12 }],
     rewards: { salvage: 85, sourcePoints: 45, alloy: 25 },
     xp: 35,
+  },
+  {
+    id: "bountyChoirStragglers",
+    name: "Choir Straggler Verse",
+    faction: "choir",
+    isBoss: false,
+    enemies: [
+      { name: "Choir Acolyte", hull: 130, damage: 16, block: 6, evasion: 0.15 },
+      { name: "Choir Acolyte", hull: 130, damage: 16, block: 6, evasion: 0.15 },
+    ],
+    rewards: { salvage: 100, sourcePoints: 55, alloy: 30 },
+    xp: 40,
   },
 ];
 

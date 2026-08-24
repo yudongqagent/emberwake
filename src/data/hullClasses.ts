@@ -144,6 +144,35 @@ export const HULL_CLASSES: HullClassDef[] = [
     unlockFlag: "act4.deepOrigin.cleared",
     essenceCost: 420,
   },
+  {
+    id: "anthem",
+    order: 6,
+    name: "Anthem-class",
+    nameCn: "颂歌舰",
+    // Reverse-engineered Choir hull tech (Act VI) — see docs/story/act-6-chorus-deep.md.
+    // Same tier/unlock/18-slot total as Sanctum, weighted hard toward weapons and
+    // engines — the glass-cannon lateral option at the campaign's new ceiling.
+    slots: { weapon: 6, armor: 3, engine: 4, utility: 5 },
+    baseHull: 2300,
+    basePower: 62,
+    baseSpeed: 4,
+    unlockFlag: "act6.civilizationDisqualified.cleared",
+    essenceCost: 620,
+  },
+  {
+    id: "sanctum",
+    order: 6,
+    name: "Sanctum-class",
+    nameCn: "圣所舰",
+    // Same tier/unlock/18-slot total as Anthem, but weapon and engine slots traded
+    // for armor — the ultimate-tank option, continuing Aegis's lineage.
+    slots: { weapon: 3, armor: 8, engine: 3, utility: 4 },
+    baseHull: 3000,
+    basePower: 50,
+    baseSpeed: 2,
+    unlockFlag: "act6.civilizationDisqualified.cleared",
+    essenceCost: 620,
+  },
 ];
 
 export const RARITY_ORDER: ShipRarity[] = [
