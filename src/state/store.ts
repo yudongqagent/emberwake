@@ -21,7 +21,7 @@ import { encounterById } from "../data/encounters";
 import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
-import { CREW_DEFS } from "../data/crew";
+import { CREW_DEFS, crewDefById } from "../data/crew";
 import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
 import { drawModule } from "../engine/modules";
 import { randomId } from "../engine/rng";
@@ -257,8 +257,25 @@ export function equipModule(shipId: string, slotIndex: number, moduleId: string 
   persist();
 }
 
+/** Section E (2026-08-24 player brief): crew are assigned to a fixed station,
+ * not stacked without limit — each of the 4 roles (Helm/Gunner/Engineer/
+ * Tactician) is one post, one crew member at a time. Assigning someone new to a
+ * role that's already staffed on this ship automatically stands the previous
+ * occupant down (a real loadout decision between two crew of the same role, not
+ * a free stack) rather than silently rejecting the action or allowing both to
+ * stay active. */
 export function assignCrew(crewId: string, shipId: string | null) {
-  const crew = state.value.crew.map((c) => (c.id === crewId ? { ...c, assignedShipId: shipId } : c));
+  const target = state.value.crew.find((c) => c.id === crewId);
+  if (!target) return;
+  const targetRole = crewDefById(target.defId).role;
+  const crew = state.value.crew.map((c) => {
+    if (c.id === crewId) return { ...c, assignedShipId: shipId };
+    // Bump whoever else currently holds this role's station on the same ship.
+    if (shipId && c.assignedShipId === shipId && crewDefById(c.defId).role === targetRole) {
+      return { ...c, assignedShipId: null };
+    }
+    return c;
+  });
   state.value = { ...state.value, crew };
   persist();
 }
