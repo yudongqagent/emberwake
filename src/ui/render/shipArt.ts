@@ -743,3 +743,40 @@ export function drawExplosionRing(ctx: CanvasRenderingContext2D, x: number, y: n
   }
   ctx.restore();
 }
+
+/** Item #3 (2026-08-23 playtest): a generic expanding "field" ring for ability/skill
+ * activations — visually distinct from drawExplosionRing (a fixed-gold ring always
+ * paired with a hit landing) since arming a buff or debuffing a target isn't an
+ * impact. Parameterized by color and radius so each skill's own signature color
+ * (matched to its status-badge/log color elsewhere) reads as a different effect
+ * instead of every ability reusing the same explosion look. */
+export function drawFieldRing(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  age: number,
+  maxAge: number,
+  color: string,
+  maxRadius: number = 50,
+) {
+  const t = Math.min(1, age / maxAge);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha = Math.max(0, 1 - t) * 0.85;
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = 3 * (1 - t) + 0.6;
+  ctx.beginPath();
+  ctx.arc(0, 0, 4 + t * maxRadius, 0, Math.PI * 2);
+  ctx.stroke();
+  if (t < 0.35) {
+    ctx.globalAlpha = (1 - t / 0.35) * 0.5;
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}

@@ -14,7 +14,7 @@ import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
 import { ResourceIcon, resourceLabel } from "../components/Icons";
 import { AnimatedFraction } from "../components/StatBlock";
-import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing } from "../render/shipArt";
+import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing, drawFieldRing } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
 import { t } from "../../i18n/strings";
 import { localizedModuleName, localizedCrewActive, localizedNamedShipActive, localizedEncounterName, localizedEnemyName } from "../../i18n/data";
@@ -151,6 +151,17 @@ interface Particle {
   maxLife: number;
   color: string;
   size: number;
+}
+
+/** Item #3: a skill-cast field ring — see spawnRing/drawFieldRing. Parallel to the
+ * explosions array but color/radius-parameterized per ability instead of fixed. */
+interface FieldRing {
+  x: number;
+  y: number;
+  color: string;
+  start: number;
+  maxAge: number;
+  maxRadius: number;
 }
 
 interface Props {
@@ -307,6 +318,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const projectilesRef = useRef<Projectile[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const explosionsRef = useRef<{ x: number; y: number; start: number }[]>([]);
+  const ringsRef = useRef<FieldRing[]>([]);
   /** Squash-and-stretch pulse timestamps — see docs/visual-standards.md §3. */
   const hitPulseRef = useRef<{ enemy: Record<number, number>; player: number }>({ enemy: {}, player: 0 });
   const shakeRef = useRef(0);
@@ -487,6 +499,17 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       });
     }
     if (particlesRef.current.length > 400) particlesRef.current.splice(0, particlesRef.current.length - 400);
+  }
+
+  /** Item #3 (2026-08-23 playtest): abilities used to only push a log line + play a
+   * sfx — no on-screen feedback tied to what the skill actually does. This is the
+   * "cast" half of that fix (see drawFieldRing): an expanding ring in the ability's
+   * own color at the cast point (the player ship for self-buffs, an enemy for
+   * marks/debuffs), paired with a spawnBurst at the same point for texture so a
+   * skill activation reads as a distinct visual event, not just a status pill
+   * appearing in the header. */
+  function spawnRing(x: number, y: number, color: string, maxRadius: number = 50, maxAge: number = 550) {
+    ringsRef.current.push({ x, y, color, start: performance.now(), maxAge, maxRadius });
   }
 
   function fireProjectile(
@@ -1132,40 +1155,75 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     let nextEnemies = enemies;
     const livingIdx = enemies.map((e, i) => ({ e, i })).filter(({ e }) => e.hull > 0).map(({ i }) => i);
 
+    const playerPos = arenaRef.current.player;
     if (abilityId === "fieldPatch") {
-      // Ori Vashti: a straightforward mid-battle repair.
+      // Ori Vashti: a straightforward mid-battle repair. Green ring + rising motes
+      // at the hull — reads as "restoring," distinct from a hit or a shield.
       const heal = Math.round(maxHull * 0.15);
       setPlayerHull((h) => Math.min(maxHull, h + heal));
       addPopup("player", `+${heal}`, "#5dffb0");
+      spawnRing(playerPos.x, playerPos.y, "#5dffb0", 55);
+      spawnBurst(playerPos.x, playerPos.y, "93,255,176", 16, 55);
       pushLog(t("combat.log.fieldPatch", { amount: heal }));
       playSfx("dock");
     } else if (abilityId === "focusFire") {
-      // Ratchet Koi: no damage now — the next weapon fired this fight is a guaranteed crit.
+      // Ratchet Koi: no damage now — the next weapon fired this fight is a
+      // guaranteed crit. A tight gold ring reads as "sighted in," distinct from the
+      // wider heal/shield rings.
       setGuaranteedCrit(true);
+      spawnRing(playerPos.x, playerPos.y, "#ffd66a", 38);
+      spawnBurst(playerPos.x, playerPos.y, "255,214,106", 10, 90);
       pushLog(t("combat.log.focusFireArm"));
       playSfx("click");
     } else if (abilityId === "riposte") {
-      // Kaan Ferrous: arms a free counter-attack the next time an enemy misses.
+      // Kaan Ferrous: arms a free counter-attack the next time an enemy misses. A
+      // cyan shimmer at the hull — a defensive, not offensive, cast.
       setRiposteArmed(true);
+      spawnRing(playerPos.x, playerPos.y, "#5dd6ff", 45);
+      spawnBurst(playerPos.x, playerPos.y, "93,214,255", 8, 70);
       pushLog(t("combat.log.riposteArm"));
       playSfx("click");
     } else if (abilityId === "undercut") {
-      // Priya Osei: halves every living enemy's block for a short window.
+      // Priya Osei: halves every living enemy's block for a short window. A burst
+      // on each affected enemy — an AoE debuff should visibly touch every target it
+      // affects, not just the player's own hull.
       nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, blockDebuffSec: 2 * TURN_SECONDS } : e));
+      livingIdx.forEach((i) => {
+        const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
+        spawnRing(pos.x, pos.y, "#ff8f66", 32, 450);
+        spawnBurst(pos.x, pos.y, "255,143,102", 8, 65);
+      });
       pushLog(t("combat.log.undercutArm"));
       playSfx("click");
     } else if (abilityId === "reaversCut") {
-      // Kessa Vray: every living enemy takes +25% damage for a short window.
+      // Kessa Vray: every living enemy takes +25% damage for a short window. Same
+      // AoE-touch pattern as Undercut but in Reaver red and more violent (faster,
+      // wider bursts) so the two debuffs read as different in kind, not just color.
       nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, vulnerableSec: TURN_SECONDS } : e));
+      livingIdx.forEach((i) => {
+        const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
+        spawnRing(pos.x, pos.y, "#ff5c5c", 36, 450);
+        spawnBurst(pos.x, pos.y, "255,92,92", 12, 110);
+      });
       pushLog(t("combat.log.reaversCutArm"));
       playSfx("click");
     } else if (abilityId === "constructOverride") {
-      // Unit 7-Requiem: negates incoming damage for a short window.
+      // Unit 7-Requiem: negates incoming damage for a short window. The biggest
+      // self-cast ring in the kit (a shield bubble, not a small buff sigil) plus a
+      // hit-pulse pop on the hull — this one should feel like a system coming
+      // online, not a quiet stat change.
       setShieldSec(TURN_SECONDS);
+      spawnRing(playerPos.x, playerPos.y, "#b98cff", 72);
+      spawnBurst(playerPos.x, playerPos.y, "185,140,255", 16, 60);
+      hitPulseRef.current.player = performance.now();
       pushLog(t("combat.log.overrideArm"));
       playSfx("click");
     } else if (abilityId === "evasiveBurn") {
-      // Generic recruit helm: an instant burst toward the target, closing or opening range.
+      // Generic recruit helm: an instant burst toward the target, closing or
+      // opening range. A trail — burst at the launch point, then again at the
+      // landing point — reads as motion, unlike every other ability here which
+      // fires in place.
+      spawnBurst(playerPos.x, playerPos.y, "143,243,255", 10, 90);
       const target = arenaRef.current.enemyPos[targetIdx];
       if (target) {
         const dx = target.x - arenaRef.current.player.x;
@@ -1175,29 +1233,39 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         const dir = closing ? 1 : -1;
         arenaRef.current.player.x = Math.max(20, Math.min(REF_W - 20, arenaRef.current.player.x + (dx / dist) * 140 * dir));
         arenaRef.current.player.y = Math.max(20, Math.min(REF_H - 20, arenaRef.current.player.y + (dy / dist) * 140 * dir));
+        spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 14, 110);
       }
       pushLog(t("combat.log.evasiveBurn"));
       playSfx("jump");
     } else if (abilityId === "targetLock") {
-      // Generic recruit tactician: halves the current target's evasion for a short window.
+      // Generic recruit tactician: halves the current target's evasion for a short
+      // window. A tight reticle-like ring ON the target, not the player — this is
+      // the only crew debuff that marks a single enemy instead of the whole field.
       const target = enemies[targetIdx];
       if (target && target.hull > 0) {
         nextEnemies = enemies.map((e, i) => (i === targetIdx ? { ...e, evasionDebuffSec: 2 * TURN_SECONDS } : e));
+        const pos = arenaRef.current.enemyPos[targetIdx] ?? enemySlot(targetIdx, enemies.length);
+        spawnRing(pos.x, pos.y, "#ffd66a", 26, 400);
+        spawnBurst(pos.x, pos.y, "255,214,106", 6, 45);
         pushLog(t("combat.log.targetLock", { target: target.name }));
       }
     } else if (abilityId === "chorusBreak") {
       // Vela, Last Cantor of the Choir: the only ability that reaches into another
       // faction's own mechanic directly — silences Choral Resonance instead of just
       // outdamaging it, on top of a real hit for using it before the chord fills.
+      // Adds a Choir-gold ring per target and a hit-stop beat on top of the
+      // existing burst so it reads as heavier than a plain weapon shot.
       const dmg = Math.round(capacity * 0.3);
       nextEnemies = enemies.map((e, i) => {
         if (e.hull <= 0) return e;
         const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
+        spawnRing(pos.x, pos.y, "#ffd66b", 34, 450);
         spawnBurst(pos.x, pos.y, "180,220,255", 10, 100);
         addPopup(i, `-${dmg}`, "#8ff3ff");
         return { ...e, hull: Math.max(0, e.hull - dmg) };
       });
       setChoralResonance(0);
+      triggerHitStop(60);
       pushLog(t("combat.log.chorusBreak", { dmg }));
       playSfx("laser");
     }
@@ -1218,24 +1286,56 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   function useShipActiveImpl() {
     if (status !== "active" || !ship.namedShipId) return;
     const namedDef = namedShipDefById(ship.namedShipId);
+    const playerPos = arenaRef.current.player;
     if (namedDef.abilityId === "alphaStrike") {
+      // Nightfall Vow: doubles the next weapon shot. A hot orange charge-up ring —
+      // the weapon-side counterpart to Focus Fire's gold one, distinct enough that
+      // the two "next shot is special" buffs don't read as the same effect.
       setAlphaStrikeArmed(true);
+      spawnRing(playerPos.x, playerPos.y, "#ff6b3d", 42);
+      spawnBurst(playerPos.x, playerPos.y, "255,107,61", 12, 100);
       pushLog(t("combat.log.alphaStrikeArm"));
     } else if (namedDef.abilityId === "phaseShift") {
+      // Nightfall Vow's sibling ability (Hollow Point): the next enemy attack
+      // auto-misses. A fast double-ring flicker — two rings staggered a beat apart
+      // at the same point — reads as "out of phase" rather than a solid buff.
       setPhaseShiftReady(true);
+      spawnRing(playerPos.x, playerPos.y, "#8ff3ff", 40, 300);
+      setTimeout(() => spawnRing(playerPos.x, playerPos.y, "#8ff3ff", 55, 350), 90);
+      spawnBurst(playerPos.x, playerPos.y, "143,243,255", 10, 80);
       pushLog(t("combat.log.phaseShiftArm"));
     } else if (namedDef.abilityId === "fortify") {
+      // Iron Verdict: doubles armor block for a duration. A slow, wide, heavy ring
+      // (steel-blue, longer-lived than the others) — plating going up should read
+      // as durable, not snappy like the crit/counter buffs.
       setFortifySec(2 * TURN_SECONDS);
+      spawnRing(playerPos.x, playerPos.y, "#9fb8cc", 62, 700);
+      spawnBurst(playerPos.x, playerPos.y, "159,184,204", 10, 45);
       pushLog(t("combat.log.fortifyArm"));
     } else if (namedDef.abilityId === "bloodscent") {
+      // Starving Wolf: marks a target — damage dealt to it heals the player. The
+      // only named-ship ability that casts ON an enemy instead of the player, same
+      // pattern as crew's Target Lock, in a blood-red that reads as "marked prey."
       const target = enemies[targetIdx];
       if (target && target.hull > 0) {
         setBloodscentSec(2 * TURN_SECONDS);
         bloodscentTargetRef.current = targetIdx;
+        const pos = arenaRef.current.enemyPos[targetIdx] ?? enemySlot(targetIdx, enemies.length);
+        spawnRing(pos.x, pos.y, "#ff3d5c", 34, 600);
+        spawnBurst(pos.x, pos.y, "255,61,92", 10, 60);
         pushLog(t("combat.log.bloodscentMark", { target: target.name }));
       }
     } else if (namedDef.abilityId === "overdrive") {
+      // Instantly resets every weapon's cooldown — the biggest single moment in the
+      // manual-ability kit (every equipped weapon fires again almost at once via
+      // the auto-fire effect), so it gets the biggest ring, a hit-pulse pop, and a
+      // touch of screen shake instead of the same-weight buff-ring every other
+      // ability uses.
       setCooldowns({});
+      spawnRing(playerPos.x, playerPos.y, "#ffe25d", 85);
+      spawnBurst(playerPos.x, playerPos.y, "255,226,93", 22, 130);
+      hitPulseRef.current.player = performance.now();
+      shakeRef.current = Math.max(shakeRef.current, 8);
       pushLog(t("combat.log.overdriveArm"));
     }
     setNamedAbilityCooldown(namedDef.activeCooldown * TURN_SECONDS);
@@ -1426,9 +1526,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       shakeRef.current = Math.max(0, shakeRef.current - dt * 30);
 
       explosionsRef.current = explosionsRef.current.filter((e) => now - e.start < 500);
+      ringsRef.current = ringsRef.current.filter((r) => now - r.start < r.maxAge);
 
       const thrusting = Math.hypot(player.vx, player.vy) > 12;
-      draw(ctx, vp, arena, { ...player, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, hitPulseRef.current);
+      draw(ctx, vp, arena, { ...player, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, ringsRef.current, hitPulseRef.current);
     }
 
     // A throw anywhere in step() (physics, draw, anything reachable from a frame
@@ -1787,6 +1888,7 @@ function draw(
   projectiles: Projectile[],
   particles: Particle[],
   explosions: { x: number; y: number; start: number }[],
+  rings: FieldRing[],
   hitPulse: { enemy: Record<number, number>; player: number },
 ) {
   vp.beginFrame(ctx);
@@ -1834,6 +1936,11 @@ function draw(
   for (const ex of explosions) {
     ctx.save();
     drawExplosionRing(ctx, ex.x, ex.y, now - ex.start, 500);
+    ctx.restore();
+  }
+  for (const r of rings) {
+    ctx.save();
+    drawFieldRing(ctx, r.x, r.y, now - r.start, r.maxAge, r.color, r.maxRadius);
     ctx.restore();
   }
 
