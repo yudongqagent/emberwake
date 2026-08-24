@@ -12,8 +12,8 @@ import { playSfx } from "../../audio/engine";
 import type { FactionId, ResourceType, ModuleInstance } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
-import { ResourceIcon, resourceLabel, CloseOrderIcon, HoldOrderIcon, RetreatOrderIcon, BoardIcon, NavIcon } from "../components/Icons";
-import { AnimatedFraction, Bar } from "../components/StatBlock";
+import { ResourceIcon, resourceLabel, CloseOrderIcon, HoldOrderIcon, RetreatOrderIcon, BoardIcon, NavIcon, HullIcon, ModuleTypeIcon, CrewRoleIcon } from "../components/Icons";
+import { AnimatedFraction, Bar, hullBarKind } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing, drawFieldRing } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
 import { t } from "../../i18n/strings";
@@ -1812,120 +1812,79 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     if (playerShakeToken > 0) shakeRef.current = 10;
   }, [playerShakeToken]);
 
+  const novaReady = emberNovaCharge >= EMBER_NOVA_MAX;
+  const target = enemies[targetIdx];
+  const hullFrac = playerHull / maxHull;
+  const activeStatuses = [
+    guaranteedCrit && { glyph: "🎯", color: "var(--amber)", text: t("combat.status.guaranteedCrit") },
+    riposteArmed && { glyph: "↩", color: "var(--cyan)", text: t("combat.status.riposteArmed") },
+    shieldSec > 0 && { glyph: "🛡", color: "var(--violet)", text: t("combat.status.overrideShield", { sec: shieldSec.toFixed(1) }) },
+    alphaStrikeArmed && { glyph: "⚡", color: "var(--red)", text: t("combat.status.alphaStrike") },
+    phaseShiftReady && { glyph: "◈", color: "var(--cyan)", text: t("combat.status.phaseShift") },
+    fortifySec > 0 && { glyph: "🔰", color: "var(--violet)", text: t("combat.status.fortified", { sec: fortifySec.toFixed(1) }) },
+    bloodscentSec > 0 && { glyph: "🩸", color: "var(--green)", text: t("combat.status.bloodscent", { sec: bloodscentSec.toFixed(1) }) },
+  ].filter(Boolean) as { glyph: string; color: string; text: string }[];
+
+  /* Combat interface rebuilt 2026-08-24 (player report: "战斗界面还是旧的").
+     The previous layout was the original arcade screen with bridge orders bolted
+     on top — Whisper's own hull was the smallest text on screen while a flat row
+     of identical pill buttons dominated the bottom, and nothing distinguished a
+     passive readout from an order from the ultimate.
+
+     This is a command console instead, in fixed zones the eye can learn:
+       VIEWSCREEN  — the fight, with the target dossier docked over it
+       HELM        — positioning orders (stance + boarding)
+       WEAPONS     — passive auto-fire readouts, visibly not buttons
+       ABILITIES   — the things you actually press
+       ULTIMATE    — Ember Nova, given its own dedicated rail
+     Vitals (hull, range, threat) are promoted to a real status bar at the top,
+     since "am I winning" should be the fastest thing on screen to read. */
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "0.6rem 1rem 0" }} className="title">{localizedEncounterName(encounter)}</div>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg)" }}>
+      {/* ---- VITALS ---- */}
+      <div style={{ padding: "0.55rem 1rem 0.5rem", borderBottom: "1px solid var(--line)", background: "rgba(5,8,16,0.6)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.75rem" }}>
+          <div className="title" style={{ fontSize: "0.95rem", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {localizedEncounterName(encounter)}
+          </div>
+          <RangeTrack band={rangeBand} progress={rangeProgress} />
+        </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.3rem 1rem 0.5rem", fontSize: "0.78rem", color: "var(--text-mid)" }}>
-        <span>{ship.name} — Hull <AnimatedFraction current={playerHull} max={maxHull} /></span>
-        {comboCount > 0 && (
-          <span
-            className="eyebrow"
-            style={{
-              color: comboCount >= 8 ? "var(--red)" : comboCount >= 4 ? "var(--amber)" : "var(--cyan)",
-              textShadow: `0 0 ${6 + Math.min(comboCount, 10)}px currentColor`,
-              fontWeight: 700,
-            }}
-          >
-            {t("combat.combo", { count: comboCount })}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginTop: "0.45rem" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", flex: "none" }}>
+            <HullIcon size={14} color={hullFrac > 0.5 ? "var(--green)" : hullFrac > 0.2 ? "var(--amber)" : "var(--red)"} />
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "0.82rem", color: "var(--text-hi)", fontVariantNumeric: "tabular-nums" }}>
+              <AnimatedFraction current={playerHull} max={maxHull} />
+            </span>
           </span>
-        )}
-        <span>
-          {t("combat.range")}: <span style={{ color: rangeBand === "close" ? "var(--red)" : rangeBand === "mid" ? "var(--amber)" : "var(--cyan)" }}>{t(`combat.rangeBand.${rangeBand}`)}</span>
-          {" · "}{t("combat.power")} {capacity}
-        </span>
-      </div>
-
-      <div style={{ display: "flex", gap: "0.4rem", padding: "0.5rem 1rem 0" }} role="group" aria-label={t("combat.stanceLabel")}>
-        {(["close", "hold", "retreat"] as StanceOrder[]).map((order) => {
-          const OrderIcon = order === "close" ? CloseOrderIcon : order === "hold" ? HoldOrderIcon : RetreatOrderIcon;
-          return (
-            <button
-              key={order}
-              className={`btn ${stanceOrder === order ? "primary" : "ghost"}`}
-              style={{ flex: 1, fontSize: "0.72rem", padding: "0.5em 0.3em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35em" }}
-              disabled={status !== "active"}
-              onClick={() => { setStanceOrder(order); playSfx("click"); }}
-              title={t(`combat.stance.${order}Title`)}
-            >
-              <OrderIcon size={13} />
-              {t(`combat.stance.${order}`)}
-            </button>
-          );
-        })}
-      </div>
-
-      {alliedFleet.length > 0 && (
-        <div style={{ padding: "0.5rem 1rem 0", display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.7rem", color: "var(--green)" }}>
-          <NavIcon name="fleet" size={13} color="var(--green)" />
-          {t("combat.fleetBattle", { count: alliedFleet.length })}
-        </div>
-      )}
-
-      {encounter.capturable && enemies[0] && enemies[0].hull > 0 && (
-        <div style={{ padding: "0.5rem 1rem 0" }}>
-          {/* Standing order, not a reactive prompt: the button's live the whole
-              fight, same as the stance orders — arm it ahead of the target
-              actually dropping below the capture threshold (see combatTick) and
-              progress starts filling itself the instant every condition lines up,
-              instead of requiring the player to notice and react within whatever
-              window auto-fire leaves before a crit finishes the target off. */}
-          <button
-            className={`btn ${boardingOrder ? "primary" : "ghost"}`}
-            style={{ width: "100%", fontSize: "0.72rem", padding: "0.5em 0.3em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35em" }}
-            disabled={status !== "active"}
-            onClick={() => { setBoardingOrder((b) => !b); playSfx("click"); }}
-            title={t("combat.boardTitle")}
-          >
-            <BoardIcon size={13} />
-            {boardingOrder ? t("combat.boarding", { pct: Math.round(boardProgress * 100) }) : t("combat.board")}
-          </button>
-          {boardingOrder && (
-            <div style={{ marginTop: "0.3rem" }}>
-              <Bar fraction={boardProgress} kind="progress" />
-            </div>
-          )}
-        </div>
-      )}
-
-      {encounter.faction === "choir" && (
-        <div style={{ padding: "0 1rem 0.5rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.66rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>
-            <span>{t("combat.choralResonance")}</span>
-            <span>{choralResonance}/{CHORAL_RESONANCE_MAX}</span>
-          </div>
-          <div style={{ height: 5, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
-            <div
+          <span style={{ flex: 1, minWidth: 0 }}><Bar fraction={hullFrac} kind={hullBarKind(hullFrac)} /></span>
+          {comboCount > 0 && (
+            <span
+              className="eyebrow"
               style={{
-                height: "100%",
-                width: `${choralResonance}%`,
-                background: choralResonance >= 80 ? "var(--red)" : "#ffd66b",
-                boxShadow: choralResonance >= 80 ? "0 0 8px var(--red)" : "none",
-                transition: "width 150ms ease",
+                flex: "none",
+                color: comboCount >= 8 ? "var(--red)" : comboCount >= 4 ? "var(--amber)" : "var(--cyan)",
+                textShadow: `0 0 ${6 + Math.min(comboCount, 10)}px currentColor`,
+                fontWeight: 800,
               }}
-            />
+            >
+              {t("combat.combo", { count: comboCount })}
+            </span>
+          )}
+          <span className="eyebrow" style={{ flex: "none", color: "var(--text-dim)" }}>
+            {t("combat.power")} {capacity}
+          </span>
+        </div>
+
+        {activeStatuses.length > 0 && (
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: "0.45rem" }}>
+            {activeStatuses.map((st, i) => <StatusBadge key={i} glyph={st.glyph} color={st.color} text={st.text} />)}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {(guaranteedCrit || riposteArmed || shieldSec > 0 || alphaStrikeArmed || phaseShiftReady || fortifySec > 0 || bloodscentSec > 0) && (
-        <div style={{ display: "flex", gap: "0.4rem", padding: "0 1rem 0.4rem", flexWrap: "wrap" }}>
-          {/* Gacha-RPG grounding #1 (docs/design-principles.md): a distinct glyph per
-              status so the badge row reads by shape/color before the text even
-              registers, instead of requiring every badge to be read to tell them
-              apart — the same "icon over text" bar the resource/module/crew icons
-              already clear. */}
-          {guaranteedCrit && <StatusBadge glyph="🎯" color="var(--amber)" text={t("combat.status.guaranteedCrit")} />}
-          {riposteArmed && <StatusBadge glyph="↩" color="var(--cyan)" text={t("combat.status.riposteArmed")} />}
-          {shieldSec > 0 && <StatusBadge glyph="🛡" color="var(--violet)" text={t("combat.status.overrideShield", { sec: shieldSec.toFixed(1) })} />}
-          {alphaStrikeArmed && <StatusBadge glyph="⚡" color="var(--red)" text={t("combat.status.alphaStrike")} />}
-          {phaseShiftReady && <StatusBadge glyph="◈" color="var(--cyan)" text={t("combat.status.phaseShift")} />}
-          {fortifySec > 0 && <StatusBadge glyph="🔰" color="var(--violet)" text={t("combat.status.fortified", { sec: fortifySec.toFixed(1) })} />}
-          {bloodscentSec > 0 && <StatusBadge glyph="🩸" color="var(--green)" text={t("combat.status.bloodscent", { sec: bloodscentSec.toFixed(1) })} />}
-        </div>
-      )}
-
-      <div style={{ flex: 1, position: "relative", minHeight: 220 }}>
+      {/* ---- VIEWSCREEN ---- */}
+      <div style={{ flex: 1, position: "relative", minHeight: 200 }}>
         <canvas
           ref={canvasRef}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", touchAction: "none", cursor: "crosshair" }}
@@ -1933,81 +1892,218 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         {popups.map((p) => (
           <PopupOverlay key={p.id} popup={p} arenaRef={arenaRef} vpRef={vpRef} />
         ))}
+
+        {/* Target dossier — docked over the viewscreen so "what am I shooting and
+            how close is it to dying" never requires hunting for a tiny sprite bar. */}
+        {target && target.hull > 0 && status === "active" && (
+          <div
+            style={{
+              position: "absolute", top: 10, right: 10, minWidth: 168, maxWidth: "52%",
+              padding: "0.5rem 0.65rem", borderRadius: 8,
+              border: "1px solid var(--line)", background: "rgba(5,8,16,0.82)", backdropFilter: "blur(6px)",
+            }}
+          >
+            <div className="eyebrow" style={{ color: "var(--red)", marginBottom: "0.2rem" }}>{t("combat.targetLabel")}</div>
+            <div style={{ fontSize: "0.8rem", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {target.name}
+            </div>
+            <div style={{ margin: "0.35rem 0 0.2rem" }}>
+              <Bar fraction={target.hull / target.maxHull} kind={hullBarKind(target.hull / target.maxHull)} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.66rem", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>
+              <span>{target.hull} / {target.maxHull}</span>
+              {enemies.filter((e) => e.hull > 0).length > 1 && (
+                <span>{t("combat.hostilesLeft", { count: enemies.filter((e) => e.hull > 0).length })}</span>
+              )}
+            </div>
+            {(target.charging || target.phased || target.enraged) && (
+              <div style={{ marginTop: "0.3rem", fontSize: "0.64rem", color: "var(--amber)", fontWeight: 700 }}>
+                {target.charging && t("combat.targetCharging")}
+                {target.phased && t("combat.targetPhased")}
+                {target.enraged && !target.charging && !target.phased && t("combat.targetEnraged")}
+              </div>
+            )}
+          </div>
+        )}
+
+        {alliedFleet.length > 0 && (
+          <div
+            style={{
+              position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", gap: "0.35rem",
+              padding: "0.3rem 0.55rem", borderRadius: 999,
+              border: "1px solid var(--green)", background: "rgba(5,8,16,0.8)",
+              fontSize: "0.66rem", color: "var(--green)", fontWeight: 700,
+            }}
+          >
+            <NavIcon name="fleet" size={12} color="var(--green)" />
+            {t("combat.fleetBattle", { count: alliedFleet.length })}
+          </div>
+        )}
+
+        {encounter.faction === "choir" && (
+          <div style={{ position: "absolute", left: 10, right: 10, bottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.62rem", color: "var(--text-dim)", marginBottom: "0.15rem" }}>
+              <span>{t("combat.choralResonance")}</span>
+              <span>{choralResonance}/{CHORAL_RESONANCE_MAX}</span>
+            </div>
+            <div style={{ height: 4, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
+              <div
+                style={{
+                  height: "100%", width: `${choralResonance}%`,
+                  background: choralResonance >= 80 ? "var(--red)" : "#ffd66b",
+                  boxShadow: choralResonance >= 80 ? "0 0 8px var(--red)" : "none",
+                  transition: "width 150ms ease",
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Item #2 (2026-08-23 playtest): the main gun(s) auto-fire — see the effect
-          above — so this row is a status readout, not a button row. It only exists
-          to make WHY nothing needs clicking legible: a glowing dot means "ready and
-          about to fire," a dim one means "charging." The manual-decision row (below)
-          is where clicks still happen. */}
-      {autoFireWeapons.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", padding: "0.6rem 1rem 0" }}>
-          {autoFireWeapons.map((mod) => {
-            const def = moduleDefById(mod.defId);
-            const cd = cooldowns[mod.id] ?? 0;
-            return <WeaponAutoStatus key={mod.id} name={localizedModuleName(def)} color={def.color ?? "#8ff3ff"} cd={cd} />;
-          })}
-        </div>
-      )}
+      {/* ---- COMMAND CONSOLE ---- */}
+      <div style={{ borderTop: "1px solid var(--line)", background: "rgba(5,8,16,0.72)", padding: "0.5rem 1rem 0.6rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <ConsoleZone label={t("combat.zone.helm")}>
+          <div style={{ display: "flex", gap: "0.35rem" }} role="group" aria-label={t("combat.stanceLabel")}>
+            {(["close", "hold", "retreat"] as StanceOrder[]).map((order) => {
+              const OrderIcon = order === "close" ? CloseOrderIcon : order === "hold" ? HoldOrderIcon : RetreatOrderIcon;
+              const active = stanceOrder === order;
+              return (
+                <button
+                  key={order}
+                  className={`btn ${active ? "primary" : "ghost"}`}
+                  style={{ flex: 1, fontSize: "0.68rem", padding: "0.45em 0.2em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3em" }}
+                  disabled={status !== "active"}
+                  onClick={() => { setStanceOrder(order); playSfx("click"); }}
+                  title={t(`combat.stance.${order}Title`)}
+                >
+                  <OrderIcon size={12} />
+                  {t(`combat.stance.${order}`)}
+                </button>
+              );
+            })}
+            {encounter.capturable && enemies[0] && enemies[0].hull > 0 && (
+              <button
+                className={`btn ${boardingOrder ? "primary" : "ghost"}`}
+                style={{ flex: 1.2, fontSize: "0.68rem", padding: "0.45em 0.2em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3em", position: "relative", overflow: "hidden" }}
+                disabled={status !== "active"}
+                onClick={() => { setBoardingOrder((b) => !b); playSfx("click"); }}
+                title={t("combat.boardTitle")}
+              >
+                {boardingOrder && (
+                  <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${boardProgress * 100}%`, background: "var(--green)", opacity: 0.28, transition: "width 150ms linear" }} />
+                )}
+                <BoardIcon size={12} />
+                <span style={{ position: "relative" }}>
+                  {boardingOrder ? t("combat.boarding", { pct: Math.round(boardProgress * 100) }) : t("combat.board")}
+                </span>
+              </button>
+            )}
+          </div>
+        </ConsoleZone>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", padding: "0.5rem 1rem 0" }}>
-        <button
-          className={`btn ${overcharged ? "danger" : "ghost"}`}
-          disabled={status !== "active"}
-          onClick={() => setOvercharged((o) => !o)}
-          title={t("combat.overchargeTitle")}
-        >
-          {overcharged ? t("combat.overcharged") : t("combat.overcharge")}
-        </button>
-        {manualModules.map((mod) => {
-          const def = moduleDefById(mod.defId);
-          const cd = cooldowns[mod.id] ?? 0;
-          return (
+        {autoFireWeapons.length > 0 && (
+          <ConsoleZone label={t("combat.zone.weapons")} hint={t("combat.zone.weaponsHint")}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+              {autoFireWeapons.map((mod) => {
+                const def = moduleDefById(mod.defId);
+                return <WeaponAutoStatus key={mod.id} name={localizedModuleName(def)} color={def.color ?? "#8ff3ff"} cd={cooldowns[mod.id] ?? 0} />;
+              })}
+            </div>
+          </ConsoleZone>
+        )}
+
+        <ConsoleZone label={t("combat.zone.abilities")}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
             <button
-              key={mod.id}
-              className="btn"
-              disabled={status !== "active" || cd > 0}
-              onClick={() => fireModule(mod.id)}
+              className={`btn ${overcharged ? "danger" : "ghost"}`}
+              style={{ fontSize: "0.68rem", padding: "0.45em 0.7em" }}
+              disabled={status !== "active"}
+              onClick={() => setOvercharged((o) => !o)}
+              title={t("combat.overchargeTitle")}
             >
-              {localizedModuleName(def)}{cd > 0 ? ` (${cd.toFixed(1)}s)` : ""}
+              {overcharged ? t("combat.overcharged") : t("combat.overcharge")}
             </button>
-          );
-        })}
-        {assignedCrew.map((c) => {
-          const def = crewDefById(c.defId);
-          const cd = crewCooldowns[c.id] ?? 0;
-          return (
-            <button key={c.id} className="btn" disabled={status !== "active" || cd > 0} onClick={() => useCrewActive(c.id, def.abilityId)}>
-              {localizedCrewActive(def).split(" — ")[0]}{cd > 0 ? ` (${cd.toFixed(1)}s)` : ""}
-            </button>
-          );
-        })}
-        {hullClassAbility(ship.hullClass) && (() => {
-          const namedDef = hullClassAbility(ship.hullClass)!;
-          return (
-            <button
-              className="btn primary"
-              disabled={status !== "active" || namedAbilityCooldown > 0}
-              onClick={useShipActive}
-              title={localizedNamedShipActive(namedDef)}
-            >
-              {localizedNamedShipActive(namedDef).split(" — ")[0]}{namedAbilityCooldown > 0 ? ` (${namedAbilityCooldown.toFixed(1)}s)` : ""}
-            </button>
-          );
-        })()}
+            {manualModules.map((mod) => {
+              const def = moduleDefById(mod.defId);
+              const cd = cooldowns[mod.id] ?? 0;
+              return (
+                <AbilityButton
+                  key={mod.id}
+                  label={localizedModuleName(def)}
+                  cd={cd}
+                  disabled={status !== "active" || cd > 0}
+                  onClick={() => fireModule(mod.id)}
+                  icon={<ModuleTypeIcon type={def.type} size={12} />}
+                />
+              );
+            })}
+            {assignedCrew.map((c) => {
+              const def = crewDefById(c.defId);
+              const cd = crewCooldowns[c.id] ?? 0;
+              return (
+                <AbilityButton
+                  key={c.id}
+                  label={localizedCrewActive(def).split(" — ")[0]}
+                  cd={cd}
+                  disabled={status !== "active" || cd > 0}
+                  onClick={() => useCrewActive(c.id, def.abilityId)}
+                  icon={<CrewRoleIcon role={def.role} size={12} />}
+                  title={localizedCrewActive(def)}
+                />
+              );
+            })}
+            {hullClassAbility(ship.hullClass) && (() => {
+              const namedDef = hullClassAbility(ship.hullClass)!;
+              return (
+                <AbilityButton
+                  label={localizedNamedShipActive(namedDef).split(" — ")[0]}
+                  cd={namedAbilityCooldown}
+                  disabled={status !== "active" || namedAbilityCooldown > 0}
+                  onClick={useShipActive}
+                  title={localizedNamedShipActive(namedDef)}
+                  accent="var(--amber)"
+                />
+              );
+            })()}
+          </div>
+        </ConsoleZone>
+
+        {/* Ember Nova gets its own rail — it's the one guaranteed ultimate every
+            ship has, and it used to look identical to a utility module until the
+            instant it was ready. Now it always shows its charge as a filling bar. */}
         <button
-          className={`btn ${emberNovaCharge >= EMBER_NOVA_MAX ? "danger" : "ghost"}`}
-          disabled={status !== "active" || emberNovaCharge < EMBER_NOVA_MAX}
+          className={`btn ${novaReady ? "danger" : "ghost"}`}
+          disabled={status !== "active" || !novaReady}
           onClick={useEmberNova}
           title={t("combat.emberNovaTitle")}
-          style={emberNovaCharge >= EMBER_NOVA_MAX ? { boxShadow: "0 0 14px var(--red)", fontWeight: 800 } : undefined}
+          style={{
+            width: "100%", position: "relative", overflow: "hidden",
+            fontSize: "0.74rem", padding: "0.55em 0.7em", fontWeight: novaReady ? 800 : 600,
+            ...(novaReady ? { boxShadow: "0 0 16px var(--red)" } : {}),
+          }}
         >
-          {emberNovaCharge >= EMBER_NOVA_MAX ? t("combat.emberNova") : t("combat.emberNovaCharging", { charge: emberNovaCharge, max: EMBER_NOVA_MAX })}
+          {!novaReady && (
+            <span
+              style={{
+                position: "absolute", left: 0, top: 0, bottom: 0,
+                width: `${(emberNovaCharge / EMBER_NOVA_MAX) * 100}%`,
+                background: "var(--red)", opacity: 0.22, transition: "width 200ms ease",
+              }}
+            />
+          )}
+          <span style={{ position: "relative" }}>
+            {novaReady ? t("combat.emberNova") : t("combat.emberNovaCharging", { charge: emberNovaCharge, max: EMBER_NOVA_MAX })}
+          </span>
         </button>
-      </div>
 
-      <div className="panel" style={{ margin: "0.6rem 1rem", padding: "0.5rem 0.75rem", fontSize: "0.75rem", color: "var(--text-mid)", maxHeight: 84, overflowY: "auto" }}>
-        {log.map((l, i) => <div key={i}>{l}</div>)}
+        {/* Log demoted to a compact ticker — newest first, two lines. It was a
+            5-line block competing with the controls for space; the important
+            feedback is on the viewscreen (popups, VFX) and in the vitals bar. */}
+        <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", lineHeight: 1.45, maxHeight: 34, overflow: "hidden" }}>
+          {[...log].slice(-2).reverse().map((l, i) => (
+            <div key={i} style={{ opacity: i === 0 ? 1 : 0.55, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l}</div>
+          ))}
+        </div>
       </div>
 
       {(status === "victory" || status === "captured") && (
@@ -2076,6 +2172,88 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           </div>
           <button className="btn primary" onClick={() => onResolve("defeat")}>{t("common.continue")}</button>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** A labelled group in the command console. The zone labels are the whole point
+ * of the redesign: they teach the player that HELM/WEAPONS/ABILITIES are
+ * different KINDS of thing, so a passive readout is never mistaken for a button
+ * they forgot to press. */
+function ConsoleZone({ label, hint, children }: { label: string; hint?: string; children: preact.ComponentChildren }) {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", marginBottom: "0.28rem" }}>
+        <span className="eyebrow" style={{ color: "var(--text-dim)", letterSpacing: "0.1em" }}>{label}</span>
+        {hint && <span style={{ fontSize: "0.6rem", color: "var(--text-dim)", opacity: 0.7 }}>{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** A pressable ability. Shows its cooldown as a draining fill behind the label
+ * rather than only as a number in parentheses, so "how long until I can use this"
+ * is readable at a glance mid-fight. */
+function AbilityButton({
+  label, cd, disabled, onClick, icon, title, accent,
+}: {
+  label: string; cd: number; disabled: boolean; onClick: () => void;
+  icon?: preact.ComponentChildren; title?: string; accent?: string;
+}) {
+  const cooling = cd > 0;
+  return (
+    <button
+      className={`btn ${accent && !cooling ? "primary" : ""}`}
+      disabled={disabled}
+      onClick={onClick}
+      title={title ?? label}
+      style={{
+        position: "relative", overflow: "hidden",
+        fontSize: "0.68rem", padding: "0.45em 0.7em",
+        display: "flex", alignItems: "center", gap: "0.3em",
+      }}
+    >
+      {cooling && (
+        <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "100%", background: "var(--bg-inset)", opacity: 0.75 }} />
+      )}
+      <span style={{ position: "relative", display: "flex", alignItems: "center", gap: "0.3em" }}>
+        {icon}
+        {label}
+        {cooling && <span style={{ color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{cd.toFixed(1)}s</span>}
+      </span>
+    </button>
+  );
+}
+
+/** Range as a three-stop track rather than a word. Positioning is a contested,
+ * continuously-moving resource now (see advanceRangeBand) — a static text label
+ * couldn't show that a transition was in progress, or which way it was heading. */
+function RangeTrack({ band, progress }: { band: RangeBand; progress: number }) {
+  const idx = RANGE_ORDER.indexOf(band);
+  const color = band === "close" ? "var(--red)" : band === "mid" ? "var(--amber)" : "var(--cyan)";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flex: "none" }}>
+      <span className="eyebrow" style={{ color: "var(--text-dim)" }}>{t("combat.range")}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+        {RANGE_ORDER.map((b, i) => (
+          <span
+            key={b}
+            style={{
+              width: i === idx ? 18 : 9, height: 5, borderRadius: 3,
+              background: i === idx ? color : "var(--line)",
+              boxShadow: i === idx ? `0 0 7px ${color}` : "none",
+              transition: "width 200ms ease, background 200ms ease",
+            }}
+          />
+        ))}
+      </div>
+      <span style={{ fontSize: "0.68rem", fontWeight: 700, color, minWidth: 26 }}>{t(`combat.rangeBand.${band}`)}</span>
+      {Math.abs(progress) > 0.02 && (
+        <span style={{ fontSize: "0.6rem", color: "var(--text-dim)" }} title={t("combat.rangeShifting")}>
+          {progress > 0 ? "\u25B8" : "\u25C2"}
+        </span>
       )}
     </div>
   );

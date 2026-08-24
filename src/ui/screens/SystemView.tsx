@@ -8,6 +8,7 @@ import {
   isPoiAvailable,
   effectiveRemaining,
   getNextObjective,
+  effectiveMaxHull,
 } from "../../state/store";
 import type { Poi, ResourceType } from "../../data/types";
 import { playSfx } from "../../audio/engine";
@@ -25,6 +26,20 @@ import {
 import { reportError } from "../../engine/errorReporting";
 import { t } from "../../i18n/strings";
 import { localizedSystemName, localizedPoiName } from "../../i18n/data";
+import { HullIcon, FACTION_COLOR } from "../components/Icons";
+import { Bar, hullBarKind } from "../components/StatBlock";
+
+/** One colour per contact type so the manifest and the map agree at a glance
+ * (design-principles.md tenet 4 — identify by colour/shape, not by reading). */
+const POI_KIND_COLOR: Record<string, string> = {
+  station: "#5dd6ff",
+  asteroidField: "#9fb8cc",
+  derelict: "#b98cff",
+  patrol: "#ff5c5c",
+  storyMarker: "#ffe25d",
+  wreck: "#b98cff",
+  riftPocket: "#c48cff",
+};
 
 const REF_W = 1000;
 const REF_H = 600;
@@ -63,6 +78,11 @@ function wanderOffset(poi: Poi, now: number): { x: number; y: number } {
 export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [nearPoi, setNearPoi] = useState<Poi | null>(null);
+  /** Set by the contacts panel to order a course for a POI. The canvas effect
+   * is frozen at mount, so it reads this ref every frame instead of a prop. */
+  const navTargetRef = useRef<{ x: number; y: number } | null>(null);
+  const [navTargetId, setNavTargetId] = useState<string | null>(null);
+  const [playerPos, setPlayerPos] = useState<{ x: number; y: number }>({ x: 120, y: 300 });
   const [progressPct, setProgressPct] = useState(0);
   const engagedRef = useRef(false);
 
@@ -87,6 +107,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
     const shipSpeed = 200 + (rawSpeed - 200) * 0.45;
     const shipAccel = shipSpeed * 2.4;
     let target: { x: number; y: number } | null = null;
+    let lastPosPush = 0;
     const keys = new Set<string>();
     let workingPoi: Poi | null = null;
     let workingAccum = 0;
@@ -140,11 +161,19 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       const dt = Math.min(0.25, Math.max(0, (now - last) / 1000));
       last = now;
 
+      // A course ordered from the contacts panel behaves exactly like a tap on
+      // the map: it sets the flight target, and manual input still overrides it.
+      if (navTargetRef.current) {
+        target = navTargetRef.current;
+        navTargetRef.current = null;
+      }
+
       let ax = 0;
       let ay = 0;
       const usingKeys = keys.has("w") || keys.has("a") || keys.has("s") || keys.has("d") ||
         keys.has("arrowup") || keys.has("arrowdown") || keys.has("arrowleft") || keys.has("arrowright");
       if (usingKeys) {
+        setNavTargetId(null);
         if (keys.has("w") || keys.has("arrowup")) ay -= 1;
         if (keys.has("s") || keys.has("arrowdown")) ay += 1;
         if (keys.has("a") || keys.has("arrowleft")) ax -= 1;
@@ -181,6 +210,10 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       if (Number.isFinite(nextX) && Number.isFinite(nextY)) {
         player.x = Math.max(20, Math.min(REF_W - 20, nextX));
         player.y = Math.max(20, Math.min(REF_H - 20, nextY));
+        if (now - lastPosPush > 180) {
+          lastPosPush = now;
+          setPlayerPos({ x: player.x, y: player.y });
+        }
       } else {
         reportError("SystemView.step (player position)", new Error(`non-finite position: vx=${player.vx} vy=${player.vy}`));
         player.vx = 0;
@@ -410,12 +443,53 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   }, [system.id]);
 
   const isBounty = !!nearPoi?.data?.bounty;
+  const ship = flagship.value;
+  const shipHullFrac = ship ? ship.currentHp / effectiveMaxHull(ship) : 0;
+  const visiblePois = system.pois.filter((p) => isPoiAvailable(p));
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div className="title">{localizedSystemName(system)}</div>
-        <button className="btn" onClick={() => onNavigate("galaxy")}>{t("common.jumpOut")}</button>
+      {/* ---- SYSTEM IDENTITY + VITALS ----
+          Redesigned 2026-08-24 (player report: "地图...还是旧的"). The map used to
+          be a bare title strip over a mostly-empty starfield: you couldn't see your
+          own hull, what faction held the system, or what was even in it without
+          pixel-hunting for unlabelled blobs. */}
+      <div style={{ padding: "0.55rem 1rem 0.5rem", borderBottom: "1px solid var(--line)", background: "rgba(5,8,16,0.6)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ minWidth: 0 }}>
+            <div className="title" style={{ fontSize: "1rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {localizedSystemName(system)}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.1rem" }}>
+              <span
+                style={{
+                  width: 7, height: 7, borderRadius: "50%", flex: "none",
+                  background: system.controllingFaction ? FACTION_COLOR[system.controllingFaction] : "var(--text-dim)",
+                  boxShadow: system.controllingFaction ? `0 0 6px ${FACTION_COLOR[system.controllingFaction]}` : "none",
+                }}
+              />
+              <span className="eyebrow" style={{ color: "var(--text-dim)" }}>
+                {system.controllingFaction ? t(`faction.${system.controllingFaction}`) : t("system.unclaimed")}
+              </span>
+            </div>
+          </div>
+          <button className="btn" style={{ flex: "none" }} onClick={() => onNavigate("galaxy")}>{t("common.jumpOut")}</button>
+        </div>
+
+        {ship && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.55rem", marginTop: "0.5rem" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", flex: "none" }}>
+              <HullIcon size={13} color={shipHullFrac > 0.5 ? "var(--green)" : shipHullFrac > 0.2 ? "var(--amber)" : "var(--red)"} />
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "0.76rem", fontVariantNumeric: "tabular-nums", color: "var(--text-hi)" }}>
+                {ship.currentHp} / {effectiveMaxHull(ship)}
+              </span>
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}><Bar fraction={shipHullFrac} kind={hullBarKind(shipHullFrac)} /></span>
+            <span className="eyebrow" style={{ flex: "none", color: "var(--text-dim)" }}>
+              {t("ascension.level", { level: ship.level })}
+            </span>
+          </div>
+        )}
       </div>
       {objectiveElsewhere && (
         <button
@@ -477,8 +551,59 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
           </div>
         )}
       </div>
-      <div style={{ padding: "0.5rem 1rem", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-        {t("system.hint")}
+      {/* ---- CONTACTS ----
+          A legible manifest of what's actually in this system, with type icon,
+          distance, and a course order. Deliberately NOT a mission-select menu
+          (design-principles.md tenet 2): ordering a course flies the ship there
+          through real space exactly as tapping the map does — it never teleports,
+          never skips the approach, and manual flight overrides it instantly. It
+          exists so the system reads as a place with known contacts instead of a
+          dark field you sweep for unlabelled dots. */}
+      <div style={{ borderTop: "1px solid var(--line)", background: "rgba(5,8,16,0.72)", padding: "0.45rem 1rem 0.55rem" }}>
+        <div className="eyebrow" style={{ color: "var(--text-dim)", letterSpacing: "0.1em", marginBottom: "0.3rem" }}>
+          {t("system.contacts", { count: visiblePois.length })}
+        </div>
+        {visiblePois.length === 0 ? (
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>{t("system.noContacts")}</div>
+        ) : (
+          <div style={{ display: "flex", gap: "0.4rem", overflowX: "auto", paddingBottom: "0.15rem" }}>
+            {visiblePois.map((poi) => {
+              const d = Math.round(Math.hypot(poi.x - playerPos.x, poi.y - playerPos.y));
+              const isNear = nearPoi?.id === poi.id;
+              const isNav = navTargetId === poi.id;
+              const color = POI_KIND_COLOR[poi.kind] ?? "var(--text-mid)";
+              return (
+                <button
+                  key={poi.id}
+                  className="btn ghost"
+                  style={{
+                    flex: "none", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.15rem",
+                    padding: "0.4em 0.6em", minWidth: 108, textAlign: "left",
+                    borderColor: isNear ? color : isNav ? "var(--cyan)" : undefined,
+                    boxShadow: isNear ? `0 0 8px ${color}` : undefined,
+                  }}
+                  onClick={() => {
+                    navTargetRef.current = { x: poi.x, y: poi.y };
+                    setNavTargetId(poi.id);
+                    playSfx("click");
+                  }}
+                  title={t("system.setCourse", { name: localizedPoiName(poi) })}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.68rem", fontWeight: 700, color, maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flex: "none" }} />
+                    {localizedPoiName(poi)}
+                  </span>
+                  <span style={{ fontSize: "0.6rem", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>
+                    {isNear ? t("system.inRange") : `${d}u`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ marginTop: "0.35rem", color: "var(--text-dim)", fontSize: "0.66rem" }}>
+          {t("system.hint")}
+        </div>
       </div>
     </div>
   );
