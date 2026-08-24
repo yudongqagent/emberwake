@@ -1,7 +1,7 @@
 import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
-import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId } from "../data/types";
+import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId, ShipInstance } from "../data/types";
 import { fabricatorCost } from "../data/modules";
 import { hullClassById, ascensionRequirementsMet } from "../data/hullClasses";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
@@ -416,6 +416,47 @@ export function resolveCombatDefeat() {
     );
     state.value = { ...state.value, ships };
   }
+  persist();
+}
+
+/** Section D (2026-08-24 player brief): boards and captures an enemy Ember
+ * Warship — see Combat.tsx's boarding order. `EnemyShipDef` only carries combat
+ * stats (name/hull/damage/block/evasion), not a Hull Class or rarity, so this is
+ * a reasonable approximation, not a precise reconstruction of "what hull class
+ * was this really" — Destroyer-class, Standard rarity, a flat mid-teens level, and
+ * neutral rolls, close enough for a ship that's never piloted (only ever gifted
+ * or, eventually, fielded in a fleet battle — see the type's own doc comment). */
+export function captureShip(enemyName: string): ShipInstance {
+  const captured: ShipInstance = {
+    id: randomId("captured"),
+    hullClass: "destroyer",
+    rarity: "standard",
+    aptitude: null,
+    scanned: false,
+    name: enemyName,
+    level: 12,
+    xp: 0,
+    equipped: [],
+    currentHp: 1,
+    rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 },
+    ascendedFrom: [],
+  };
+  state.value = { ...state.value, capturedShips: [...state.value.capturedShips, captured] };
+  playSfx("draw");
+  persist();
+  return captured;
+}
+
+/** Gifting a captured ship to family/allies — per the brief, it's never piloted
+ * by the player and doesn't join the roster; it just leaves the captured list in
+ * exchange for a resource reward (a stand-in for the political/material payoff of
+ * strengthening the House's own strength — see world-bible.md's Warship
+ * Supremacy Doctrine). */
+export function giftCapturedShip(shipId: string) {
+  const ship = state.value.capturedShips.find((s) => s.id === shipId);
+  if (!ship) return;
+  state.value = { ...state.value, capturedShips: state.value.capturedShips.filter((s) => s.id !== shipId) };
+  grant({ salvage: 150, sourcePoints: 80 });
   persist();
 }
 

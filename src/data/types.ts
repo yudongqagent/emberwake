@@ -209,6 +209,10 @@ export interface EncounterDef {
   enemies: EnemyShipDef[];
   rewards: Partial<Record<ResourceType, number>>;
   xp: number;
+  /** Section D of the 2026-08-24 player brief: the enemy at index 0 is itself an
+   * Ember Warship that can be boarded and captured instead of destroyed, once
+   * weakened enough and at close range — see Combat.tsx's boarding order. */
+  capturable?: boolean;
 }
 
 export interface DialogueLine {

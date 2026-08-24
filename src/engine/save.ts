@@ -2,7 +2,7 @@ import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance } from ".
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 const SAVE_KEY = "emberwake.save";
 
 export interface PoiRuntimeState {
@@ -24,6 +24,11 @@ export interface GameState {
   flagshipId: string | null;
   currentSystemId: string;
   poiState: Record<string, PoiRuntimeState>;
+  /** Section D (2026-08-24 player brief): enemy Ember Warships boarded and
+   * captured in combat (see Combat.tsx's boarding order), held here until gifted
+   * to family/allies (state/store.ts's giftCapturedShip) — never piloted by the
+   * player, and not the same roster the old ship-gacha hangar used to be. */
+  capturedShips: ShipInstance[];
 }
 
 function startingModule(defId: string): ModuleInstance {
@@ -52,6 +57,7 @@ export function createInitialState(): GameState {
     flagshipId: whisper.id,
     currentSystemId: "amaranthBelt",
     poiState: {},
+    capturedShips: [],
   };
 }
 
@@ -91,6 +97,13 @@ const migrations: Record<number, (s: any) => any> = {
       flagshipId: kept.id,
     };
   },
+  // Section D: adds the captured-ships roster — empty for every existing save,
+  // nothing to backfill.
+  4: (s: any) => ({
+    ...s,
+    schemaVersion: 5,
+    capturedShips: s.capturedShips ?? [],
+  }),
 };
 
 function migrate(raw: any): GameState {

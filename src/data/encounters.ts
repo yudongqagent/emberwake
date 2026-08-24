@@ -27,6 +27,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     name: "Tiger Shark's Lieutenant",
     faction: "reavers",
     isBoss: true,
+    capturable: true,
     enemies: [
       { name: "Reaver Lieutenant's Cutter", hull: 260, damage: 18, block: 10, evasion: 0.2 },
       { name: "Reaver Skiff", hull: 45, damage: 14, block: 2, evasion: 0.15 },

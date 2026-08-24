@@ -5,7 +5,7 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance } from "../.
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend } from "../../state/store";
+import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip } from "../../state/store";
 import { crewDefById } from "../../data/crew";
 import { hullClassAbility } from "../../data/namedShips";
 import { playSfx } from "../../audio/engine";
@@ -13,7 +13,7 @@ import type { FactionId, ResourceType, ModuleInstance } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
 import { ResourceIcon, resourceLabel } from "../components/Icons";
-import { AnimatedFraction } from "../components/StatBlock";
+import { AnimatedFraction, Bar } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing, drawFieldRing } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
 import { t } from "../../i18n/strings";
@@ -85,6 +85,17 @@ const ENEMY_RANGE_RATE = 1 / 18;
  * smoothly by rangeProgress so a transition reads as real movement, not a snap. */
 const BAND_ANCHOR_X: Record<RangeBand, number> = { close: 300, mid: 480, long: 680 };
 const PLAYER_ANCHOR: ArenaPoint = { x: 130, y: REF_H / 2 };
+/** Section D: a capturable encounter's index-0 enemy can be boarded once its hull
+ * drops to this fraction or below, at close range, with the boarding order given
+ * — fills over BOARD_SECONDS of real time, holding steady (not draining) the
+ * instant any condition breaks, so a fight you have to disengage from mid-boarding
+ * doesn't punish you further than losing the tempo already did.
+ * Live-tested at 0.25: with weapons auto-firing continuously, a target already
+ * that low routinely dies outright (crits, combo scaling) before the window is
+ * even noticed, let alone acted on — widened to 0.4 so boarding is a real
+ * decision the player gets a practical chance to make, not a rare timing fluke. */
+const CAPTURE_HULL_THRESHOLD = 0.4;
+const BOARD_SECONDS = 10;
 
 interface EnemyState {
   name: string;
@@ -178,7 +189,7 @@ interface Props {
   encounterId: string;
   poiId: string | null;
   victoryFlag?: string;
-  onResolve: (result: "victory" | "defeat") => void;
+  onResolve: (result: "victory" | "defeat" | "captured") => void;
 }
 
 export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
@@ -226,7 +237,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [crewCooldowns, setCrewCooldowns] = useState<Record<string, number>>({});
   const [targetIdx, setTargetIdx] = useState(0);
   const [log, setLog] = useState<string[]>([t("combat.log.contact", { name: localizedEncounterName(encounter) })]);
-  const [status, setStatus] = useState<"active" | "victory" | "defeat">("active");
+  const [status, setStatus] = useState<"active" | "victory" | "defeat" | "captured">("active");
   const [popups, setPopups] = useState<Popup[]>([]);
   const [playerShakeToken, setPlayerShakeToken] = useState(0);
   const [rewardsEarned, setRewardsEarned] = useState<Partial<Record<ResourceType, number>> | null>(null);
@@ -241,6 +252,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [stanceOrder, setStanceOrder] = useState<StanceOrder>("hold");
   const [rangeBand, setRangeBand] = useState<RangeBand>("mid");
   const [rangeProgress, setRangeProgress] = useState(0);
+  // Section D (2026-08-24 player brief): boarding — a stance-adjacent order, not
+  // a stance itself, since you can only give it once the target's actually
+  // weakened and you're at close range (see the conditions in combatTick). Fills
+  // over real time like the range tug does, so committing to a boarding action is
+  // a real tactical choice (you're not dealing damage while it fills), not a free
+  // alternate win condition layered on top of just winning normally.
+  const [boardingOrder, setBoardingOrder] = useState(false);
+  const [boardProgress, setBoardProgress] = useState(0);
   const [comboCount, setComboCount] = useState(0);
   const [overcharged, setOvercharged] = useState(false);
   const [guaranteedCrit, setGuaranteedCrit] = useState(false);
@@ -393,6 +412,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const stanceOrderRef = useRef(stanceOrder);
   const rangeBandRef = useRef(rangeBand);
   const rangeProgressRef = useRef(rangeProgress);
+  const boardingOrderRef = useRef(boardingOrder);
+  const boardProgressRef = useRef(boardProgress);
   enemiesRef.current = enemies;
   targetIdxRef.current = targetIdx;
   statusRef.current = status;
@@ -410,6 +431,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   stanceOrderRef.current = stanceOrder;
   rangeBandRef.current = rangeBand;
   rangeProgressRef.current = rangeProgress;
+  boardingOrderRef.current = boardingOrder;
+  boardProgressRef.current = boardProgress;
 
   useEffect(() => {
     if (enemies[targetIdx] && enemies[targetIdx].hull <= 0) {
@@ -901,6 +924,28 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       }
     }
 
+    // Section D: boarding — fills only while every condition holds (order given,
+    // capturable target alive and weak enough, at close range); holds steady
+    // (doesn't drain) the instant any of them breaks, so losing range or the
+    // order for a moment costs tempo, not progress already earned.
+    if (encounter.capturable) {
+      const target = enemiesRef.current[0];
+      const conditionsHold = boardingOrderRef.current
+        && target && target.hull > 0
+        && target.hull <= target.maxHull * CAPTURE_HULL_THRESHOLD
+        && rangeBandRef.current === "close";
+      if (conditionsHold) {
+        const next = Math.min(1, boardProgressRef.current + dt / BOARD_SECONDS);
+        boardProgressRef.current = next;
+        setBoardProgress(next);
+        if (next >= 1) {
+          finishCombat("captured", enemiesRef.current);
+          const captured = captureShip(target!.name);
+          pushLog(t("combat.log.captured", { name: captured.name }));
+        }
+      }
+    }
+
     setEnemies((prev) => prev.map((e) => (e.hull <= 0 ? e : {
       ...e,
       evasionDebuffSec: Math.max(0, (e.evasionDebuffSec ?? 0) - dt),
@@ -990,11 +1035,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     });
   }
 
-  function finishCombat(result: "victory" | "defeat", finalEnemies: EnemyState[]) {
+  function finishCombat(result: "victory" | "defeat" | "captured", finalEnemies: EnemyState[]) {
     setStatus(result);
     setEnemies(finalEnemies);
-    if (result === "victory") {
-      playSfx("victory");
+    if (result === "victory" || result === "captured") {
+      playSfx(result === "captured" ? "draw" : "victory");
       // Convert the combat-local (hullBonus-scaled) playerHull back to the ship's
       // own terms before persisting — see resolveCombatVictory's endingHullPoints.
       const realEndingHull = playerHull / (1 + hullBonusFraction);
@@ -1611,7 +1656,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // "fly toward" if the tap misses every contact.
     function onPointer(e: PointerEvent) {
       try {
-        if (statusRef.current === "victory" || statusRef.current === "defeat") return;
+        if (statusRef.current !== "active") return;
         const world = vp.toWorld(e.clientX, e.clientY);
         if (!Number.isFinite(world.x) || !Number.isFinite(world.y)) return;
         const enemies = enemiesRef.current;
@@ -1634,7 +1679,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       const frozen = now < hitStopUntilRef.current;
       const dt = frozen ? 0 : Math.min(0.25, Math.max(0, (now - last) / 1000));
       last = now;
-      const combatOver = statusRef.current === "victory" || statusRef.current === "defeat";
+      const combatOver = statusRef.current !== "active";
 
       // Player anchor never moves — a small idle drift for life, same texture the
       // old thrusting ship had at rest.
@@ -1744,6 +1789,31 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           </button>
         ))}
       </div>
+
+      {encounter.capturable && enemies[0] && enemies[0].hull > 0 && (
+        <div style={{ padding: "0.5rem 1rem 0" }}>
+          {/* Standing order, not a reactive prompt: the button's live the whole
+              fight, same as the stance orders — arm it ahead of the target
+              actually dropping below the capture threshold (see combatTick) and
+              progress starts filling itself the instant every condition lines up,
+              instead of requiring the player to notice and react within whatever
+              window auto-fire leaves before a crit finishes the target off. */}
+          <button
+            className={`btn ${boardingOrder ? "primary" : "ghost"}`}
+            style={{ width: "100%", fontSize: "0.72rem", padding: "0.5em 0.3em" }}
+            disabled={status !== "active"}
+            onClick={() => { setBoardingOrder((b) => !b); playSfx("click"); }}
+            title={t("combat.boardTitle")}
+          >
+            {boardingOrder ? t("combat.boarding", { pct: Math.round(boardProgress * 100) }) : t("combat.board")}
+          </button>
+          {boardingOrder && (
+            <div style={{ marginTop: "0.3rem" }}>
+              <Bar fraction={boardProgress} kind="progress" />
+            </div>
+          )}
+        </div>
+      )}
 
       {encounter.faction === "choir" && (
         <div style={{ padding: "0 1rem 0.5rem" }}>
@@ -1867,9 +1937,16 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         {log.map((l, i) => <div key={i}>{l}</div>)}
       </div>
 
-      {status === "victory" && (
+      {(status === "victory" || status === "captured") && (
         <div className="panel pop-in" style={{ margin: "0 1rem 1rem", padding: "1rem", textAlign: "center" }}>
-          <div className="title" style={{ marginBottom: "0.5rem" }}>{t("combat.victory")}</div>
+          <div className="title" style={{ marginBottom: "0.5rem" }}>{status === "captured" ? t("combat.captured") : t("combat.victory")}</div>
+          {status === "captured" && (
+            <div className="panel accent scanline pop-in" style={{ padding: "0.9rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: "var(--green)" }}>
+              <div className="eyebrow" style={{ color: "var(--green)" }}>{t("combat.capturedShipLabel")}</div>
+              <div style={{ fontWeight: 700, fontSize: "1.05rem", marginTop: "0.2rem" }}>{enemies[0]?.name}</div>
+              <div style={{ fontSize: "0.76rem", color: "var(--text-mid)", marginTop: "0.3rem" }}>{t("combat.capturedHint")}</div>
+            </div>
+          )}
           {levelUp && (
             <div className="panel accent scanline pop-in" style={{ padding: "0.9rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: "var(--amber)" }}>
               <div style={{ fontFamily: "var(--font-display)", fontSize: "1.15rem", fontWeight: 800, color: "var(--amber)", letterSpacing: "0.03em" }}>
@@ -1915,7 +1992,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               </div>
             );
           })()}
-          <button className="btn primary" onClick={() => onResolve("victory")}>{t("common.continue")}</button>
+          <button className="btn primary" onClick={() => onResolve(status === "captured" ? "captured" : "victory")}>{t("common.continue")}</button>
         </div>
       )}
       {status === "defeat" && (

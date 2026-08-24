@@ -1,4 +1,4 @@
-import { flagship, scanShipAction, effectiveMaxHull } from "../../state/store";
+import { state, flagship, scanShipAction, effectiveMaxHull, giftCapturedShip } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
 import { hullClassAbility } from "../../data/namedShips";
 import { computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
@@ -98,6 +98,25 @@ export function Fleet() {
               </span>
             ))}
             <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{localizedHullClassDisplay(def)}</span>
+          </div>
+        </div>
+      )}
+
+      {state.value.capturedShips.length > 0 && (
+        <div>
+          <div className="title" style={{ fontSize: "1.05rem" }}>{t("fleet.capturedShips")}</div>
+          <div style={{ color: "var(--text-mid)", fontSize: "0.8rem", marginTop: "0.2rem", marginBottom: "0.6rem" }}>
+            {t("fleet.capturedShipsHint")}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {state.value.capturedShips.map((cs) => (
+              <div key={cs.id} className="panel compact" style={{ padding: "0.7rem 0.9rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem" }}>
+                <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>{cs.name}</div>
+                <button className="btn" onClick={() => { giftCapturedShip(cs.id); playSfx("click"); }}>
+                  {t("fleet.giftShip")}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
