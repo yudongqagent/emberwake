@@ -12,7 +12,7 @@ import { playSfx } from "../../audio/engine";
 import type { FactionId, ResourceType, ModuleInstance } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
-import { ResourceIcon, resourceLabel, CloseOrderIcon, HoldOrderIcon, RetreatOrderIcon, BoardIcon } from "../components/Icons";
+import { ResourceIcon, resourceLabel, CloseOrderIcon, HoldOrderIcon, RetreatOrderIcon, BoardIcon, NavIcon } from "../components/Icons";
 import { AnimatedFraction, Bar } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing, drawFieldRing } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
@@ -96,6 +96,17 @@ const PLAYER_ANCHOR: ArenaPoint = { x: 130, y: REF_H / 2 };
  * decision the player gets a practical chance to make, not a rare timing fluke. */
 const CAPTURE_HULL_THRESHOLD = 0.4;
 const BOARD_SECONDS = 10;
+/** Section D (fleet battles): seconds between one allied ship's volleys, and the
+ * fraction of its own level-scaled strength each volley lands for. Deliberately
+ * slower and weaker per-ship than Whisper's own weapons — allies are a real but
+ * secondary contribution (the fight is still yours to win or lose), and a stack
+ * of them shortens a fleet battle without trivializing it. */
+const ALLY_ATTACK_INTERVAL = 3.4;
+const ALLY_DAMAGE_PER_LEVEL = 1.7;
+/** Where allied ships sit on the viewscreen — behind and flanking Whisper's own
+ * fixed anchor, so their volleys visibly originate from the player's side of the
+ * field rather than nowhere. */
+const ALLY_ANCHOR_X = 60;
 
 interface EnemyState {
   name: string;
@@ -195,6 +206,14 @@ interface Props {
 export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const encounter = encounterById(encounterId);
   const ship = flagship.value!;
+  // Section D (fleet battles): allied ships — captured, then gifted on to family
+  // or allies — join only where the encounter opts in. The riftEchoes exclusion
+  // is defense in depth on top of that opt-in: the extradimensional battlefield
+  // is explicitly solo per the brief, and every rift encounter is that faction,
+  // so a future rift encounter can't accidentally be flagged into fleet support.
+  const alliedFleet = encounter.fleetBattle && encounter.faction !== "riftEchoes"
+    ? state.value.alliedShips
+    : [];
   const equippedModuleList = ship.equipped
     .map((id) => state.value.modules.find((m) => m.id === id))
     .filter((m): m is NonNullable<typeof m> => !!m);
@@ -334,6 +353,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // Initialized lazily (per index, on first tick) with a staggered random start so
   // a multi-enemy fight doesn't open with every enemy firing in lockstep.
   const enemyTimersRef = useRef<EnemyTimer[]>([]);
+  /** Section D: per-allied-ship volley clocks, staggered on init so a gifted
+   * fleet doesn't fire in one synchronized wall. Same ref-not-state reasoning as
+   * enemyTimersRef — they tick constantly, only the moment they fire matters. */
+  const allyTimersRef = useRef<number[]>([]);
+  /** Mirrored for the render loop's frozen-at-mount closure, same reason as every
+   * other *Ref here — the draw call needs the count every frame. */
+  const allyCountRef = useRef(alliedFleet.length);
+  allyCountRef.current = alliedFleet.length;
   // Ion Disruptor's Overload: a per-module shot counter, keyed by module instance id
   // so two Ion Disruptors equipped at once track independently.
   const overloadCountersRef = useRef<Record<string, number>>({});
@@ -945,6 +972,34 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         }
       }
     }
+
+    // Section D (fleet battles): allied ships fire on their own independent
+    // clocks at whatever the player has designated as focus fire — they follow
+    // the player's targeting order rather than picking their own, which keeps
+    // "who dies next" a decision the player still owns.
+    alliedFleet.forEach((ally, i) => {
+      if (allyTimersRef.current[i] === undefined) {
+        allyTimersRef.current[i] = 0.5 + Math.random() * ALLY_ATTACK_INTERVAL;
+      }
+      allyTimersRef.current[i] -= dt;
+      if (allyTimersRef.current[i] > 0) return;
+      allyTimersRef.current[i] = ALLY_ATTACK_INTERVAL + (Math.random() - 0.5) * 1.2;
+
+      const currentEnemies = enemiesRef.current;
+      const tIdx = targetIdxRef.current;
+      const target = currentEnemies[tIdx];
+      if (!target || target.hull <= 0 || target.phased) return;
+
+      const dmg = Math.max(1, Math.round(ally.level * ALLY_DAMAGE_PER_LEVEL) - target.block);
+      const pos = arenaRef.current.enemyPos[tIdx] ?? enemySlot(tIdx, currentEnemies.length);
+      const from = { x: ALLY_ANCHOR_X, y: REF_H / 2 + (i - (alliedFleet.length - 1) / 2) * 70 };
+      fireProjectile(from, pos, "#8cffc7", () => {
+        spawnBurst(pos.x, pos.y, "140,255,199", 8, 90);
+        addPopup(tIdx, `-${dmg}`, "#8cffc7");
+      }, 0.9);
+      setEnemies((prev) => prev.map((e, idx) => (idx === tIdx ? { ...e, hull: Math.max(0, e.hull - dmg) } : e)));
+      pushLog(t("combat.log.allyVolley", { ally: ally.name, target: target.name, dmg }));
+    });
 
     setEnemies((prev) => prev.map((e) => (e.hull <= 0 ? e : {
       ...e,
@@ -1726,7 +1781,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // Engines read as "lit" while an order is actively contesting range, not
       // while literally accelerating — there's no velocity left to check.
       const thrusting = !combatOver && stanceOrderRef.current !== "hold";
-      draw(ctx, vp, arena, { angle: 0, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, ringsRef.current, hitPulseRef.current);
+      draw(ctx, vp, arena, { angle: 0, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, ringsRef.current, hitPulseRef.current, allyCountRef.current);
     }
 
     // A throw anywhere in step() (physics, draw, anything reachable from a frame
@@ -1793,6 +1848,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           );
         })}
       </div>
+
+      {alliedFleet.length > 0 && (
+        <div style={{ padding: "0.5rem 1rem 0", display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.7rem", color: "var(--green)" }}>
+          <NavIcon name="fleet" size={13} color="var(--green)" />
+          {t("combat.fleetBattle", { count: alliedFleet.length })}
+        </div>
+      )}
 
       {encounter.capturable && enemies[0] && enemies[0].hull > 0 && (
         <div style={{ padding: "0.5rem 1rem 0" }}>
@@ -2140,6 +2202,7 @@ function draw(
   explosions: { x: number; y: number; start: number }[],
   rings: FieldRing[],
   hitPulse: { enemy: Record<number, number>; player: number },
+  allyCount: number,
 ) {
   vp.beginFrame(ctx);
   const { scale, offsetX, offsetY } = vp.transform();
@@ -2200,6 +2263,19 @@ function draw(
     if (!pos) return;
     drawEnemyShip(ctx, pos, faction, now + i * 500, i === targetIdx, e, pulseScale(now, hitPulse.enemy[i]));
   });
+
+  // Section D: allied ships in formation behind Whisper — drawn smaller and
+  // dimmer than the flagship so the player's own ship stays the clear focal
+  // point, but present enough that a fleet battle visibly IS one.
+  for (let i = 0; i < allyCount; i++) {
+    const pos = { x: ALLY_ANCHOR_X, y: REF_H / 2 + (i - (allyCount - 1) / 2) * 70 };
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    ctx.globalAlpha = 0.75;
+    ctx.scale(0.62, 0.62);
+    drawPlayerHull(ctx, 1, now + i * 700, false);
+    ctx.restore();
+  }
 
   drawPlayerShip(ctx, arena.player, player.angle, now, player.thrusting, pulseScale(now, hitPulse.player));
   ctx.restore();

@@ -2,7 +2,7 @@ import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance } from ".
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 const SAVE_KEY = "emberwake.save";
 
 export interface PoiRuntimeState {
@@ -29,6 +29,11 @@ export interface GameState {
    * to family/allies (state/store.ts's giftCapturedShip) — never piloted by the
    * player, and not the same roster the old ship-gacha hangar used to be. */
   capturedShips: ShipInstance[];
+  /** Captured ships that have been gifted on to family/allies. They're gone from
+   * the player's own hands for good, but they fight alongside Whisper in fleet
+   * battles (团战) — see EncounterDef.fleetBattle. Never in the extradimensional
+   * battlefield, which stays solo. */
+  alliedShips: ShipInstance[];
 }
 
 function startingModule(defId: string): ModuleInstance {
@@ -58,6 +63,7 @@ export function createInitialState(): GameState {
     currentSystemId: "amaranthBelt",
     poiState: {},
     capturedShips: [],
+    alliedShips: [],
   };
 }
 
@@ -103,6 +109,14 @@ const migrations: Record<number, (s: any) => any> = {
     ...s,
     schemaVersion: 5,
     capturedShips: s.capturedShips ?? [],
+  }),
+  // Section D, second half: adds the allied (gifted) roster for fleet battles.
+  // Empty for existing saves — ships gifted before this existed were consumed
+  // outright for resources, and there's no record left to reconstruct them from.
+  5: (s: any) => ({
+    ...s,
+    schemaVersion: 6,
+    alliedShips: s.alliedShips ?? [],
   }),
 };
 

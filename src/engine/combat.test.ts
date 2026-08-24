@@ -141,3 +141,26 @@ describe("early-game damage floor (Act I trash-tier enemies vs. starting block)"
     }
   });
 });
+
+// Section D (2026-08-24 player brief): gifted/allied ships join fleet battles
+// "depending on the map/mission" but explicitly do NOT accompany the player into
+// the extradimensional battlefield — that content stays solo. Combat.tsx enforces
+// this two ways (an opt-in fleetBattle flag AND a hard riftEchoes faction
+// exclusion); this guards the data side so a future rift encounter can't be
+// flagged into fleet support by mistake and quietly break the promise.
+describe("fleet battles never include the extradimensional battlefield (section D)", () => {
+  it("no riftEchoes encounter is flagged as a fleet battle", () => {
+    for (const enc of ENCOUNTER_DEFS) {
+      if (enc.faction !== "riftEchoes") continue;
+      expect(enc.fleetBattle ?? false, `${enc.id} is a Rift (extradimensional) encounter and must stay solo`).toBe(false);
+    }
+  });
+
+  it("every rift-dive encounter is riftEchoes faction, so the exclusion rule actually covers them", () => {
+    for (const id of ["riftDiveShallow", "riftDiveDeep", "riftDiveAbyssal"]) {
+      const enc = ENCOUNTER_DEFS.find((e) => e.id === id)!;
+      expect(enc, `${id} should exist`).toBeDefined();
+      expect(enc.faction, `${id} must be riftEchoes for the fleet-battle exclusion to apply`).toBe("riftEchoes");
+    }
+  });
+});

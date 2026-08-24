@@ -464,15 +464,19 @@ export function captureShip(enemyName: string): ShipInstance {
   return captured;
 }
 
-/** Gifting a captured ship to family/allies — per the brief, it's never piloted
- * by the player and doesn't join the roster; it just leaves the captured list in
- * exchange for a resource reward (a stand-in for the political/material payoff of
- * strengthening the House's own strength — see world-bible.md's Warship
- * Supremacy Doctrine). */
+/** Gifting a captured ship to family/allies — it's never piloted by the player,
+ * but it isn't consumed either: it joins the allied fleet and fights alongside
+ * Whisper in fleet battles (团战, see EncounterDef.fleetBattle). The resource
+ * grant is the immediate political/material payoff of strengthening the House's
+ * own standing — see world-bible.md's Warship Supremacy Doctrine. */
 export function giftCapturedShip(shipId: string) {
   const ship = state.value.capturedShips.find((s) => s.id === shipId);
   if (!ship) return;
-  state.value = { ...state.value, capturedShips: state.value.capturedShips.filter((s) => s.id !== shipId) };
+  state.value = {
+    ...state.value,
+    capturedShips: state.value.capturedShips.filter((s) => s.id !== shipId),
+    alliedShips: [...state.value.alliedShips, ship],
+  };
   grant({ salvage: 150, sourcePoints: 80 });
   persist();
 }

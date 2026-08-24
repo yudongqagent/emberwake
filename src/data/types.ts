@@ -213,6 +213,12 @@ export interface EncounterDef {
    * Ember Warship that can be boarded and captured instead of destroyed, once
    * weakened enough and at close range — see Combat.tsx's boarding order. */
   capturable?: boolean;
+  /** Section D, second half: a fleet battle (团战) — ships the player captured and
+   * gifted to family/allies fight alongside Whisper here. Opt-in per encounter
+   * ("depending on the map/mission"), and never true for the extradimensional
+   * battlefield, which stays solo — see alliedFleetJoins() in Combat.tsx, which
+   * additionally hard-excludes the riftEchoes faction as defense in depth. */
+  fleetBattle?: boolean;
 }
 
 export interface DialogueLine {

@@ -120,6 +120,26 @@ export function Fleet() {
           </div>
         </div>
       )}
+
+      {state.value.alliedShips.length > 0 && (
+        <div>
+          <div className="title" style={{ fontSize: "1.05rem" }}>{t("fleet.alliedFleet")}</div>
+          <div style={{ color: "var(--text-mid)", fontSize: "0.8rem", marginTop: "0.2rem", marginBottom: "0.6rem" }}>
+            {t("fleet.alliedFleetHint")}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {state.value.alliedShips.map((as) => (
+              <div key={as.id} className="panel compact accent" style={{ padding: "0.7rem 0.9rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem", ["--accent" as any]: "var(--green)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <NavIcon name="fleet" size={15} color="var(--green)" />
+                  <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>{as.name}</div>
+                </div>
+                <span className="eyebrow" style={{ color: "var(--text-dim)" }}>{t("fleet.allyLevel", { level: as.level })}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

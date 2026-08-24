@@ -88,6 +88,9 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     name: "Swarm Incursion at the Border",
     faction: "swarm",
     isBoss: true,
+    // A border defense the Principality's own houses have a stake in — exactly
+    // the kind of engagement allied ships turn out for (section D, 团战).
+    fleetBattle: true,
     enemies: [
       { name: "Swarm Drone", hull: 60, damage: 9, block: 0, evasion: 0.12, regen: 6 },
       { name: "Swarm Drone", hull: 60, damage: 9, block: 0, evasion: 0.12, regen: 6 },
@@ -345,6 +348,9 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     name: "The Conductor's Last Movement (Act VI Finale)",
     faction: "choir",
     isBoss: true,
+    // The campaign's final stand — everything the player has built, including the
+    // ships they captured and gave away, turns up for it (section D, 团战).
+    fleetBattle: true,
     enemies: [
       { name: "The Conductor", hull: 1900, damage: 38, block: 26, evasion: 0.1 },
       { name: "Choir Herald", hull: 1000, damage: 32, block: 20, evasion: 0.12 },
