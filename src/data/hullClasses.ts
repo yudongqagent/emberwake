@@ -12,6 +12,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 5,
     unlockFlag: null,
     essenceCost: 0,
+    minLevel: 0,
   },
   {
     id: "destroyer",
@@ -24,6 +25,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 5,
     unlockFlag: "act1.tigersReach.cleared",
     essenceCost: 40,
+    minLevel: 4,
   },
   {
     id: "interceptor",
@@ -39,6 +41,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 8,
     unlockFlag: "act1.tigersReach.cleared",
     essenceCost: 40,
+    minLevel: 4,
   },
   {
     id: "cruiser",
@@ -51,6 +54,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 4,
     unlockFlag: "act1.emberRising.cleared",
     essenceCost: 90,
+    minLevel: 10,
   },
   {
     id: "vanguard",
@@ -65,6 +69,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 5,
     unlockFlag: "act1.emberRising.cleared",
     essenceCost: 90,
+    minLevel: 10,
   },
   {
     id: "battleship",
@@ -77,6 +82,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 3,
     unlockFlag: "act2.reachOpens.cleared",
     essenceCost: 160,
+    minLevel: 18,
   },
   {
     id: "bulwark",
@@ -91,6 +97,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 2,
     unlockFlag: "act2.reachOpens.cleared",
     essenceCost: 160,
+    minLevel: 18,
   },
   {
     id: "dreadnought",
@@ -103,6 +110,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 3,
     unlockFlag: "act3.originTide.cleared",
     essenceCost: 260,
+    minLevel: 28,
   },
   {
     id: "corsair",
@@ -111,12 +119,17 @@ export const HULL_CLASSES: HullClassDef[] = [
     nameCn: "掠夺舰",
     // Same tier/unlock/12-slot total as Dreadnought, but weighted hard toward
     // weapons and engines instead of armor — an alpha-strike glass cannon.
+    // baseHull bumped from 750 (Player-Tested Anti-Patterns #6, caught by the ship-
+    // ascension redesign's order-gap test): 750 was actually *below* order-3
+    // Bulwark's 800, so ascending Bulwark→Corsair would have LOST hull — the tier
+    // gap must hold across every branch pair, not just within one lateral pairing.
     slots: { weapon: 5, armor: 2, engine: 3, utility: 2 },
-    baseHull: 750,
+    baseHull: 820,
     basePower: 38,
     baseSpeed: 5,
     unlockFlag: "act3.originTide.cleared",
     essenceCost: 260,
+    minLevel: 28,
   },
   {
     id: "sovereign",
@@ -129,6 +142,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 3,
     unlockFlag: "act4.deepOrigin.cleared",
     essenceCost: 420,
+    minLevel: 40,
   },
   {
     id: "aegis",
@@ -143,6 +157,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 2,
     unlockFlag: "act4.deepOrigin.cleared",
     essenceCost: 420,
+    minLevel: 40,
   },
   {
     id: "anthem",
@@ -158,6 +173,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 4,
     unlockFlag: "act6.civilizationDisqualified.cleared",
     essenceCost: 620,
+    minLevel: 55,
   },
   {
     id: "sanctum",
@@ -172,6 +188,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 2,
     unlockFlag: "act6.civilizationDisqualified.cleared",
     essenceCost: 620,
+    minLevel: 55,
   },
 ];
 
@@ -197,23 +214,6 @@ export const RARITY_MULTIPLIER: Record<ShipRarity, number> = {
   ascendant: 4.01,
 };
 
-/** Shipwright showcase price for a rolled hull instance — scales with both hull tier
- * and rarity, so a visibly better ship costs visibly more instead of every rarity at
- * a given tier costing the same flat fee. */
-export function shipwrightCost(hullClassId: HullClassId, rarity: ShipRarity): number {
-  const def = hullClassById(hullClassId);
-  return Math.round((30 + def.order * 25) * RARITY_MULTIPLIER[rarity]);
-}
-
-export const RARITY_WEIGHTS: Record<ShipRarity, number> = {
-  salvage: 42,
-  standard: 28,
-  reinforced: 16,
-  advanced: 9,
-  prototype: 4,
-  ascendant: 1,
-};
-
 export const APTITUDE_GROWTH: Record<Aptitude, number> = {
   S: 1.5,
   A: 1.25,
@@ -236,7 +236,27 @@ export function hullClassById(id: string): HullClassDef {
   return def;
 }
 
-export function nextHullClass(current: string): HullClassDef | null {
+/** Ship ascension (see docs/story/research-notes-ship-ascension.md): the 1-2 hull
+ * classes one order above the given one — a free choice each tier, not a locked
+ * branch, since nothing in the source material specifies a branching tree. Empty
+ * once past the campaign's current ceiling (order 6). */
+export function nextHullClassOptions(current: HullClassId): HullClassDef[] {
   const cur = hullClassById(current);
-  return HULL_CLASSES.find((h) => h.order === cur.order + 1) ?? null;
+  return HULL_CLASSES.filter((h) => h.order === cur.order + 1);
+}
+
+/** Whether `ship` currently meets every ascension requirement for `target` — story
+ * flag, Origin Essence on hand, and minimum level. All three must hold; ascending
+ * itself (see engine/ships.ts's ascendShip) is what actually spends the Essence. */
+export function ascensionRequirementsMet(
+  target: HullClassDef,
+  level: number,
+  originEssence: number,
+  flags: Record<string, boolean>,
+): { flag: boolean; essence: boolean; level: boolean } {
+  return {
+    flag: target.unlockFlag === null || !!flags[target.unlockFlag],
+    essence: originEssence >= target.essenceCost,
+    level: level >= target.minLevel,
+  };
 }

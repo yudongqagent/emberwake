@@ -1,8 +1,8 @@
 import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance } from "../data/types";
-import { drawShip, computeMaxHull } from "./ships";
+import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 const SAVE_KEY = "emberwake.save";
 
 export interface PoiRuntimeState {
@@ -31,10 +31,7 @@ function startingModule(defId: string): ModuleInstance {
 }
 
 export function createInitialState(): GameState {
-  const whisper = drawShip("corvette");
-  whisper.rarity = "salvage";
-  whisper.name = "Whisper";
-  whisper.currentHp = computeMaxHull(whisper);
+  const whisper = createWhisper();
   const startingWeapon = startingModule("pulseCannon");
   const startingArmor = startingModule("plateBarrier");
   // Slot order matches slotLayout() in ui/screens/Modules.tsx: weapon, armor, engine, utility.
@@ -76,6 +73,24 @@ const migrations: Record<number, (s: any) => any> = {
     schemaVersion: 3,
     ships: s.ships.map((ship: any) => ({ ...ship, namedShipId: ship.namedShipId ?? null })),
   }),
+  // Ship-ascension redesign (docs/story/research-notes-ship-ascension.md): the
+  // multi-ship gacha hangar is gone — a save may own several ships with one flagged
+  // as the flagship. Keep only that one (whichever ship is currently flown is the
+  // one that keeps growing; nothing is reset), drop the rest with no clawback of the
+  // Essence/Source Points they cost, and drop the now-meaningless namedShipId (the
+  // ability is derived from hullClass now, not stored — see data/namedShips.ts's
+  // hullClassAbility()). Currency the player had earmarked for ship-buying is just
+  // currency now.
+  3: (s: any) => {
+    const kept = s.ships.find((ship: any) => ship.id === s.flagshipId) ?? s.ships[0];
+    const { namedShipId, ...rest } = kept;
+    return {
+      ...s,
+      schemaVersion: 4,
+      ships: [{ ...rest, ascendedFrom: rest.ascendedFrom ?? [] }],
+      flagshipId: kept.id,
+    };
+  },
 };
 
 function migrate(raw: any): GameState {

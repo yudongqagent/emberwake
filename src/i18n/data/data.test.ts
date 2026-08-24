@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MODULE_DEFS } from "../../data/modules";
 import { CREW_DEFS } from "../../data/crew";
-import { NAMED_SHIP_DEFS } from "../../data/namedShips";
+import { HULL_CLASS_ABILITIES } from "../../data/namedShips";
 import { ENCOUNTER_DEFS, BOUNTY_ENCOUNTER_DEFS } from "../../data/encounters";
 import { BAUHINIA_REACH } from "../../data/galaxies/bauhiniaReach";
 import { LIONSHEART_EXPANSE } from "../../data/galaxies/lionsheartExpanse";
@@ -56,14 +56,14 @@ describe("module/crew/named-ship translation overlays stay in sync with English 
     }
   });
 
-  it("every NamedShipDef has a Chinese translation", () => {
-    for (const def of NAMED_SHIP_DEFS) {
+  it("every HullClassAbilityDef has a Chinese translation", () => {
+    for (const def of HULL_CLASS_ABILITIES) {
       expect(NAMED_SHIPS_ZH[def.id], `named ship "${def.id}" has no Chinese translation`).toBeDefined();
     }
   });
 
   it("every translated named-ship active ability keeps the ' — ' separator the English original uses", () => {
-    for (const def of NAMED_SHIP_DEFS) {
+    for (const def of HULL_CLASS_ABILITIES) {
       const zh = NAMED_SHIPS_ZH[def.id];
       if (!zh) continue;
       expect(zh.active.includes(" — "), `named ship "${def.id}": translated active ability is missing the ' — ' separator Combat.tsx splits on`).toBe(true);

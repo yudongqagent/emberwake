@@ -7,7 +7,7 @@ import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion,
 import { RANGE_MODIFIERS, resolveAttack, rangeBandFromDistance, CRIT_MULTIPLIER, type RangeBand } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend } from "../../state/store";
 import { crewDefById } from "../../data/crew";
-import { namedShipDefById } from "../../data/namedShips";
+import { hullClassAbility } from "../../data/namedShips";
 import { playSfx } from "../../audio/engine";
 import type { FactionId, ResourceType, ModuleInstance } from "../../data/types";
 import { randomId } from "../../engine/rng";
@@ -256,6 +256,30 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [fortifySec, setFortifySec] = useState(0);
   const [bloodscentSec, setBloodscentSec] = useState(0);
   const bloodscentTargetRef = useRef<number | null>(null);
+  // Ship-ascension redesign: hull-class abilities for the 7 hull classes that
+  // previously had none (see data/namedShips.ts). Each is a genuinely distinct
+  // axis from every existing ability, not a reskin — see the "Open call" note in
+  // the ascension design plan.
+  // Interceptor's Blink Vector: a flat evasion buff over time — no existing
+  // ability grants the player evasion directly (evasionDebuffSec/undercut etc. are
+  // all enemy-side debuffs).
+  const [evasionBoostSec, setEvasionBoostSec] = useState(0);
+  // Bulwark's Bastion Ward: negates a fixed COUNT of hits, not a time window —
+  // distinct from Construct Override's shieldSec (time-based full negation).
+  const [wardCharges, setWardCharges] = useState(0);
+  // Corsair's First Blood: the next enemy attack (hit OR miss) is preceded by a
+  // counter-strike — distinct from crew Riposte, which only triggers on a miss.
+  const [firstBloodArmed, setFirstBloodArmed] = useState(false);
+  // Aegis's Aegis Ward: a flat % damage-reduction multiplier over time — distinct
+  // from Fortify (doubles block, a pre-mitigation stat) and Bastion Ward (count-
+  // based full negation).
+  const [aegisWardSec, setAegisWardSec] = useState(0);
+  // Anthem's Chorus Overture: the next N weapon shots can't miss and hit harder —
+  // a guaranteed-hit buff, distinct from Focus Fire's guaranteed CRIT.
+  const [chorusOvertureShots, setChorusOvertureShots] = useState(0);
+  // Sanctum's Sanctuary Field: full negation (like Construct Override) but paired
+  // with an instant heal, which nothing else combines with a negation window.
+  const [sanctuaryFieldSec, setSanctuaryFieldSec] = useState(0);
   // Issues #5/#6 (2026-08 playtest): a signature ultimate, and the game's first
   // guaranteed (not rarity-pull-dependent) AoE — every ship has this regardless of
   // loadout. Charges from landing hits, not from time or RNG, so it rewards active
@@ -345,6 +369,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const fortifySecRef = useRef(fortifySec);
   const corrodedBlockRef = useRef(corrodedBlock);
   const unhitStreakRef = useRef(unhitStreak);
+  const evasionBoostSecRef = useRef(evasionBoostSec);
+  const wardChargesRef = useRef(wardCharges);
+  const firstBloodArmedRef = useRef(firstBloodArmed);
+  const aegisWardSecRef = useRef(aegisWardSec);
+  const sanctuaryFieldSecRef = useRef(sanctuaryFieldSec);
   enemiesRef.current = enemies;
   targetIdxRef.current = targetIdx;
   statusRef.current = status;
@@ -354,6 +383,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   fortifySecRef.current = fortifySec;
   corrodedBlockRef.current = corrodedBlock;
   unhitStreakRef.current = unhitStreak;
+  evasionBoostSecRef.current = evasionBoostSec;
+  wardChargesRef.current = wardCharges;
+  firstBloodArmedRef.current = firstBloodArmed;
+  aegisWardSecRef.current = aegisWardSec;
+  sanctuaryFieldSecRef.current = sanctuaryFieldSec;
 
   useEffect(() => {
     if (enemies[targetIdx] && enemies[targetIdx].hull <= 0) {
@@ -573,6 +607,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     }
 
     const shieldActive = shieldSecRef.current > 0;
+    // Sanctum's Sanctuary Field: full negation like Construct Override's shieldSec,
+    // just granted by a different ability (and paired with a heal at cast time).
+    const sanctuaryActive = sanctuaryFieldSecRef.current > 0;
     // Hollow Point's Phase Shift: the next enemy attack (whichever fires first)
     // auto-misses — a guaranteed single-attack dodge, distinct from Construct
     // Override's short full-negation window — a miss still triggers Lionsheart's
@@ -580,6 +617,27 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const phaseShiftBlocksThis = phaseShiftReadyRef.current;
     if (phaseShiftBlocksThis) setPhaseShiftReady(false);
     const riposteActive = riposteArmedRef.current;
+
+    // Corsair's First Blood: the next enemy attack, hit or miss, is preceded by a
+    // full-power counter-strike — unlike Riposte (crew), this doesn't wait to see
+    // if the enemy actually connects.
+    if (firstBloodArmedRef.current) {
+      setFirstBloodArmed(false);
+      const bestWeapon = equippedModules
+        .filter((m) => moduleDefById(m.defId).baseDamage)
+        .sort((a, b) => computeModuleDamage(b) - computeModuleDamage(a))[0];
+      if (bestWeapon) {
+        const firstBloodDmg = computeModuleDamage(bestWeapon);
+        const pos = arenaRef.current.enemyPos[idx] ?? enemySlot(idx, currentEnemies.length);
+        setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, hull: Math.max(0, e.hull - firstBloodDmg) } : e)));
+        fireProjectile(arenaRef.current.player, pos, "#ff6b3d", () => {
+          spawnBurst(pos.x, pos.y, "255,107,61", 14, 110);
+          addPopup(idx, `-${firstBloodDmg}`, "#ff6b3d");
+        });
+        pushLog(t("combat.log.firstBlood", { enemy: enemy.name, dmg: firstBloodDmg }));
+        playSfx("laser");
+      }
+    }
 
     // Reaver doctrine: Frenzy. Below 30% hull, a Reaver stops fighting defensively
     // and goes all-in — a real threshold distinct from boss enrage (50%, isBoss-only).
@@ -596,24 +654,37 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // distance to long range during the windup negates the charged bonus entirely.
     const chargeDodged = charged && band === "long";
     const dmgMultiplier = (charged && !chargeDodged ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus;
+    // Interceptor's Blink Vector: a flat evasion buff over time.
     const baseEvasion = shipBaseEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus
-      + (hasMomentum ? Math.min(0.15, unhitStreakRef.current * 0.03) : 0);
+      + (hasMomentum ? Math.min(0.15, unhitStreakRef.current * 0.03) : 0)
+      + (evasionBoostSecRef.current > 0 ? 0.25 : 0);
     // Kaan Ferrous: "+10% evasion when at Long range" — only when he's assigned to the flagship.
     const kaanAssigned = assignedCrew.some((c) => c.defId === "kaanFerrous");
-    const evasion = Math.min(0.6, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
+    const evasion = Math.min(0.75, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
     // Iron Verdict's Fortify: armor block doubles for its duration.
     const fortifyMult = fortifySecRef.current > 0 ? 2 : 1;
     const rawResult = resolveAttack(enemy.damage * dmgMultiplier, Math.max(0, armorBlock - corrodedBlockRef.current) * fortifyMult, evasion, RANGE_MODIFIERS[band].incoming);
-    const result = phaseShiftBlocksThis ? { ...rawResult, hit: false } : rawResult;
+    let result = phaseShiftBlocksThis ? { ...rawResult, hit: false } : rawResult;
+    // Aegis Ward: a flat % damage-reduction multiplier — applied once, here, so
+    // every downstream use of result.damageDealt (popup, hull loss, Bloodscent's
+    // heal calc) stays consistent automatically.
+    if (result.hit && aegisWardSecRef.current > 0) {
+      result = { ...result, damageDealt: Math.round(result.damageDealt * 0.5) };
+    }
     // Ablative Plating's Absorb: negates exactly the first hit of the fight,
     // regardless of which enemy lands it — consumed the instant it's used.
     const absorbedHit = hasAbsorbArmor && absorbRef.current && result.hit && result.damageDealt > 0;
     if (absorbedHit) absorbRef.current = false;
-    const dealt = shieldActive || absorbedHit ? 0 : result.hit ? result.damageDealt : 0;
+    // Bulwark's Bastion Ward: negates a fixed COUNT of hits rather than a time
+    // window — only consumes a charge when a hit actually lands.
+    const wardActive = wardChargesRef.current > 0 && result.hit;
+    if (wardActive) setWardCharges((c) => Math.max(0, c - 1));
+    const negated = shieldActive || sanctuaryActive || wardActive;
+    const dealt = negated || absorbedHit ? 0 : result.hit ? result.damageDealt : 0;
     // Kinetic Reflector's Reflect: a fraction of whatever the block actually
     // absorbed strikes back, computed from resolveAttack's own pre-block raw damage.
     let reflectDmg = 0;
-    if (hasReflectArmor && result.hit && !absorbedHit && !shieldActive) {
+    if (hasReflectArmor && result.hit && !absorbedHit && !negated) {
       const preBlockRaw = Math.max(1, Math.round(enemy.damage * dmgMultiplier * RANGE_MODIFIERS[band].incoming));
       const blockedAmount = Math.max(0, preBlockRaw - result.damageDealt);
       reflectDmg = Math.round(blockedAmount * 0.3);
@@ -642,7 +713,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     }
 
     fireProjectile(enemyPos, arenaRef.current.player, charged ? "#ffe25d" : "#ff6b6b", () => {
-      if (result.hit && shieldActive) {
+      if (result.hit && negated) {
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 10, 90);
         addPopup("player", t("combat.popup.deflected"), "#8ff3ff");
         pushLog(t("combat.log.overrideDeflect", { enemy: enemy.name }));
@@ -776,6 +847,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setFortifySec((t) => Math.max(0, t - dt));
     setBloodscentSec((t) => Math.max(0, t - dt));
     setShieldSec((t) => Math.max(0, t - dt));
+    setEvasionBoostSec((t) => Math.max(0, t - dt));
+    setAegisWardSec((t) => Math.max(0, t - dt));
+    setSanctuaryFieldSec((t) => Math.max(0, t - dt));
 
     setEnemies((prev) => prev.map((e) => (e.hull <= 0 ? e : {
       ...e,
@@ -963,7 +1037,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       const blockMult = blockBroken ? 0 : Math.min(mod.traits.includes("pierce") ? 0.5 : 1, undercut ? 0.5 : 1);
       const effectiveBlock = Math.round(target.block * blockMult);
       const critChance = wasGuaranteedCrit ? 1 : computeCritChance(mod, comboCount, shipBaseCrit);
-      const rawResult = resolveAttack(dmg, effectiveBlock, targetEvasion, outgoingMult, undefined, critChance);
+      // Anthem's Chorus Overture: the next N weapon shots can't miss (roll=1 always
+      // clears resolveAttack's evasion check) and hit harder — consumed one shot at
+      // a time, across whichever weapons fire next (auto-fire or manual).
+      const chorusShotActive = chorusOvertureShots > 0;
+      const chorusRoll = chorusShotActive ? 1 : undefined;
+      const chorusDmgMult = chorusShotActive ? 1.3 : 1;
+      const rawResult = resolveAttack(Math.round(dmg * chorusDmgMult), effectiveBlock, targetEvasion, outgoingMult, chorusRoll, critChance);
+      if (chorusShotActive) setChorusOvertureShots((c) => Math.max(0, c - 1));
       // Bauhinia/Swanreach doctrine: Point Defense. Utilitarian military-industrial
       // hulls run point-defense grids that specifically blunt precision hits — a crit
       // against them lands at a reduced multiplier instead of the full 1.75x.
@@ -1284,8 +1365,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   }
 
   function useShipActiveImpl() {
-    if (status !== "active" || !ship.namedShipId) return;
-    const namedDef = namedShipDefById(ship.namedShipId);
+    if (status !== "active") return;
+    const namedDef = hullClassAbility(ship.hullClass);
+    if (!namedDef) return;
     const playerPos = arenaRef.current.player;
     if (namedDef.abilityId === "alphaStrike") {
       // Nightfall Vow: doubles the next weapon shot. A hot orange charge-up ring —
@@ -1337,6 +1419,85 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       hitPulseRef.current.player = performance.now();
       shakeRef.current = Math.max(shakeRef.current, 8);
       pushLog(t("combat.log.overdriveArm"));
+    } else if (namedDef.abilityId === "blinkVector") {
+      // Interceptor's Blink Vector: reposition + a flat evasion buff — the only
+      // ability that combines motion with a lingering defensive effect.
+      setEvasionBoostSec(2 * TURN_SECONDS);
+      const target = arenaRef.current.enemyPos[targetIdx];
+      if (target) {
+        const dx = target.x - playerPos.x;
+        const dy = target.y - playerPos.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const dir = dist > 160 ? 1 : -1;
+        arenaRef.current.player.x = Math.max(20, Math.min(REF_W - 20, playerPos.x + (dx / dist) * 160 * dir));
+        arenaRef.current.player.y = Math.max(20, Math.min(REF_H - 20, playerPos.y + (dy / dist) * 160 * dir));
+      }
+      spawnRing(playerPos.x, playerPos.y, "#8ff3ff", 45);
+      spawnBurst(playerPos.x, playerPos.y, "143,243,255", 12, 100);
+      spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 12, 100);
+      pushLog(t("combat.log.blinkVector"));
+    } else if (namedDef.abilityId === "ravagerSalvo") {
+      // Vanguard's Ravager Salvo: every equipped weapon fires at once, immediately,
+      // at reduced damage each — a burst that ignores the normal cooldown cycle
+      // entirely rather than manipulating it (distinct from Overdrive, which resets
+      // cooldowns but still fires through the normal auto-fire path).
+      const target = enemies[targetIdx];
+      if (target && target.hull > 0 && !target.phased) {
+        const enemyPos = arenaRef.current.enemyPos[targetIdx] ?? enemySlot(targetIdx, enemies.length);
+        let totalDmg = 0;
+        autoFireWeapons.forEach((mod, i) => {
+          const def = moduleDefById(mod.defId);
+          const dmg = Math.round(computeModuleDamage(mod) * 0.5);
+          totalDmg += dmg;
+          setTimeout(() => {
+            fireProjectile(playerPos, enemyPos, def.color ?? "#8ff3ff", () => {
+              spawnBurst(enemyPos.x, enemyPos.y, hexToRgbString(def.color ?? "#8ff3ff"), 10, 100);
+              addPopup(targetIdx, `-${dmg}`, def.color ?? "#8ff3ff");
+            }, (def.powerDraw ?? 2) / 2);
+          }, i * 70);
+        });
+        setEnemies((prev) => prev.map((e, i) => (i === targetIdx ? { ...e, hull: Math.max(0, e.hull - totalDmg) } : e)));
+        pushLog(t("combat.log.ravagerSalvo", { dmg: totalDmg }));
+      }
+    } else if (namedDef.abilityId === "bastionWard") {
+      // Bulwark's Bastion Ward: negates the next 2 hits outright, how long ever
+      // that takes — a count, not a clock.
+      setWardCharges(2);
+      spawnRing(playerPos.x, playerPos.y, "#9fb8cc", 68, 900);
+      spawnBurst(playerPos.x, playerPos.y, "159,184,204", 14, 55);
+      pushLog(t("combat.log.bastionWardArm"));
+    } else if (namedDef.abilityId === "firstBlood") {
+      // Corsair's First Blood — see the preemptive-counter logic in enemyAttack.
+      setFirstBloodArmed(true);
+      spawnRing(playerPos.x, playerPos.y, "#ff6b3d", 46);
+      spawnBurst(playerPos.x, playerPos.y, "255,107,61", 10, 90);
+      pushLog(t("combat.log.firstBloodArm"));
+    } else if (namedDef.abilityId === "aegisWard") {
+      // Aegis's Aegis Ward: incoming damage halved for a duration — see the
+      // multiplier applied to result.damageDealt in enemyAttack.
+      setAegisWardSec(3 * TURN_SECONDS);
+      spawnRing(playerPos.x, playerPos.y, "#b98cff", 72, 800);
+      spawnBurst(playerPos.x, playerPos.y, "185,140,255", 16, 55);
+      pushLog(t("combat.log.aegisWardArm"));
+    } else if (namedDef.abilityId === "chorusOverture") {
+      // Anthem's Chorus Overture: the next 3 weapon shots can't miss — see the
+      // guaranteed-hit consumption in fireModuleImpl.
+      setChorusOvertureShots(3);
+      spawnRing(playerPos.x, playerPos.y, "#ffd66b", 50);
+      spawnBurst(playerPos.x, playerPos.y, "255,214,107", 16, 110);
+      pushLog(t("combat.log.chorusOvertureArm"));
+    } else if (namedDef.abilityId === "sanctuaryField") {
+      // Sanctum's Sanctuary Field: full negation (see the `negated` check in
+      // enemyAttack) paired with an instant heal — the only ability that combines
+      // the two.
+      setSanctuaryFieldSec(2.5 * TURN_SECONDS);
+      const heal = Math.round(maxHull * 0.2);
+      setPlayerHull((h) => Math.min(maxHull, h + heal));
+      addPopup("player", `+${heal}`, "#5dffb0");
+      spawnRing(playerPos.x, playerPos.y, "#ffd66b", 80, 900);
+      spawnBurst(playerPos.x, playerPos.y, "255,214,107", 20, 70);
+      hitPulseRef.current.player = performance.now();
+      pushLog(t("combat.log.sanctuaryFieldArm", { amount: heal }));
     }
     setNamedAbilityCooldown(namedDef.activeCooldown * TURN_SECONDS);
     playSfx("click");
@@ -1674,8 +1835,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             </button>
           );
         })}
-        {ship.namedShipId && (() => {
-          const namedDef = namedShipDefById(ship.namedShipId);
+        {hullClassAbility(ship.hullClass) && (() => {
+          const namedDef = hullClassAbility(ship.hullClass)!;
           return (
             <button
               className="btn primary"

@@ -1,15 +1,6 @@
 import type { HullClassId, ShipInstance, ShipRolls } from "../data/types";
-import { RARITY_WEIGHTS, RARITY_ORDER, APTITUDE_WEIGHTS, APTITUDE_GROWTH, RARITY_MULTIPLIER, hullClassById } from "../data/hullClasses";
-import { NAMED_SHIP_DEFS } from "../data/namedShips";
-import { weightedPick, randomId, rollQuality } from "./rng";
-
-/** A named ship never rolls below this rarity — it's meant to always feel special,
- * not occasionally show up as a mediocre roll wearing a unique name. */
-const NAMED_SHIP_MIN_RARITY: ShipInstance["rarity"] = "advanced";
-/** Flat per-draw chance to substitute a named ship for a hull class that has one
- * still unowned — independent of rarity, so it's a distinct, legible moment rather
- * than folded into the rarity roll itself. */
-const NAMED_SHIP_CHANCE = 0.12;
+import { RARITY_ORDER, APTITUDE_WEIGHTS, APTITUDE_GROWTH, RARITY_MULTIPLIER, hullClassById, nextHullClassOptions, ascensionRequirementsMet } from "../data/hullClasses";
+import { weightedPick, rollQuality } from "./rng";
 
 /** A roll of 0 gives 88% of the class baseline, 0.5 (neutral) gives exactly 100%, and a
  * roll of 1 gives 112% — the same ±quality band used for every stat, so a ship's rarity
@@ -35,54 +26,76 @@ function rollShipAttributes(rarity: ShipInstance["rarity"]): ShipRolls {
   };
 }
 
-const SHIP_NAME_POOL = [
-  "Cindersong",
-  "Farwake",
-  "Hollow Promise",
-  "Last Ledger",
-  "Quiet Reach",
-  "Emberline",
-  "Static Vow",
-  "Driftglass",
-  "Second Tide",
-  "Nightledger",
-];
-
 /** Ships built before the itemization overhaul (or ad-hoc proxy objects built for a
  * stat-delta comparison) have no rolls — treat them as dead-center average. */
 const NEUTRAL_ROLLS: ShipRolls = { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 };
 
-/** `ownedNamedShipIds` excludes named ships the player already has from the roll —
- * each one is a singleton. Pass the current roster's namedShipIds when generating
- * real draws/offers; omit it only for throwaway preview instances that never get
- * added to state. */
-export function drawShip(hullClass: HullClassId, ownedNamedShipIds: ReadonlySet<string> = new Set()): ShipInstance {
-  let rarity = weightedPick(RARITY_WEIGHTS);
+/** Ship-ascension redesign (docs/story/research-notes-ship-ascension.md): Whisper is
+ * the only ship there ever is — created once at game start, always Corvette-class,
+ * always Salvage rarity (a fixed starting point, not a draw), with a lightly rolled
+ * stat spread for texture. All further growth is level (XP, unchanged) and ascension
+ * (hull class, see ascendShip below). */
+export function createWhisper(): ShipInstance {
+  const hullClass: HullClassId = "corvette";
+  const rarity: ShipInstance["rarity"] = "salvage";
   const def = hullClassById(hullClass);
-
-  const availableNamedShip = NAMED_SHIP_DEFS.find(
-    (n) => n.hullClass === hullClass && !ownedNamedShipIds.has(n.id),
-  );
-  const namedShip = availableNamedShip && Math.random() < NAMED_SHIP_CHANCE ? availableNamedShip : null;
-  if (namedShip && RARITY_ORDER.indexOf(rarity) < RARITY_ORDER.indexOf(NAMED_SHIP_MIN_RARITY)) {
-    rarity = NAMED_SHIP_MIN_RARITY;
-  }
-
   const rolls = rollShipAttributes(rarity);
   return {
-    id: randomId("ship"),
+    id: "whisper",
     hullClass,
     rarity,
     aptitude: null,
     scanned: false,
-    name: namedShip ? namedShip.name : SHIP_NAME_POOL[Math.floor(Math.random() * SHIP_NAME_POOL.length)],
+    name: "Whisper",
     level: 1,
     xp: 0,
     equipped: new Array(def.slots.weapon + def.slots.armor + def.slots.engine + def.slots.utility).fill(null),
     currentHp: computeMaxHull({ hullClass, rarity, level: 1, rolls }),
     rolls,
-    namedShipId: namedShip ? namedShip.id : null,
+    ascendedFrom: [],
   };
+}
+
+/** Whether every ascension gate (story flag, Origin Essence, level) is met for at
+ * least one of the current hull class's next-tier options. Used to show/hide the
+ * "Ascension available" prompt without needing to know which branch yet. */
+export function canAscend(ship: ShipInstance, originEssence: number, flags: Record<string, boolean>): boolean {
+  return nextHullClassOptions(ship.hullClass).some((target) => {
+    const req = ascensionRequirementsMet(target, ship.level, originEssence, flags);
+    return req.flag && req.essence && req.level;
+  });
+}
+
+/** Ascends `ship` into `targetHullClass` — a genuine tier change on the same ship
+ * instance, not a new draw (see docs/story/research-notes-ship-ascension.md). Full
+ * heal (an ascension is a bigger, rarer moment than a level-up, which doesn't fully
+ * heal) and slots are remapped per type: hull classes don't always add slots of
+ * every type (a tank branch can trade weapon/engine slots for armor ones, see
+ * data/hullClasses.ts), so this both grows AND shrinks per-type slot counts as
+ * needed — any module that no longer fits is simply unequipped (still owned, not
+ * lost), never silently reassigned to the wrong slot type. */
+export function ascendShip(ship: ShipInstance, targetHullClass: HullClassId): ShipInstance {
+  const oldDef = hullClassById(ship.hullClass);
+  const newDef = hullClassById(targetHullClass);
+  const types: (keyof typeof oldDef.slots)[] = ["weapon", "armor", "engine", "utility"];
+  let cursor = 0;
+  const newEquipped: (string | null)[] = [];
+  for (const type of types) {
+    const oldCount = oldDef.slots[type];
+    const newCount = newDef.slots[type];
+    const currentGroup = ship.equipped.slice(cursor, cursor + oldCount);
+    cursor += oldCount;
+    const keep = currentGroup.slice(0, newCount);
+    while (keep.length < newCount) keep.push(null);
+    newEquipped.push(...keep);
+  }
+  const grown = {
+    ...ship,
+    hullClass: targetHullClass,
+    equipped: newEquipped,
+    ascendedFrom: [...ship.ascendedFrom, ship.hullClass],
+  };
+  return { ...grown, currentHp: computeMaxHull(grown) };
 }
 
 export function scanShip(ship: ShipInstance): ShipInstance {

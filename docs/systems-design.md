@@ -29,38 +29,33 @@ class is slot **count**:
 | Dreadnought-class (歼星舰) | Act III, Ch.6 (Origin Tide, finale) | 12 (3W/3A/3E/3U) | +tier |
 | Sovereign-class (主宰舰) | Act IV, Ch.6 (Deep Origin, finale) | 16 (4W/4A/4E/4U) | Max |
 
-### Ships are drawn, and every ship is a unique instance
+### Whisper ascends — she is never replaced
 
-Ships are acquired the same way crew are: a **Draw** action at a station's Shipwright's
-Dock costs Source Points and pulls one new ship. Draw pools are restricted to Hull
-Classes at or below whatever the player has story-unlocked — you can't draw a
-Dreadnought before Act III grants one, but Corvette/Destroyer/Cruiser stay drawable
-after being outgrown, useful for Support-slot variety and scrap material.
+Per `docs/story/research-notes-ship-ascension.md`: ships are **not** drawn, and there
+is no fleet of candidate flagships. *Whisper* is the only ship there is, for the whole
+campaign — she starts Corvette-class at Salvage rarity and grows entirely through:
 
-Kade's starting ship, *Whisper*, is the one guaranteed non-drawn exception — a
-Corvette-class hull at Salvage rarity, fitting its backstory. Every ship acquired after
-it comes from a Draw.
+- **Level** — XP from combat, unchanged mechanically from before, shaped by
+  **Aptitude** (`S/A/B/C/D`, hidden until **Scan** reveals it — still the direct
+  homage to the novel's core hook: a low-Rarity hull can still be a hidden gem if its
+  Aptitude is high).
+- **Ascension** — a hull-class tier change on Whisper herself, not a new draw. Each
+  hull class past Corvette actually comes in a **lateral pair** (e.g. Destroyer vs.
+  Interceptor) with a real tradeoff and no dominance either way (see
+  `docs/content-depth-standards.md`'s hull-tier standard); ascending is a free choice
+  between whichever pair sits one order above her current class. Ascending requires
+  **all three** at once: enough Origin Essence, the story flag for that tier, and a
+  minimum level (`HullClassDef.minLevel`) — see `data/hullClasses.ts`. It fully heals
+  her, remaps her equipped modules into the new slot layout (unequipping anything
+  that no longer fits a shrunk slot type, never misplacing it into the wrong type),
+  and grants a hull-class-specific combat ability nothing else in the game has (see
+  `data/namedShips.ts`'s `HULL_CLASS_ABILITIES` — every hull class past Corvette has
+  one, not just the tiers that used to roll a "named ship").
 
-Every draw produces a **unique ship instance** — not a copy of a shared template —
-with two independently rolled properties on top of its Hull Class:
-
-- **Rarity**: `Salvage → Standard → Reinforced → Advanced → Prototype → Ascendant`.
-  Determines base stat quality within the class's range. Rolled and revealed to the
-  player immediately on draw, same as a crew pull.
-- **Aptitude**: `S / A / B / C / D`, hidden until **Scan** (the Cinder power) is used
-  on that specific instance. Shapes how much the ship's stats grow per level. This is
-  the direct homage to the novel's core hook — a low-Rarity hull can still be a hidden
-  gem if its Aptitude is high, exactly the kind of find Kade's Scan exists to catch
-  that nobody else can see.
-
-The player's **Hangar** is the growing roster of drawn ship instances. One is assigned
-active Flagship; others crew Support slots (unlocked via story) or sit in reserve.
-Duplicate draws of a Hull Class the player already has plenty of can be broken down
-for Alloy/Salvage rather than left idle.
-
-- **Level** (within a Hull Class) increases with XP from combat, expeditions, and
-  story missions, at a rate shaped by that instance's Aptitude. Leveling is soft-capped
-  per class so a low-class ship can't out-scale a high-class one just by grinding XP.
+**Rarity** (`Salvage → Standard → Reinforced → Advanced → Prototype → Ascendant`) is
+fixed at Salvage for the whole game — it was never meant to be re-rolled under this
+model, it's a starting-point property, not a progression axis. All the actual
+tier-to-tier growth comes from Hull Class order and Level.
 
 ## Modules
 

@@ -140,17 +140,26 @@ derelicts, and patrols — see `docs/architecture.md` for the map model.
 - **Insight** — scarce, slow-drip resource powering the Cinder's Lock ability
   (module trait reroll/choice).
 
-## Ship Hull Classes
+## Ship Hull Classes — Ascension, not Acquisition
 
-Corvette-class (护卫舰) → Destroyer-class (驱逐舰) → Cruiser-class (巡洋舰) →
-Battleship-class (战列舰) → Dreadnought-class (歼星舰) → Sovereign-class (主宰舰) →
-Anthem-class (颂歌舰). Each class jump requires both Origin Essence and a
-story-flagged refit event — see `docs/systems-design.md` for slot/stat details and
-`docs/story/` for exactly which chapter unlocks which class. Anthem-class (order 6,
-Act VI) is reverse-engineered Choir hull tech, not a Mayeth/Principality design —
-see `docs/story/act-6-chorus-deep.md`.
+Per `docs/story/research-notes-ship-ascension.md`: *Whisper* is not one ship among
+many the player collects — she is the only ship there is, and she grows by
+**ascending** into a new hull class in place, the same way the source novel's
+protagonist keeps flying the same 火种战舰 (Fire Seed Warship) through several
+evolution events rather than trading up to a new hull each time. Kade commits to
+Whisper at the very start (Corvette-class, Salvage rarity — her rarity never
+changes again) and every further power jump is an ascension, not a purchase.
 
-Ships themselves are drawn (like crew) and every drawn ship is a unique instance with
-its own rolled Rarity and hidden Aptitude — see `docs/systems-design.md` for the full
-model. Kade's starting ship, *Whisper*, is the one non-drawn exception: a Corvette-
-class hull at Salvage rarity.
+Corvette-class (护卫舰) → {Destroyer-class (驱逐舰) or Interceptor-class (拦截舰)}
+→ {Cruiser-class (巡洋舰) or Vanguard-class (先锋舰)} → {Battleship-class (战列舰)
+or Bulwark-class (壁垒舰)} → {Dreadnought-class (歼星舰) or Corsair-class (掠夺舰)}
+→ {Sovereign-class (主宰舰) or Aegis-class (神盾舰)} → {Anthem-class (颂歌舰) or
+Sanctum-class (圣所舰)}. At each tier the player freely picks one of the two lateral
+options — a real strategic choice, not a locked branch — and ascending requires
+level, Origin Essence, and a story flag all at once (see `docs/systems-design.md`
+for the exact gates and `docs/story/` for which chapter unlocks which tier). Every
+hull class past the starting Corvette grants Whisper a distinct combat ability the
+instant she ascends into it (see `data/namedShips.ts`'s `HULL_CLASS_ABILITIES`) —
+not just bigger numbers. Anthem-class and Sanctum-class (order 6, Act VI) are
+reverse-engineered Choir hull tech, not a Mayeth/Principality design — see
+`docs/story/act-6-chorus-deep.md`.

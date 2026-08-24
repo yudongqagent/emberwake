@@ -5,7 +5,7 @@ import { NAMED_SHIPS_ZH } from "./namedShips";
 import { ENCOUNTER_NAMES_ZH, ENEMY_NAMES_ZH } from "./encounters";
 import { GALAXY_NAMES_ZH, SYSTEM_NAMES_ZH, POI_NAMES_ZH } from "./places";
 import type { ModuleDef, ModuleTrait, CrewDef, EncounterDef, GalaxyDef, SystemDef, Poi } from "../../data/types";
-import type { NamedShipDef } from "../../data/namedShips";
+import type { HullClassAbilityDef } from "../../data/namedShips";
 
 /** Issue #11: thin localization wrappers around the module/crew/named-ship data
  * defs — call these instead of reading `.name`/`.label`/`.passive`/etc. directly at
@@ -39,17 +39,17 @@ export function localizedCrewActive(def: CrewDef): string {
   return CREW_ZH[def.id]?.active ?? def.active;
 }
 
-export function localizedNamedShipName(def: NamedShipDef): string {
+export function localizedNamedShipName(def: HullClassAbilityDef): string {
   if (language.value !== "zh") return def.name;
   return NAMED_SHIPS_ZH[def.id]?.name ?? def.name;
 }
 
-export function localizedNamedShipActive(def: NamedShipDef): string {
+export function localizedNamedShipActive(def: HullClassAbilityDef): string {
   if (language.value !== "zh") return def.active;
   return NAMED_SHIPS_ZH[def.id]?.active ?? def.active;
 }
 
-export function localizedNamedShipFlavor(def: NamedShipDef): string {
+export function localizedNamedShipFlavor(def: HullClassAbilityDef): string {
   if (language.value !== "zh") return def.flavor;
   return NAMED_SHIPS_ZH[def.id]?.flavor ?? def.flavor;
 }

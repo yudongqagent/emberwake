@@ -58,6 +58,11 @@ export interface HullClassDef {
   baseSpeed: number;
   unlockFlag: string | null;
   essenceCost: number;
+  /** Ship-ascension redesign (2026-08-24, see docs/story/research-notes-ship-
+   * ascension.md): the flagship level Whisper must have reached before she can
+   * ascend into this hull class — alongside unlockFlag and essenceCost, all three
+   * gate the same "Ascend" action. 0 for the starting hull (nothing to ascend from). */
+  minLevel: number;
 }
 
 export interface ModuleTrait {
@@ -116,13 +121,15 @@ export interface ShipInstance {
   xp: number;
   equipped: (string | null)[]; // parallel to slot order: weapon..weapon,armor..armor,engine..engine,utility..utility
   currentHp: number;
-  /** Independent 0..1 rolls per attribute — two ships of the same rarity can trade off
-   * a tanky hull against a nimble evasion build. */
+  /** Independent 0..1 rolls per attribute — rolled once at game start and never
+   * rerolled (ship ascension redesign: rarity/rolls are a one-time starting
+   * property of Whisper, not something drawn repeatedly — see
+   * docs/story/research-notes-ship-ascension.md). */
   rolls: ShipRolls;
-  /** Set only for a named-ship draw (see data/namedShips.ts) — grants a fixed name and
-   * a unique combat ability nothing else has, not just bigger numbers. Each named ship
-   * is a singleton: once owned, it won't roll again. Null for an ordinary hull. */
-  namedShipId: string | null;
+  /** Hull classes Whisper has ascended through, oldest first (not including her
+   * current hullClass) — a simple ascension history, mostly for narrative texture
+   * on the Fleet screen. */
+  ascendedFrom: HullClassId[];
 }
 
 export interface CrewDef {

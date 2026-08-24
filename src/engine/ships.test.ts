@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance, xpToNextLevel, applyXp, qualityMultiplier, drawShip } from "./ships";
-import { RARITY_ORDER, RARITY_MULTIPLIER } from "../data/hullClasses";
-import { NAMED_SHIP_DEFS } from "../data/namedShips";
+import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance, xpToNextLevel, applyXp, qualityMultiplier, canAscend, ascendShip } from "./ships";
+import { HULL_CLASSES, RARITY_ORDER, RARITY_MULTIPLIER } from "../data/hullClasses";
 import type { ShipInstance } from "../data/types";
 
 function makeShip(overrides: Partial<ShipInstance> = {}): ShipInstance {
@@ -17,7 +16,7 @@ function makeShip(overrides: Partial<ShipInstance> = {}): ShipInstance {
     equipped: [null, null, null, null],
     currentHp: 120,
     rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 },
-    namedShipId: null,
+    ascendedFrom: [],
     ...overrides,
   };
 }
@@ -134,28 +133,61 @@ describe("rarity tier gaps (no overlap between adjacent tiers)", () => {
   });
 });
 
-// Issues #3/#4 (docs/design-principles.md): a named ship needs to be verifiably
-// special, not just occasionally tagged onto a mediocre roll, and its singleton
-// promise (data/namedShips.ts) needs to actually hold under repeated draws — not
-// just look right in the one manual playtest that happened to not hit the edge case.
-describe("named ship draws (data/namedShips.ts)", () => {
-  it("never rolls below the named-ship rarity floor", () => {
-    const destroyerNamed = NAMED_SHIP_DEFS.find((n) => n.hullClass === "destroyer")!;
-    const minIdx = RARITY_ORDER.indexOf("advanced");
-    for (let i = 0; i < 500; i++) {
-      const ship = drawShip("destroyer");
-      if (ship.namedShipId === destroyerNamed.id) {
-        expect(RARITY_ORDER.indexOf(ship.rarity)).toBeGreaterThanOrEqual(minIdx);
+// Ship-ascension redesign (docs/story/research-notes-ship-ascension.md): hull
+// classes are ordered by `order`, and a worst-roll ship at the next order should
+// still hit noticeably harder than the tier it just ascended from — same shape as
+// the rarity-tier-gap check above, applied to baseHull/basePower across orders
+// (rarity/rolls are now held fixed across an ascension, so the tier gap has to
+// come entirely from the hull class's own base stats).
+describe("hull class order gaps (no overlap between adjacent ascension tiers)", () => {
+  it("every order's base hull and base power exceed every hull class one order below it", () => {
+    for (let order = 0; order < 6; order++) {
+      const lower = HULL_CLASSES.filter((h) => h.order === order);
+      const higher = HULL_CLASSES.filter((h) => h.order === order + 1);
+      for (const hi of higher) {
+        for (const lo of lower) {
+          expect(hi.baseHull, `${hi.id} (order ${hi.order}) should exceed ${lo.id} (order ${lo.order}) in base hull`).toBeGreaterThan(lo.baseHull);
+          expect(hi.basePower, `${hi.id} (order ${hi.order}) should exceed ${lo.id} (order ${lo.order}) in base power`).toBeGreaterThan(lo.basePower);
+        }
       }
     }
   });
+});
 
-  it("never rolls a named ship that's already owned", () => {
-    const destroyerNamed = NAMED_SHIP_DEFS.find((n) => n.hullClass === "destroyer")!;
-    const owned = new Set([destroyerNamed.id]);
-    for (let i = 0; i < 500; i++) {
-      const ship = drawShip("destroyer", owned);
-      expect(ship.namedShipId).not.toBe(destroyerNamed.id);
-    }
+describe("ascension gating (canAscend/ascendShip)", () => {
+  it("cannot ascend when level, essence, or the story flag isn't met", () => {
+    const ship = makeShip({ hullClass: "corvette", level: 1 });
+    expect(canAscend(ship, 0, {})).toBe(false);
+    expect(canAscend(ship, 1000, {})).toBe(false); // flag still missing
+    expect(canAscend(ship, 1000, { "act1.tigersReach.cleared": true })).toBe(false); // level too low
+  });
+
+  it("can ascend once level, essence, and the story flag all hold", () => {
+    const ship = makeShip({ hullClass: "corvette", level: 10 });
+    expect(canAscend(ship, 40, { "act1.tigersReach.cleared": true })).toBe(true);
+  });
+
+  it("ascending changes hull class, fully heals, and records ascension history", () => {
+    const ship = makeShip({ hullClass: "corvette", level: 10, currentHp: 50 });
+    const ascended = ascendShip(ship, "destroyer");
+    expect(ascended.hullClass).toBe("destroyer");
+    expect(ascended.ascendedFrom).toEqual(["corvette"]);
+    expect(ascended.currentHp).toBe(computeMaxHull(ascended));
+  });
+
+  it("slot remapping preserves equipped modules within their own type group when slots grow", () => {
+    // Corvette: 1 weapon/1 armor/1 engine/1 utility. Destroyer: 2 weapon/1 armor/1 engine/2 utility.
+    const ship = makeShip({ hullClass: "corvette", equipped: ["w", "a", "e", "u"] });
+    const ascended = ascendShip(ship, "destroyer");
+    expect(ascended.equipped).toEqual(["w", null, "a", "e", "u", null]);
+  });
+
+  it("slot remapping drops (never misplaces) modules that no longer fit when a type's slots shrink", () => {
+    // Vanguard (order2): 3 weapon/1 armor/2 engine/2 utility. Bulwark (order3): 2 weapon/4 armor/1 engine/3 utility.
+    const ship = makeShip({ hullClass: "vanguard", equipped: ["w1", "w2", "w3", "a1", "e1", "e2", "u1", "u2"] });
+    const ascended = ascendShip(ship, "bulwark");
+    // weapon: keeps the first 2 of 3 (w3 dropped); armor: a1 kept, 3 new empty slots;
+    // engine: keeps the first 1 of 2 (e2 dropped); utility: both kept, 1 new empty slot.
+    expect(ascended.equipped).toEqual(["w1", "w2", "a1", null, null, null, "e1", "u1", "u2", null]);
   });
 });

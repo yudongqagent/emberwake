@@ -1,9 +1,9 @@
 import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
-import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ShipInstance, ModuleInstance } from "../data/types";
+import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId } from "../data/types";
 import { fabricatorCost } from "../data/modules";
-import { shipwrightCost } from "../data/hullClasses";
+import { hullClassById, ascensionRequirementsMet } from "../data/hullClasses";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
 import { LIONSHEART_EXPANSE } from "../data/galaxies/lionsheartExpanse";
 import { SWANREACH_COMBINE } from "../data/galaxies/swanreachCombine";
@@ -22,7 +22,7 @@ import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS } from "../data/crew";
-import { applyXp, computeMaxHull } from "../engine/ships";
+import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
 import { drawModule } from "../engine/modules";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
@@ -71,7 +71,7 @@ export function canAfford(costs: Partial<Record<ResourceType, number>>): boolean
   return Object.entries(costs).every(([k, v]) => state.value.resources[k as ResourceType] >= (v ?? 0));
 }
 
-/** Every other mutating action in this file (addShip, addModule, sellModule,
+/** Every other mutating action in this file (addModule, sellModule,
  * repairFlagship, recruitGenericCrew, resolveCombatVictory...) calls persist()
  * internally. spend/grant didn't, which meant every caller had to remember to
  * persist afterward themselves — several didn't (StationPanel's Trade exchanges,
@@ -170,17 +170,8 @@ export function collectWreck(poiId: string, rewards: Partial<Record<ResourceType
   persist();
 }
 
-/** Adds an already-rolled ship instance (generated as a preview candidate the player
- * chose to buy, not a fresh blind draw) — see ShipwrightTab's offer-showcase flow. */
-export function addShip(ship: ShipInstance) {
-  state.value = { ...state.value, ships: [...state.value.ships, ship] };
-  playSfx("draw");
-  persist();
-  return ship;
-}
-
 /** Adds an already-rolled module instance the player chose from the Fabricator's
- * offer showcase (see addShip). */
+ * offer showcase. */
 export function addModule(mod: ModuleInstance) {
   state.value = { ...state.value, modules: [...state.value.modules, mod] };
   playSfx("draw");
@@ -205,18 +196,23 @@ export function sellModule(moduleId: string) {
   return refund;
 }
 
-/** Sells a non-flagship ship for a fraction of its Shipwright cost. */
-export function sellShip(shipId: string) {
-  const ship = state.value.ships.find((s) => s.id === shipId);
-  if (!ship || ship.id === state.value.flagshipId) return;
-  const refund = Math.round(shipwrightCost(ship.hullClass, ship.rarity) * 0.4);
+/** Ascends Whisper into `targetHullClass` — see engine/ships.ts's ascendShip and
+ * docs/story/research-notes-ship-ascension.md. Silently no-ops if the requirements
+ * aren't actually met (defense in depth; the UI should already have this gated). */
+export function ascendShipAction(targetHullClass: HullClassId) {
+  const ship = flagship.value;
+  if (!ship) return;
+  const target = hullClassById(targetHullClass);
+  const req = ascensionRequirementsMet(target, ship.level, state.value.resources.originEssence, state.value.flags);
+  if (!req.flag || !req.essence || !req.level) return;
+  const ascended = ascendShip(ship, targetHullClass);
   state.value = {
     ...state.value,
-    ships: state.value.ships.filter((s) => s.id !== shipId),
-    resources: { ...state.value.resources, sourcePoints: state.value.resources.sourcePoints + refund },
+    ships: [ascended],
+    resources: { ...state.value.resources, originEssence: state.value.resources.originEssence - target.essenceCost },
   };
+  playSfx("levelUp");
   persist();
-  return refund;
 }
 
 export function recruitGenericCrew(defId: string) {
@@ -244,11 +240,6 @@ function pickAptitude(): "S" | "A" | "B" | "C" | "D" {
     if (roll <= 0) return k as any;
   }
   return "B";
-}
-
-export function setActiveFlagship(shipId: string) {
-  state.value = { ...state.value, flagshipId: shipId };
-  persist();
 }
 
 export function equipModule(shipId: string, slotIndex: number, moduleId: string | null) {
@@ -342,12 +333,6 @@ export function crewCount(defId: string): number {
 
 export function hasCrewRecruited(defId: string): boolean {
   return crewCount(defId) > 0;
-}
-
-/** Every named ship is a singleton (see data/namedShips.ts) — pass this to drawShip
- * so an offer showcase or draw never rolls one the player already owns. */
-export function ownedNamedShipIds(): Set<string> {
-  return new Set(state.value.ships.map((s) => s.namedShipId).filter((id): id is string => !!id));
 }
 
 /** Unit 7-Requiem's "+15% max hull fleet-wide" passive, applied wherever a ship's max

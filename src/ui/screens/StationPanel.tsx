@@ -1,21 +1,19 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, flagship, spend, grant, canAfford, addShip, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, ownedNamedShipIds, repairFlagship } from "../../state/store";
-import { HULL_CLASSES, hullClassById, shipwrightCost } from "../../data/hullClasses";
+import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, ascendShipAction, repairFlagship } from "../../state/store";
+import { hullClassById, nextHullClassOptions, ascensionRequirementsMet } from "../../data/hullClasses";
 import { CREW_DEFS } from "../../data/crew";
 import { moduleDefById, fabricatorCost } from "../../data/modules";
-import { namedShipDefById } from "../../data/namedShips";
+import { hullClassAbility } from "../../data/namedShips";
 import { computeModuleDamage, computeModuleBlock } from "../../engine/modules";
-import { drawShip } from "../../engine/ships";
 import { computeMaxHull, computePowerCapacity, computeSpeed } from "../../engine/ships";
 import { drawModule } from "../../engine/modules";
 import { ShipRarityTag, ModuleRarityTag } from "../components/RarityTag";
 import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon, HullIcon, PowerIcon, SpeedIcon } from "../components/Icons";
 import { RollQualityBadge } from "../components/StatBlock";
-import type { ShipInstance, ModuleInstance } from "../../data/types";
-import { pickOne } from "../../engine/rng";
+import type { ModuleInstance, HullClassId } from "../../data/types";
 import { t } from "../../i18n/strings";
-import { localizedModuleName, localizedTrait, localizedCrewName, localizedCrewPassive, localizedNamedShipName, localizedNamedShipActive, localizedHullClassDisplay } from "../../i18n/data";
+import { localizedModuleName, localizedTrait, localizedCrewName, localizedCrewPassive, localizedNamedShipActive, localizedHullClassDisplay } from "../../i18n/data";
 
 type Tab = "trade" | "shipwright" | "fabricator" | "recruit";
 
@@ -28,7 +26,7 @@ const TAB_META: { id: Tab; labelKey: string; icon: preact.ComponentChildren }[] 
 
 export function StationPanel({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>("trade");
-  const [drawnShip, setDrawnShip] = useState<ShipInstance | null>(null);
+  const [ascendedTo, setAscendedTo] = useState<HullClassId | null>(null);
   const [drawnModule, setDrawnModule] = useState<ModuleInstance | null>(null);
 
   return (
@@ -73,38 +71,37 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
         </div>
         <div style={{ padding: "0 1rem 1rem", overflowY: "auto" }}>
           {tab === "trade" && <TradeTab />}
-          {tab === "shipwright" && <ShipwrightTab onBuy={setDrawnShip} />}
+          {tab === "shipwright" && (
+            <AscensionTab
+              onAscend={(hullClass) => {
+                ascendShipAction(hullClass);
+                setAscendedTo(hullClass);
+              }}
+            />
+          )}
           {tab === "fabricator" && <FabricatorTab onBuy={setDrawnModule} />}
           {tab === "recruit" && <RecruitTab />}
         </div>
       </div>
 
-      {drawnShip && (() => {
-        const cur = flagship.value;
-        const newHull = effectiveMaxHull(drawnShip);
-        const curHull = cur ? effectiveMaxHull(cur) : 0;
-        const delta = newHull - curHull;
+      {ascendedTo && (() => {
+        const def = hullClassById(ascendedTo);
+        const ability = hullClassAbility(ascendedTo);
+        const ship = flagship.value!;
         return (
-          <DrawReveal title={drawnShip.namedShipId ? t("station.namedShipAcquired") : t("station.hullAcquired")} accent={drawnShip.namedShipId ? "var(--amber)" : `var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
-            <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{drawnShip.name}</div>
-            <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{localizedHullClassDisplay(hullClassById(drawnShip.hullClass))}</div>
-            {drawnShip.namedShipId && (
+          <DrawReveal title={t("station.ascended")} accent="var(--green)" onClose={() => setAscendedTo(null)}>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{ship.name}</div>
+            <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{localizedHullClassDisplay(def)}</div>
+            {ability && (
               <div style={{ fontSize: "0.78rem", color: "var(--amber)", marginBottom: "0.5rem" }}>
-                {namedShipDefById(drawnShip.namedShipId).active}
+                {localizedNamedShipActive(ability)}
               </div>
             )}
-            <ShipRarityTag rarity={drawnShip.rarity} showPips={false} />
-            <div style={{ marginTop: "0.5rem" }}>
-              <RollQualityBadge
-                roll={(drawnShip.rolls.hull + drawnShip.rolls.power + drawnShip.rolls.speed + drawnShip.rolls.evasion + drawnShip.rolls.crit) / 5}
-                label={t("station.overallRoll")}
-              />
+            <div style={{ display: "flex", gap: "1rem", justifyContent: "center", marginTop: "0.6rem", fontSize: "0.85rem", color: "var(--text-mid)" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><HullIcon size={13} /> {computeMaxHull(ship)}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><PowerIcon size={13} /> {computePowerCapacity(ship)}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><SpeedIcon size={13} /> {computeSpeed(ship)}</span>
             </div>
-            {cur && (
-              <div style={{ marginTop: "0.75rem", fontFamily: "var(--font-display)", fontWeight: 700, color: delta >= 0 ? "var(--green)" : "var(--red)" }}>
-                {t("station.hullVs", { sign: delta >= 0 ? "+" : "", delta, ship: cur.name })}
-              </div>
-            )}
           </DrawReveal>
         );
       })()}
@@ -236,107 +233,95 @@ function TradeTab() {
 
 const OFFER_COUNT = 4;
 
-function generateShipOffers(): ShipInstance[] {
-  const unlocked = HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag]);
-  // Exclude within this batch too, not just already-owned ones — otherwise two
-  // offers in the same showcase could independently roll the same "singleton" named
-  // ship, and buying both would break the singleton guarantee.
-  const excluded = new Set(ownedNamedShipIds());
-  return Array.from({ length: OFFER_COUNT }, () => {
-    const candidate = drawShip(pickOne(unlocked).id, excluded);
-    if (candidate.namedShipId) excluded.add(candidate.namedShipId);
-    return candidate;
-  });
-}
-
-/** Curated random showcase, not a blind pull: every candidate's rarity, stats, and
- * cost are visible before spending anything, and the player picks the one they want
- * (Player-Tested Anti-Patterns #4/#3 in docs/design-principles.md — a shown-then-
- * chosen offer preserves agency and makes rarity unmistakable, instead of finding out
- * what you got only after paying for it). */
 /** Issue #9 (2026-08 playtest, docs/design-principles.md Player-Tested
  * Anti-Patterns #4): a free, unlimited Refresh let a player just reroll until they
- * got something great, which quietly turned the curated showcase back into the
- * blind-pull problem it was built to fix — the showcase itself needs its own
- * economy, or "choose from a shown list" has no more real tension than "keep
- * spinning until you like the result." Cost escalates per refresh within one visit
- * (resets when the tab remounts) so a first look is still cheap but fishing for a
- * perfect roll isn't free. */
+ * got something great — this still applies to the Fabricator's module showcase
+ * below. It no longer applies to ships: ascension has no RNG to reroll (see
+ * AscensionTab), the player always sees and picks between the same two real
+ * options. Cost escalates per refresh within one visit (resets when the tab
+ * remounts) so a first look is still cheap but fishing for a perfect roll isn't free. */
 function refreshCost(count: number): number {
   return 10 + count * 15;
 }
 
-function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
-  const [offers, setOffers] = useState<ShipInstance[]>(() => generateShipOffers());
-  const [refreshCount, setRefreshCount] = useState(0);
-  const cost = refreshCost(refreshCount);
+/** Ship-ascension redesign (docs/story/research-notes-ship-ascension.md): replaces
+ * the old gacha showcase (draw a new candidate ship) — Whisper is the only ship,
+ * and grows by ascending into the next hull-class tier in place. No RNG: the two
+ * next-tier options (if any) are always both shown, same "shown-then-chosen"
+ * agency principle the old showcase had (Player-Tested Anti-Patterns #4), just
+ * without a draw underneath it. */
+function AscensionTab({ onAscend }: { onAscend: (hullClass: HullClassId) => void }) {
+  const ship = flagship.value;
+  if (!ship) return null;
+  const currentDef = hullClassById(ship.hullClass);
+  const currentAbility = hullClassAbility(ship.hullClass);
+  const options = nextHullClassOptions(ship.hullClass);
+  const res = state.value.resources;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
-          {t("station.shipwrightHint")}
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+      <div className="panel compact" style={{ padding: "0.75rem 0.9rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
+          <div>
+            <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{ship.name}</div>
+            <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{localizedHullClassDisplay(currentDef)}</div>
+          </div>
+          <ShipRarityTag rarity={ship.rarity} showPips={false} />
         </div>
-        <button
-          className="btn ghost"
-          style={{ fontSize: "0.7rem", padding: "0.4em 0.7em", flex: "none", display: "flex", alignItems: "center", gap: "0.3rem" }}
-          disabled={!canAfford({ sourcePoints: cost })}
-          onClick={() => {
-            spend({ sourcePoints: cost });
-            setOffers(generateShipOffers());
-            setRefreshCount((c) => c + 1);
-          }}
-        >
-          {t("common.refresh")} <ResourceIcon type="sourcePoints" size={11} /> {cost}
-        </button>
+        <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><HullIcon size={12} /> {computeMaxHull(ship)}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><PowerIcon size={12} /> {computePowerCapacity(ship)}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><SpeedIcon size={12} /> {computeSpeed(ship)}</span>
+        </div>
+        {currentAbility && (
+          <div style={{ fontSize: "0.72rem", color: "var(--amber)", marginTop: "0.5rem" }}>
+            {t("station.namedShipLine", { active: localizedNamedShipActive(currentAbility) })}
+          </div>
+        )}
       </div>
-      {offers.map((candidate, i) => {
-        const def = hullClassById(candidate.hullClass);
-        const cost = shipwrightCost(candidate.hullClass, candidate.rarity);
-        const namedDef = candidate.namedShipId ? namedShipDefById(candidate.namedShipId) : null;
+
+      <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
+        {options.length > 0 ? t("station.ascensionHint") : t("station.ascensionMaxed")}
+      </div>
+
+      {options.map((target) => {
+        const req = ascensionRequirementsMet(target, ship.level, res.originEssence, state.value.flags);
+        const ready = req.flag && req.essence && req.level;
+        const ability = hullClassAbility(target.id);
         return (
-          <div key={i} className={`panel compact ${namedDef ? "accent" : ""}`} style={{ padding: "0.75rem 0.9rem", ["--accent" as any]: namedDef ? "var(--amber)" : undefined }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-              <div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{namedDef ? localizedNamedShipName(namedDef) : def.name}</div>
-                <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{localizedHullClassDisplay(def)}</div>
-              </div>
-              <ShipRarityTag rarity={candidate.rarity} showPips={false} />
+          <div key={target.id} className={`panel compact ${ready ? "accent" : ""}`} style={{ padding: "0.75rem 0.9rem", ["--accent" as any]: ready ? "var(--green)" : undefined }}>
+            <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{localizedHullClassDisplay(target)}</div>
+            <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", margin: "0.4rem 0 0.6rem" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><HullIcon size={12} /> {target.baseHull}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><PowerIcon size={12} /> {target.basePower}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><SpeedIcon size={12} /> {target.baseSpeed}</span>
             </div>
-            {namedDef && (
-              <div style={{ fontSize: "0.72rem", color: "var(--amber)", marginBottom: "0.5rem" }}>
-                {t("station.namedShipLine", { active: localizedNamedShipActive(namedDef) })}
+            {ability && (
+              <div style={{ fontSize: "0.72rem", color: "var(--amber)", marginBottom: "0.6rem" }}>
+                {t("station.namedShipLine", { active: localizedNamedShipActive(ability) })}
               </div>
             )}
-            <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.6rem" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><HullIcon size={12} /> {computeMaxHull(candidate)}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><PowerIcon size={12} /> {computePowerCapacity(candidate)}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><SpeedIcon size={12} /> {computeSpeed(candidate)}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginBottom: "0.65rem" }}>
+              <AscensionRequirement met={req.level} label={t("station.reqLevel", { level: target.minLevel })} />
+              <AscensionRequirement met={req.essence} label={t("station.reqEssence", { amount: target.essenceCost })} icon={<ResourceIcon type="originEssence" size={12} />} />
+              {target.unlockFlag !== null && <AscensionRequirement met={req.flag} label={t("station.reqStory")} />}
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8rem", color: "var(--text-mid)" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><ResourceIcon type="sourcePoints" size={13} /> {cost}</span>
-                {def.essenceCost > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", color: canAfford({ originEssence: def.essenceCost }) ? "var(--text-mid)" : "var(--red)" }}>
-                    <ResourceIcon type="originEssence" size={13} /> {def.essenceCost}
-                  </span>
-                )}
-              </span>
-              <button
-                className="btn primary"
-                disabled={!canAfford({ sourcePoints: cost, originEssence: def.essenceCost })}
-                onClick={() => {
-                  spend({ sourcePoints: cost, originEssence: def.essenceCost });
-                  addShip(candidate);
-                  onBuy(candidate);
-                  setOffers((prev) => prev.map((o, idx) => (idx === i ? drawShip(pickOne(HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag])).id, ownedNamedShipIds()) : o)));
-                }}
-              >
-                {t("station.buy")}
-              </button>
-            </div>
+            <button className="btn primary" disabled={!ready} style={{ width: "100%" }} onClick={() => onAscend(target.id)}>
+              {t("station.ascend")}
+            </button>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function AscensionRequirement({ met, label, icon }: { met: boolean; label: string; icon?: preact.ComponentChildren }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.72rem", color: met ? "var(--green)" : "var(--text-dim)" }}>
+      <span aria-hidden="true">{met ? "✓" : "○"}</span>
+      {icon}
+      {label}
     </div>
   );
 }
