@@ -2,7 +2,7 @@ import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance } from ".
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 const SAVE_KEY = "emberwake.save";
 
 export interface PoiRuntimeState {
@@ -42,8 +42,12 @@ function startingModule(defId: string): ModuleInstance {
 
 export function createInitialState(): GameState {
   const whisper = createWhisper();
-  const startingWeapon = startingModule("pulseCannon");
-  const startingArmor = startingModule("plateBarrier");
+  // Whisper's inherited fit — the lowest tier of the Principality's own tech line,
+  // matching her backstory as a Bauhinia hull handed down rather than chosen
+  // (see ACT1_SCENES coldWake). Ids are from the 200-module roster in
+  // data/moduleDefs.ts.
+  const startingWeapon = startingModule("bauhiniaWeapon1");
+  const startingArmor = startingModule("bauhiniaArmor1");
   // Slot order matches slotLayout() in ui/screens/Modules.tsx: weapon, armor, engine, utility.
   whisper.equipped = [startingWeapon.id, startingArmor.id, null, null];
   return {
@@ -118,7 +122,55 @@ const migrations: Record<number, (s: any) => any> = {
     schemaVersion: 6,
     alliedShips: s.alliedShips ?? [],
   }),
+  // The 17-module roster was replaced wholesale by the 200-module one
+  // (data/moduleDefs.ts), so every id in an existing save now points at nothing —
+  // and moduleDefById THROWS on an unknown id, which would hard-crash any save
+  // from before this change the moment it loaded. Remap each retired module onto
+  // the closest equivalent in the new roster rather than deleting player property:
+  // same type, a family whose doctrine matches what the old module did, at a tier
+  // matching the instance's own rarity so nothing is upgraded or downgraded.
+  6: (s: any) => {
+    const FAMILY_FOR: Record<string, string> = {
+      pulseCannon: "bauhinia", arcLance: "rift", railgun: "construct",
+      flakBattery: "swarm", ionDisruptor: "construct", twinLinkedCannon: "choir",
+      plateBarrier: "bauhinia", reactiveMesh: "swarm", ablativePlating: "hollow",
+      kineticReflector: "lionsheart",
+      thrusterArray: "bauhinia", vectorDrive: "swanreach", inertialDampers: "lionsheart",
+      empBurst: "construct", salvageDrone: "swanreach", purgeField: "construct",
+      displacementCharge: "rift",
+    };
+    const TYPE_FOR: Record<string, string> = {
+      pulseCannon: "Weapon", arcLance: "Weapon", railgun: "Weapon", flakBattery: "Weapon",
+      ionDisruptor: "Weapon", twinLinkedCannon: "Weapon",
+      plateBarrier: "Armor", reactiveMesh: "Armor", ablativePlating: "Armor", kineticReflector: "Armor",
+      thrusterArray: "Engine", vectorDrive: "Engine", inertialDampers: "Engine",
+      empBurst: "Utility", salvageDrone: "Utility", purgeField: "Utility", displacementCharge: "Utility",
+    };
+    const TIER: Record<string, number> = { mk1: 1, mk2: 2, mk3: 3, mk4: 4, mk5: 5 };
+    const modules = (s.modules ?? []).map((m: any) => {
+      const fam = FAMILY_FOR[m.defId];
+      const typ = TYPE_FOR[m.defId];
+      if (!fam || !typ) return m; // already a new-roster id
+      return {
+        ...m,
+        defId: `${fam}${typ}${TIER[m.rarity] ?? 1}`,
+        // Old rolled traits came from per-module pools that no longer exist; the
+        // new module's own signature carries its identity, so clear the stale ones
+        // rather than leave ids that resolve to nothing.
+        traits: [],
+        lockedTraitSlot: null,
+      };
+    });
+    return { ...s, schemaVersion: 7, modules };
+  },
 };
+
+/** Exposed for tests — migrations are only otherwise reachable through
+ * localStorage, and the legacy module remap is exactly the kind of thing that
+ * silently breaks every existing save if it regresses. */
+export function migrateForTest(raw: any): GameState {
+  return migrate(raw);
+}
 
 function migrate(raw: any): GameState {
   let state = raw;

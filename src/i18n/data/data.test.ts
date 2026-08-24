@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MODULE_DEFS } from "../../data/modules";
+import { MODULE_EFFECTS } from "../../data/moduleEffects";
 import { CREW_DEFS } from "../../data/crew";
 import { HULL_CLASS_ABILITIES } from "../../data/namedShips";
 import { ENCOUNTER_DEFS, BOUNTY_ENCOUNTER_DEFS } from "../../data/encounters";
@@ -10,7 +11,7 @@ import { FRACTURED_VEIL } from "../../data/galaxies/fracturedVeil";
 import { DEEP_ORIGIN } from "../../data/galaxies/deepOrigin";
 import { UMBRAL_LINE } from "../../data/galaxies/umbralLine";
 import { CHORUS_DEEP } from "../../data/galaxies/chorusDeep";
-import { MODULES_ZH } from "./modules";
+import { MODULE_NAMES_ZH } from "./modules";
 import { CREW_ZH } from "./crew";
 import { NAMED_SHIPS_ZH } from "./namedShips";
 import { ENCOUNTER_NAMES_ZH, ENEMY_NAMES_ZH } from "./encounters";
@@ -20,25 +21,33 @@ import { GALAXY_NAMES_ZH, SYSTEM_NAMES_ZH, POI_NAMES_ZH } from "./places";
 // render time (see i18n/data/index.ts) — a typo'd or stale id here just silently
 // falls back to English with no error, so nothing catches drift except a real test.
 describe("module/crew/named-ship translation overlays stay in sync with English data", () => {
-  it("every translated module id exists in MODULE_DEFS, and every translated trait id exists in that module's traitPool", () => {
+  it("every module id with a Chinese name has a matching ModuleDef", () => {
     const defIds = new Set(MODULE_DEFS.map((m) => m.id));
-    for (const [id, zh] of Object.entries(MODULES_ZH)) {
+    for (const id of Object.keys(MODULE_NAMES_ZH)) {
       expect(defIds.has(id), `translated module id "${id}" has no matching ModuleDef`).toBe(true);
-      const def = MODULE_DEFS.find((m) => m.id === id)!;
-      const traitIds = new Set(def.traitPool.map((tp) => tp.id));
-      for (const traitId of Object.keys(zh.traits)) {
-        expect(traitIds.has(traitId), `${id}: translated trait "${traitId}" isn't in this module's traitPool`).toBe(true);
-      }
     }
   });
 
-  it("every ModuleDef's traitPool is fully covered by its translation overlay", () => {
+  it("every ModuleDef has a Chinese name — all 200, no silent gaps", () => {
     for (const def of MODULE_DEFS) {
-      const zh = MODULES_ZH[def.id];
-      expect(zh, `module "${def.id}" has no Chinese translation at all`).toBeDefined();
-      for (const tp of def.traitPool) {
-        expect(zh.traits[tp.id], `${def.id}: trait "${tp.id}" has no Chinese translation`).toBeDefined();
+      expect(MODULE_NAMES_ZH[def.id], `module "${def.id}" (${def.name}) has no Chinese name`).toBeDefined();
+    }
+  });
+
+  // Effect labels moved out of per-module overlays into one shared registry, so
+  // the risk shifted: not "is this module's trait translated" but "does every
+  // effect any module references actually exist, in both languages".
+  it("every effect referenced by any module exists in the registry, in both languages", () => {
+    const known = new Set(MODULE_EFFECTS.map((e) => e.id));
+    for (const def of MODULE_DEFS) {
+      expect(known.has(def.signature), `${def.id}: signature effect "${def.signature}" is not in the effect registry`).toBe(true);
+      for (const t of def.traitPool) {
+        expect(known.has(t), `${def.id}: trait "${t}" is not in the effect registry`).toBe(true);
       }
+    }
+    for (const e of MODULE_EFFECTS) {
+      expect(e.labelCn.length, `effect "${e.id}" has no Chinese label`).toBeGreaterThan(0);
+      expect(e.descriptionCn.length, `effect "${e.id}" has no Chinese description`).toBeGreaterThan(0);
     }
   });
 

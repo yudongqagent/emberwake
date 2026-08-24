@@ -1,10 +1,11 @@
 import { language } from "../language";
-import { MODULES_ZH } from "./modules";
+import { MODULE_NAMES_ZH } from "./modules";
 import { CREW_ZH } from "./crew";
 import { NAMED_SHIPS_ZH } from "./namedShips";
 import { ENCOUNTER_NAMES_ZH, ENEMY_NAMES_ZH } from "./encounters";
 import { GALAXY_NAMES_ZH, SYSTEM_NAMES_ZH, POI_NAMES_ZH } from "./places";
 import type { ModuleDef, ModuleTrait, CrewDef, EncounterDef, GalaxyDef, SystemDef, Poi } from "../../data/types";
+import { moduleEffectById } from "../../data/moduleEffects";
 import type { HullClassAbilityDef } from "../../data/namedShips";
 
 /** Issue #11: thin localization wrappers around the module/crew/named-ship data
@@ -14,15 +15,21 @@ import type { HullClassAbilityDef } from "../../data/namedShips";
 
 export function localizedModuleName(def: ModuleDef): string {
   if (language.value !== "zh") return def.name;
-  return MODULES_ZH[def.id]?.name ?? def.name;
+  return MODULE_NAMES_ZH[def.id] ?? def.name;
 }
 
-export function localizedTrait(def: ModuleDef, traitId: string): ModuleTrait {
-  const original = def.traitPool.find((tp) => tp.id === traitId) ?? { id: traitId, label: traitId, description: "" };
-  if (language.value !== "zh") return original;
-  const zh = MODULES_ZH[def.id]?.traits[traitId];
-  return zh ? { id: traitId, label: zh.label, description: zh.description } : original;
+/** Effect labels now live in one place — the shared effect registry
+ * (data/moduleEffects.ts) carries both languages, so 200 modules referencing the
+ * same effect can't drift out of sync the way per-module trait copies would. The
+ * `def` parameter is kept for call-site compatibility and unknown-id fallback. */
+export function localizedTrait(_def: ModuleDef, traitId: string): ModuleTrait {
+  const eff = moduleEffectById(traitId);
+  if (!eff) return { id: traitId, label: traitId, description: "" };
+  return language.value === "zh"
+    ? { id: traitId, label: eff.labelCn, description: eff.descriptionCn }
+    : { id: traitId, label: eff.label, description: eff.description };
 }
+
 
 export function localizedCrewName(def: CrewDef): string {
   if (language.value !== "zh") return def.name;

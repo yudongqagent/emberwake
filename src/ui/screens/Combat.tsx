@@ -135,6 +135,14 @@ interface EnemyState {
    * is out of the fight both ways: player attacks against it auto-miss, and it skips
    * its own attack timer, until it flickers back. See combatTick. */
   phased?: boolean;
+  /** Mark: takes +25% from every source while it lasts. */
+  markedSec?: number;
+  /** Dampen: this enemy's next attack is delayed. */
+  slowedSec?: number;
+  /** Corrode: permanent armor reduction for the rest of the fight. */
+  corrodedBlock?: number;
+  /** Sunder: permanent damage reduction for the rest of the fight. */
+  sunderedDamage?: number;
 }
 
 /** Per-enemy real-time attack/charge/regen clocks — kept in a ref (not React state)
@@ -223,24 +231,42 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // Charge) stay manual, since those are situational calls, not baseline damage.
   const autoFireWeapons = equippedModules.filter((m) => moduleDefById(m.defId).type === "weapon");
   const manualModules = equippedModules.filter((m) => moduleDefById(m.defId).type !== "weapon");
+  /** Effect lookup. A module's `signature` is as real as a rolled trait — both are
+   * effect ids from data/moduleEffects.ts — so every check goes through these two
+   * helpers rather than reading `traits` directly, otherwise every module's
+   * defining effect would silently do nothing. */
+  function modHasEffect(m: ModuleInstance, id: string): boolean {
+    const d = moduleDefById(m.defId);
+    return d.signature === id || m.traits.includes(id);
+  }
+  const shipEffects = new Set<string>();
+  for (const m of equippedModuleList) {
+    const d = moduleDefById(m.defId);
+    shipEffects.add(d.signature);
+    for (const tr of m.traits) shipEffects.add(tr);
+  }
+  const hasEffect = (id: string) => shipEffects.has(id);
+  /** How many equipped modules carry an effect — for the ones that stack. */
+  const effectStacks = (id: string) => equippedModuleList.filter((m) => modHasEffect(m, id)).length;
+
   const armorBlock = equippedModuleList
     .filter((m) => moduleDefById(m.defId).baseBlock !== undefined)
     .reduce((sum, m) => sum + (moduleDefById(m.defId).baseBlock ?? 0), 0);
-  const evasionTraitCount = equippedModuleList.filter((m) => m.traits.includes("evasion")).length;
+  const evasionTraitCount = effectStacks("evasion");
   // Passive trait aggregates — every trait id in the game now does something real:
   // hullBonus grows the flagship's effective max hull for this fight, regen ticks
   // hull back each round, jumpRange shaves a turn off weapon cooldowns, an armor-slot
   // shieldBreak grants bonus evasion, and yieldBonus boosts salvage/alloy on victory.
   // Unit 7-Requiem's passive ("+15% max hull fleet-wide") stacks with equipment hullBonus traits.
-  const hullBonusFraction = 0.15 * equippedModuleList.filter((m) => m.traits.includes("hullBonus")).length + (hasCrewRecruited("unit7Requiem") ? 0.15 : 0);
+  const hullBonusFraction = 0.15 * effectStacks("hullBonus") + (hasCrewRecruited("unit7Requiem") ? 0.15 : 0);
   // Generic recruit helms passively contribute "+5% evasion fleet-wide" each, just by being recruited.
   const recruitHelmEvasionBonus = crewCount("recruitHelm") * 0.05;
-  const regenStacks = equippedModuleList.filter((m) => m.traits.includes("regen")).length;
-  const jumpRangeStacks = equippedModuleList.filter((m) => m.traits.includes("jumpRange")).length;
+  const regenStacks = effectStacks("regen");
+  const jumpRangeStacks = effectStacks("jumpRange");
   const shieldBreakArmorStacks = equippedModuleList.filter(
-    (m) => moduleDefById(m.defId).type === "armor" && m.traits.includes("shieldBreak"),
+    (m) => moduleDefById(m.defId).type === "armor" && modHasEffect(m, "shieldBreak"),
   ).length;
-  const yieldBonusFraction = 0.2 * equippedModuleList.filter((m) => m.traits.includes("yieldBonus")).length;
+  const yieldBonusFraction = 0.2 * effectStacks("yieldBonus");
   const assignedCrew = state.value.crew.filter((c) => c.assignedShipId === ship.id);
   // The ship's own rolled attributes — real itemization variance, not a flat rarity number.
   const shipBaseEvasion = computeBaseEvasion(ship);
@@ -376,13 +402,21 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // behaves like ordinary block for the rest of it — a ref because it must mutate
   // synchronously mid-resolution, before any re-render, same pattern as bossPhaseRef.
   const absorbRef = useRef(true);
+  /** New effect state (see data/moduleEffects.ts). Refs, not state, where they're
+   * read inside the frozen combatTick/enemyAttack closures. */
+  const firstShotRef = useRef(true);            // opener
+  const killCountRef = useRef(0);               // rampage
+  const ablateStacksRef = useRef(0);            // ablate
+  const lastStandUsedRef = useRef(false);       // lastStand
+  const burnStacksRef = useRef<Record<number, { dps: number; remaining: number }>>({}); // burn
+
   const hasAbsorbArmor = equippedModuleList.some(
-    (m) => moduleDefById(m.defId).type === "armor" && m.traits.includes("absorb"),
+    (m) => moduleDefById(m.defId).type === "armor" && modHasEffect(m, "absorb"),
   );
   // Kinetic Reflector's Reflect: the only module that punishes an enemy for hitting
   // you, instead of just mitigating what you take.
   const hasReflectArmor = equippedModuleList.some(
-    (m) => moduleDefById(m.defId).type === "armor" && m.traits.includes("reflect"),
+    (m) => moduleDefById(m.defId).type === "armor" && modHasEffect(m, "reflect"),
   );
   // Inertial Dampers' Momentum: evasion rises with consecutive undamaged enemy
   // attacks, capped modestly so it augments rather than replaces the flat +evasion
@@ -391,7 +425,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // frozen combatTick/enemyAttack closure.
   const [unhitStreak, setUnhitStreak] = useState(0);
   const hasMomentum = equippedModuleList.some(
-    (m) => moduleDefById(m.defId).type === "engine" && m.traits.includes("momentum"),
+    (m) => moduleDefById(m.defId).type === "engine" && modHasEffect(m, "momentum"),
   );
 
   const capacity = computePowerCapacity(ship);
@@ -475,6 +509,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     enemies.forEach((e, i) => {
       if (prevHullsRef.current[i] > 0 && e.hull <= 0) {
         anyDiedThisUpdate = true;
+        killCountRef.current += 1;
         const pos = arenaRef.current.enemyPos[i];
         if (pos) {
           spawnBurst(pos.x, pos.y, "255,180,90", 30, 140);
@@ -734,7 +769,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const evasion = Math.min(0.75, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
     // Iron Verdict's Fortify: armor block doubles for its duration.
     const fortifyMult = fortifySecRef.current > 0 ? 2 : 1;
-    const rawResult = resolveAttack(enemy.damage * dmgMultiplier, Math.max(0, armorBlock - corrodedBlockRef.current) * fortifyMult, evasion, RANGE_MODIFIERS[band].incoming);
+    // Bulwark: plating bites harder the closer Whisper is to going down — a
+    // comeback axis, the inverse of the enemy enrage threshold.
+    const hullFraction = playerHull / maxHull;
+    const bulwarkMult = hasEffect("bulwark") ? 1 + (1 - hullFraction) * 0.8 : 1;
+    // Ablate: each hit taken softens the next one, resetting when one is avoided.
+    const ablateReduction = hasEffect("ablate") ? Math.min(0.4, ablateStacksRef.current * 0.1) : 0;
+    const effectiveEnemyDamage = Math.max(1, enemy.damage - (enemy.sunderedDamage ?? 0));
+    const rawResult = resolveAttack(effectiveEnemyDamage * dmgMultiplier, Math.max(0, armorBlock - corrodedBlockRef.current) * fortifyMult * bulwarkMult, evasion, RANGE_MODIFIERS[band].incoming);
     let result = phaseShiftBlocksThis ? { ...rawResult, hit: false } : rawResult;
     // Aegis Ward: a flat % damage-reduction multiplier — applied once, here, so
     // every downstream use of result.damageDealt (popup, hull loss, Bloodscent's
@@ -742,6 +784,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     if (result.hit && aegisWardSecRef.current > 0) {
       result = { ...result, damageDealt: Math.round(result.damageDealt * 0.5) };
     }
+    // Ablate: consecutive hits land progressively softer.
+    if (result.hit && ablateReduction > 0) {
+      result = { ...result, damageDealt: Math.max(1, Math.round(result.damageDealt * (1 - ablateReduction))) };
+    }
+    // Deflect: a flat chance to turn an attack aside outright.
+    const deflected = result.hit && hasEffect("deflect") && Math.random() < Math.min(0.4, 0.14 * effectStacks("deflect"));
+    if (deflected) result = { ...result, hit: false };
     // Ablative Plating's Absorb: negates exactly the first hit of the fight,
     // regardless of which enemy lands it — consumed the instant it's used.
     const absorbedHit = hasAbsorbArmor && absorbRef.current && result.hit && result.damageDealt > 0;
@@ -750,8 +799,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // window — only consumes a charge when a hit actually lands.
     const wardActive = wardChargesRef.current > 0 && result.hit;
     if (wardActive) setWardCharges((c) => Math.max(0, c - 1));
-    const negated = shieldActive || sanctuaryActive || wardActive;
+    const negated = shieldActive || sanctuaryActive || wardActive || deflected;
     const dealt = negated || absorbedHit ? 0 : result.hit ? result.damageDealt : 0;
+    if (hasEffect("ablate")) {
+      // Builds while you're being hit, resets the moment one is avoided.
+      ablateStacksRef.current = dealt > 0 ? Math.min(4, ablateStacksRef.current + 1) : 0;
+    }
     // Kinetic Reflector's Reflect: a fraction of whatever the block actually
     // absorbed strikes back, computed from resolveAttack's own pre-block raw damage.
     let reflectDmg = 0;
@@ -839,7 +892,23 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       } else {
         pushLog(phaseShiftBlocksThis ? t("combat.log.phaseShiftMiss", { enemy: enemy.name }) : t("combat.log.enemyMiss", { enemy: enemy.name }));
       }
-      if (dealt > 0) setPlayerHull((prev) => Math.max(0, Math.min(maxHull, prev - dealt)));
+      if (dealt > 0) setPlayerHull((prev) => {
+        const next = Math.max(0, Math.min(maxHull, prev - dealt));
+        // Last Stand: survive one otherwise-fatal blow per fight, at 1 hull. The
+        // check lives here rather than at the damage roll because this is the only
+        // place that knows the resulting hull — every other damage source (burn,
+        // Choral Strike, honor riposte) routes through setPlayerHull too, so the
+        // save applies to all of them rather than only to direct weapon fire.
+        if (next <= 0 && hasEffect("lastStand") && !lastStandUsedRef.current) {
+          lastStandUsedRef.current = true;
+          pushLog(t("combat.log.lastStand"));
+          playSfx("alarm");
+          shakeRef.current = 20;
+          triggerHitStop(140);
+          return 1;
+        }
+        return next;
+      });
       // Inertial Dampers' Momentum: real-time reinterpretation of "a clean enemy
       // turn" — now evaluated per individual attack event instead of per batch,
       // since batches no longer exist. Any hit landed resets the streak to zero.
@@ -1012,7 +1081,35 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       evasionDebuffSec: Math.max(0, (e.evasionDebuffSec ?? 0) - dt),
       blockDebuffSec: Math.max(0, (e.blockDebuffSec ?? 0) - dt),
       vulnerableSec: Math.max(0, (e.vulnerableSec ?? 0) - dt),
+      markedSec: Math.max(0, (e.markedSec ?? 0) - dt),
+      slowedSec: Math.max(0, (e.slowedSec ?? 0) - dt),
     })));
+
+    // Ignite: burning damage over time, ticking independently of weapon fire.
+    {
+      const burns = burnStacksRef.current;
+      const ids = Object.keys(burns).map(Number);
+      if (ids.length > 0) {
+        for (const idx of ids) {
+          const b = burns[idx];
+          b.remaining -= dt;
+          const target = enemiesRef.current[idx];
+          if (!target || target.hull <= 0 || b.remaining <= 0) { delete burns[idx]; continue; }
+          const tick = Math.max(1, Math.round(b.dps * dt));
+          setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, hull: Math.max(0, e.hull - tick) } : e)));
+        }
+      }
+    }
+
+    // Recycler: bleeds weapon cooldowns down over time on top of normal decay.
+    if (hasEffect("recycler")) {
+      const extra = 0.35 * effectStacks("recycler") * dt;
+      setCooldowns((prev) => {
+        const next: Record<string, number> = {};
+        for (const [k, v] of Object.entries(prev)) next[k] = Math.max(0, v - extra);
+        return next;
+      });
+    }
 
     // Passive player field regen — its own clock now, decoupled from any specific
     // enemy attack (there's no longer a "batch boundary" to hang it on).
@@ -1166,15 +1263,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const ratchetBonus = band === "close" && assignedCrew.some((c) => c.defId === "ratchetKoi") ? 1.1 : 1;
     // Railgun's Execute: a finisher axis, not a raw-damage lead — it does nothing
     // against a healthy target and swings hard against a dying one.
-    const executeMult = mod.traits.includes("execute") && target.hull <= target.maxHull * 0.25 ? 1.5 : 1;
+    const executeMult = modHasEffect(mod, "execute") && target.hull <= target.maxHull * 0.25 ? 1.5 : 1;
     // Ion Disruptor's Overload: every 3rd shot from THIS module instance hits double —
     // an automatic charge-up rhythm, distinct from Alpha Strike's manual one-shot arm.
-    const overloadShotCount = mod.traits.includes("overload") ? (overloadCountersRef.current[mod.id] ?? 0) + 1 : 0;
+    const overloadShotCount = modHasEffect(mod, "overload") ? (overloadCountersRef.current[mod.id] ?? 0) + 1 : 0;
     const overloadMult = overloadShotCount > 0 && overloadShotCount % 3 === 0 ? 2 : 1;
     // Vector Drive's Surge: range actually shifting since the last shot (any
     // weapon) charges the next one — rewards actually contesting range, not just
     // holding whatever band you started at.
-    const hasSurgeEngine = equippedModuleList.some((m) => moduleDefById(m.defId).type === "engine" && m.traits.includes("surge"));
+    const hasSurgeEngine = equippedModuleList.some((m) => moduleDefById(m.defId).type === "engine" && modHasEffect(m, "surge"));
     const surgeMult = hasSurgeEngine && bandChangedSinceLastShotRef.current ? 1.25 : 1;
     // Nightfall Vow's Alpha Strike: doubles this one shot, at the cost of that
     // weapon's cooldown locking out 2 extra turns (see the cooldown-set below).
@@ -1182,14 +1279,38 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // survivor takes +50% from the player for the rest of it (see the reactive
     // effect keyed on [enemies]).
     const riftAnchorMult = encounter.faction === "riftEchoes" && riftAnchoredRef.current ? 1.5 : 1;
-    const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult * (wasAlphaStrike ? 2 : 1) * overloadMult * surgeMult * riftAnchorMult);
+
+    // --- module effect multipliers (data/moduleEffects.ts) ---
+    // Opener: the very first shot of the fight, from any weapon carrying it.
+    const openerMult = modHasEffect(mod, "opener") && firstShotRef.current ? 2 : 1;
+    // Finisher: pressure when only one enemy is left standing.
+    const livingCount = enemies.filter((e) => e.hull > 0).length;
+    const finisherMult = modHasEffect(mod, "finisher") && livingCount === 1 ? 1.35 : 1;
+    // Rampage: escalates as the fight thins out.
+    const rampageMult = modHasEffect(mod, "rampage") ? 1 + 0.12 * killCountRef.current : 1;
+    // Range-conditional pair — opposite answers to the same positioning question.
+    const pointBlankMult = modHasEffect(mod, "pointBlank") && band === "close" ? 1.3 : 1;
+    const sniperMult = modHasEffect(mod, "sniper") && band === "long" ? 1.3 : 1;
+    // Exploit: rewards setting a target up with debuffs first.
+    const debuffed = (target.evasionDebuffSec ?? 0) > 0 || (target.blockDebuffSec ?? 0) > 0
+      || (target.vulnerableSec ?? 0) > 0 || (target.blockBrokenHits ?? 0) > 0 || !!target.stunned;
+    const exploitMult = modHasEffect(mod, "exploit") && debuffed ? 1.4 : 1;
+    // Mark: applied by another module, consumed by everything.
+    const markedMult = (target.markedSec ?? 0) > 0 ? 1.25 : 1;
+
+    const dmg = Math.round(
+      baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult
+      * (wasAlphaStrike ? 2 : 1) * overloadMult * surgeMult * riftAnchorMult
+      * openerMult * finisherMult * rampageMult * pointBlankMult * sniperMult * exploitMult * markedMult,
+    );
+    firstShotRef.current = false;
     bandChangedSinceLastShotRef.current = false;
     const nextEnemies = [...enemies];
     if (dmg > 0) {
       const targetEvasion = (target.evasionDebuffSec ?? 0) > 0 ? target.evasion * 0.5 : target.evasion;
       const blockBroken = (target.blockBrokenHits ?? 0) > 0;
       const undercut = (target.blockDebuffSec ?? 0) > 0;
-      const blockMult = blockBroken ? 0 : Math.min(mod.traits.includes("pierce") ? 0.5 : 1, undercut ? 0.5 : 1);
+      const blockMult = blockBroken ? 0 : Math.min(modHasEffect(mod, "pierce") ? 0.5 : 1, undercut ? 0.5 : 1);
       const effectiveBlock = Math.round(target.block * blockMult);
       const critChance = wasGuaranteedCrit ? 1 : computeCritChance(mod, comboCount, shipBaseCrit);
       // Anthem's Chorus Overture: the next N weapon shots can't miss (roll=1 always
@@ -1253,18 +1374,58 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
       // EMP-style traits: a chance to disable the target's next attack, or strip
       // its block outright so follow-up hits land at full force.
-      if (result.hit && mod.traits.includes("disable") && hitTarget.hull > 0 && Math.random() < 0.35) {
+      if (result.hit && modHasEffect(mod, "disable") && hitTarget.hull > 0 && Math.random() < 0.35) {
         hitTarget.stunned = true;
         pushLog(t("combat.log.stunned", { target: target.name }));
       }
-      if (result.hit && def.type === "utility" && mod.traits.includes("shieldBreak") && hitTarget.hull > 0) {
+      // --- status-applying effects (data/moduleEffects.ts) ---
+      if (result.hit && hitTarget.hull > 0) {
+        if (modHasEffect(mod, "mark")) {
+          hitTarget.markedSec = 3 * TURN_SECONDS;
+          pushLog(t("combat.log.marked", { target: target.name }));
+        }
+        if (modHasEffect(mod, "slow")) {
+          hitTarget.slowedSec = 1.5 * TURN_SECONDS;
+          const timer = enemyTimersRef.current[targetIdx];
+          if (timer) timer.attackRemaining += 1.2;
+          pushLog(t("combat.log.dampened", { target: target.name }));
+        }
+        if (modHasEffect(mod, "corrode")) {
+          hitTarget.corrodedBlock = (hitTarget.corrodedBlock ?? 0) + Math.max(1, Math.round(target.block * 0.15));
+          pushLog(t("combat.log.corrodeTarget", { target: target.name }));
+        }
+        if (modHasEffect(mod, "sunder")) {
+          hitTarget.sunderedDamage = (hitTarget.sunderedDamage ?? 0) + Math.max(1, Math.round(target.damage * 0.1));
+          pushLog(t("combat.log.sundered", { target: target.name }));
+        }
+        if (modHasEffect(mod, "burn")) {
+          burnStacksRef.current[targetIdx] = { dps: Math.max(1, Math.round(dmg * 0.16)), remaining: 3 * TURN_SECONDS };
+          pushLog(t("combat.log.ignited", { target: target.name }));
+        }
+      }
+      // Nova Coil: landing hits charges the ultimate faster.
+      if (result.hit && modHasEffect(mod, "novaCharge")) {
+        setEmberNovaCharge((c) => Math.min(EMBER_NOVA_MAX, c + 8 * effectStacks("novaCharge")));
+      }
+      // Overkill: damage past a kill splashes to another living enemy.
+      if (result.hit && modHasEffect(mod, "overkill") && result.damageDealt > target.hull) {
+        const spill = Math.round((result.damageDealt - target.hull) * 0.6);
+        const otherIdx = nextEnemies.findIndex((e, i) => i !== targetIdx && e.hull > 0);
+        if (spill > 0 && otherIdx >= 0) {
+          nextEnemies[otherIdx] = { ...nextEnemies[otherIdx], hull: Math.max(0, nextEnemies[otherIdx].hull - spill) };
+          addPopup(otherIdx, `-${spill}`, "#ff9f4d");
+          pushLog(t("combat.log.overkill", { target: nextEnemies[otherIdx].name, dmg: spill }));
+        }
+      }
+
+      if (result.hit && def.type === "utility" && modHasEffect(mod, "shieldBreak") && hitTarget.hull > 0) {
         hitTarget.blockBrokenHits = 3;
         pushLog(t("combat.log.shieldStripped", { target: target.name }));
       }
       nextEnemies[targetIdx] = hitTarget;
 
       // Chain Arc: a fraction of the hit arcs to a second living target.
-      if (result.hit && mod.traits.includes("chainArc")) {
+      if (result.hit && modHasEffect(mod, "chainArc")) {
         const others = nextEnemies.map((e, i) => ({ e, i })).filter(({ e, i }) => i !== targetIdx && e.hull > 0);
         if (others.length > 0) {
           const { e: arcTarget, i: arcIdx } = others[Math.floor(Math.random() * others.length)];
@@ -1291,7 +1452,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // this hits every other living enemy at once — weak against a lone boss, strong
       // against the multi-enemy Swarm/Reaver formations. A group-control axis, not a
       // bigger single-target number.
-      if (result.hit && mod.traits.includes("aoe")) {
+      if (result.hit && modHasEffect(mod, "aoe")) {
         nextEnemies.forEach((splashTarget, splashIdx) => {
           if (splashIdx === targetIdx || splashTarget.hull <= 0) return;
           const splashResult = resolveAttack(Math.round(dmg * 0.6), splashTarget.block, splashTarget.evasion, outgoingMult);
@@ -1311,11 +1472,55 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         });
       }
 
+      // Barrage: three rapid shots at reduced damage each — a different answer to
+      // "more hits" than Volley (one extra full-power roll) or Scatter (spread).
+      if (modHasEffect(mod, "barrage") && nextEnemies[targetIdx].hull > 0) {
+        for (let shot = 0; shot < 3; shot++) {
+          const bResult = resolveAttack(Math.round(dmg * 0.42), effectiveBlock, targetEvasion, outgoingMult);
+          if (bResult.hit) {
+            nextEnemies[targetIdx] = { ...nextEnemies[targetIdx], hull: Math.max(0, nextEnemies[targetIdx].hull - bResult.damageDealt) };
+          }
+          setTimeout(() => {
+            fireProjectile(playerPos, impactPos, weaponColor, () => {
+              if (bResult.hit) {
+                spawnBurst(impactPos.x, impactPos.y, hexToRgbString(weaponColor), 6, 80);
+                addPopup(targetIdx, `-${bResult.damageDealt}`, weaponColor);
+              }
+            }, weaponWeight * 0.6);
+          }, 70 * shot);
+        }
+        pushLog(t("combat.log.barrage", { target: target.name }));
+      }
+
+      // Scatter: splits into two weaker shots at RANDOM living targets — unlike
+      // Splash (everyone) or Chain Arc (one specific second target), where the
+      // damage lands is out of your hands.
+      if (modHasEffect(mod, "scatter")) {
+        const living = nextEnemies.map((e, i) => ({ e, i })).filter(({ e }) => e.hull > 0);
+        for (let shot = 0; shot < 2 && living.length > 0; shot++) {
+          const pick = living[Math.floor(Math.random() * living.length)];
+          const sResult = resolveAttack(Math.round(dmg * 0.5), pick.e.block, pick.e.evasion, outgoingMult);
+          const sPos = arenaRef.current.enemyPos[pick.i] ?? enemySlot(pick.i, enemies.length);
+          if (sResult.hit) {
+            nextEnemies[pick.i] = { ...nextEnemies[pick.i], hull: Math.max(0, nextEnemies[pick.i].hull - sResult.damageDealt) };
+          }
+          setTimeout(() => {
+            fireProjectile(playerPos, sPos, weaponColor, () => {
+              if (sResult.hit) {
+                spawnBurst(sPos.x, sPos.y, hexToRgbString(weaponColor), 7, 85);
+                addPopup(pick.i, `-${sResult.damageDealt}`, weaponColor);
+              }
+            }, weaponWeight * 0.7);
+          }, 60 * shot);
+        }
+        pushLog(t("combat.log.scatter", { target: target.name }));
+      }
+
       // Twin-Linked Cannon's Volley: a second, fully independent hit-or-miss roll at
       // the same target — unlike Chain Arc/Splash (which only fire off a successful
       // first hit and spread to OTHER targets), this always fires and stays on the
       // same one, trading peak burst for a second real chance to land.
-      if (mod.traits.includes("volley") && nextEnemies[targetIdx].hull > 0) {
+      if (modHasEffect(mod, "volley") && nextEnemies[targetIdx].hull > 0) {
         const volleyTarget = nextEnemies[targetIdx];
         const volleyResult = resolveAttack(dmg, effectiveBlock, targetEvasion, outgoingMult);
         setTimeout(() => {
@@ -1337,7 +1542,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       pushLog(t("combat.log.moduleActivated", { module: localizedModuleName(def) }));
       // Purge Field's Cleanse: the only removal effect in combat — instantly clears
       // Hollow's permanent Corrosion stack, restoring the ship's real armor value.
-      if (mod.traits.includes("cleanse") && corrodedBlock > 0) {
+      if (modHasEffect(mod, "cleanse") && corrodedBlock > 0) {
         setCorrodedBlock(0);
         pushLog(t("combat.log.purgeField", { amount: corrodedBlock }));
       }
@@ -1347,15 +1552,20 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // spending an order" effect the old push did, mechanically: a brief evasion
       // spike, as if the charge scattered the formation just long enough to duck
       // clear (reuses the same evasion-boost state Blink Vector uses).
-      if (mod.traits.includes("displace") && target.hull > 0) {
+      if (modHasEffect(mod, "displace") && target.hull > 0) {
         setEvasionBoostSec((s) => Math.max(s, 1.5 * TURN_SECONDS));
         pushLog(t("combat.log.displace", { target: target.name }));
       }
     }
     const overchargePenalty = wasOvercharged ? 2 : 0;
     const alphaStrikePenalty = wasAlphaStrike ? 2 : 0;
+    // Coolant shortens weapon cooldowns; Overdrive Sync removes Overcharge's
+    // cooldown penalty, turning its downside off rather than just softening it.
+    const coolantReduction = 0.18 * effectStacks("coolant");
     const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
-    const rawCooldownSec = Math.max(0, ((def.cooldown ?? 0) + overchargePenalty + alphaStrikePenalty - cooldownReduction) * TURN_SECONDS);
+    const syncedOverchargePenalty = hasEffect("overdriveSync") ? 0 : overchargePenalty;
+    const rawCooldownSec = Math.max(0, ((def.cooldown ?? 0) + syncedOverchargePenalty + alphaStrikePenalty - cooldownReduction) * TURN_SECONDS)
+      * Math.max(0.4, 1 - coolantReduction);
     // Item #2: weapon-type modules only ever fire via auto-fire now — floor their
     // cadence at AUTO_FIRE_MIN_INTERVAL so a 0-cooldown weapon (e.g. Pulse Cannon)
     // doesn't refire every render. Utility actives keep their raw authored cooldown.
@@ -1508,7 +1718,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       playSfx("laser");
     }
     const cooldownValue = crewDefById(state.value.crew.find((c) => c.id === crewId)!.defId).activeCooldown;
-    setCrewCooldowns((prev) => ({ ...prev, [crewId]: cooldownValue * TURN_SECONDS }));
+    const hasteMult = Math.max(0.5, 1 - 0.15 * effectStacks("haste"));
+    setCrewCooldowns((prev) => ({ ...prev, [crewId]: cooldownValue * TURN_SECONDS * hasteMult }));
     setEnemies(nextEnemies);
   }
 
@@ -1656,7 +1867,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       hitPulseRef.current.player = performance.now();
       pushLog(t("combat.log.sanctuaryFieldArm", { amount: heal }));
     }
-    setNamedAbilityCooldown(namedDef.activeCooldown * TURN_SECONDS);
+    setNamedAbilityCooldown(namedDef.activeCooldown * TURN_SECONDS * Math.max(0.5, 1 - 0.15 * effectStacks("haste")));
     playSfx("click");
   }
 

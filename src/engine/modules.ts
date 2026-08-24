@@ -48,7 +48,9 @@ export function drawModule(
   const def = defId ? moduleDefById(defId) : pickOne(MODULE_DEFS);
   const rarity = rollModuleRarity(def.baseRarity, opts);
   const traitCount = 1 + Math.floor(Math.random() * Math.min(3, def.traitPool.length));
-  const traits = shuffle(def.traitPool.map((t) => t.id)).slice(0, traitCount);
+  // traitPool is effect ids (see data/moduleEffects.ts). The signature effect is
+  // always present and is not part of the rolled variance.
+  const traits = shuffle([...def.traitPool]).slice(0, traitCount);
   const quality = rollQuality(MODULE_RARITY_ORDER.indexOf(rarity), MODULE_RARITY_ORDER.length);
   return {
     id: randomId("module"),
@@ -74,7 +76,7 @@ export function computeModuleDamage(mod: ModuleInstance): number {
   const def = moduleDefById(mod.defId);
   const base = def.baseDamage ?? 0;
   const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
-  const levelMult = 1 + (mod.level - 1) * 0.12;
+  const levelMult = moduleLevelMultiplier(mod.level);
   const rollMult = qualityMultiplier(mod.quality ?? 0.5);
   return Math.round(base * rarityMult * levelMult * rollMult);
 }
@@ -110,6 +112,15 @@ export function computeModuleBlock(mod: ModuleInstance): number {
  * The cap rises with rarity so rarity buys long-term investment headroom, not just
  * a bigger starting number — a mk5 stays worth upgrading long after a mk1 has
  * topped out. */
+/** Exponential stat growth (player direction 2026-08-24), replacing the old linear
+ * +12%/level. A maxed mk5 (L13) now reaches ~5.5x its base instead of ~2.4x, so
+ * late levels are the ones worth chasing — paired with an exponential cost curve
+ * below, upgrading becomes a decision about where to concentrate Alloy rather than
+ * a checklist to complete on everything you own. */
+export function moduleLevelMultiplier(level: number): number {
+  return Math.pow(1.14, level - 1);
+}
+
 export function moduleMaxLevel(rarity: ModuleRarity): number {
   return 5 + MODULE_RARITY_ORDER.indexOf(rarity) * 2;
 }
@@ -118,24 +129,20 @@ export function isModuleMaxed(mod: ModuleInstance): boolean {
   return mod.level >= moduleMaxLevel(mod.rarity);
 }
 
-/** Alloy to take a module from its current level to the next: superlinear in level,
- * scaled by rarity.
+/** Alloy for the next level — exponential, matching the exponential stat growth
+ * above (player direction 2026-08-24).
  *
- * Calibrated 2026-08-24 against measured income rather than guessed. Every story
- * encounter in all six acts combined pays 4,535 Alloy; a deep (depth-7) rift run
- * pays ~920. The first pass (base 14, exponent 1.55) put a full mk5 at 10,451 —
- * more than 2x the entire campaign's story income for ONE module, with a single
- * late level costing 2,003 (~44% of it). That's a wall, not a curve.
- *
- * At base 12 / exponent 1.35 the ladder reads:
- *   mk1  174 · mk2 546 · mk3 1,355 · mk4 2,944 · mk5 5,865 (full max)
- * so the market-ceiling mk3 is comfortably maxable mid-campaign from story income
- * alone, while a mk5 stays a real endgame chase (~6 deep rift runs) — which is
- * where the rift-exclusive top tiers are supposed to send you anyway. */
+ * Still calibrated against measured income: all six acts of story combat pay 4,535
+ * Alloy combined, a depth-7 rift run ~920. At 18 x rarityMult x 1.55^(level-1) the
+ * full-max ladder is roughly mk1 250 / mk2 1,300 / mk3 8,700 / mk4 63,000 /
+ * mk5 480,000 — deliberately steep at the top: a fully maxed mk5 is a long-term
+ * ambition, not a box to tick, and the early levels stay cheap enough that every
+ * module is worth putting a few levels into. */
 export function moduleUpgradeCost(mod: ModuleInstance): number {
   const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
-  return Math.round(12 * rarityMult * Math.pow(mod.level, 1.35));
+  return Math.round(18 * rarityMult * Math.pow(1.55, mod.level - 1));
 }
+
 
 export function levelUpModule(mod: ModuleInstance): ModuleInstance {
   if (isModuleMaxed(mod)) return mod;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { qualityMultiplier, drawModule, riftDropRarityFloor, moduleMaxLevel, moduleUpgradeCost, isModuleMaxed, levelUpModule, computeModuleDamage } from "./modules";
-import { MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, MARKET_MAX_RARITY, fabricatorCost } from "../data/modules";
+import { MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, MARKET_MAX_RARITY, fabricatorCost, moduleDefById } from "../data/modules";
+import { createInitialState, migrateForTest } from "./save";
 
 // Player-Tested Anti-Patterns #6 (docs/design-principles.md): tier gaps must be
 // verified, not assumed. A worst-roll module of tier N+1 must always beat a
@@ -69,7 +70,7 @@ describe("module economy sourcing (section B)", () => {
 // fired. Wired up 2026-08-24; these guard the rules it now runs on.
 describe("module upgrading", () => {
   const mk = (rarity: "mk1" | "mk3" | "mk5", level = 1) => ({
-    id: "m", defId: "pulseCannon", rarity, level, traits: [], lockedTraitSlot: null, quality: 0.5,
+    id: "m", defId: "bauhiniaWeapon1", rarity, level, traits: [], lockedTraitSlot: null, quality: 0.5,
   });
 
   it("the level cap rises with rarity, so rarity buys investment headroom", () => {
@@ -94,5 +95,47 @@ describe("module upgrading", () => {
   it("upgrade cost climbs with each level and with rarity", () => {
     expect(moduleUpgradeCost(mk("mk3", 2))).toBeGreaterThan(moduleUpgradeCost(mk("mk3", 1)));
     expect(moduleUpgradeCost(mk("mk5", 3))).toBeGreaterThan(moduleUpgradeCost(mk("mk1", 3)));
+  });
+});
+
+// A save's starting loadout references module ids by string. When the roster was
+// replaced wholesale those ids silently pointed at nothing — moduleDefById throws,
+// so a brand-new game would have crashed on first load. Nothing else covered it.
+describe("starting loadout integrity", () => {
+  it("every module id a new save creates actually exists in the roster", () => {
+    const state = createInitialState();
+    for (const m of state.modules) {
+      expect(() => moduleDefById(m.defId), `starting module "${m.defId}" is not in the roster`).not.toThrow();
+    }
+    expect(state.modules.length).toBeGreaterThan(0);
+  });
+});
+
+// Existing saves referenced the retired 17-module roster by string id, and
+// moduleDefById THROWS on an unknown id — so without a remap every pre-existing
+// save would hard-crash on load. This checks the migration actually produces ids
+// the current roster knows.
+describe("legacy module id migration (schema 6 -> 7)", () => {
+  it("remaps every retired module id onto a real module in the current roster", () => {
+    const legacy = ["pulseCannon","arcLance","railgun","flakBattery","ionDisruptor","twinLinkedCannon",
+      "plateBarrier","reactiveMesh","ablativePlating","kineticReflector",
+      "thrusterArray","vectorDrive","inertialDampers",
+      "empBurst","salvageDrone","purgeField","displacementCharge"];
+    const rarities = ["mk1","mk2","mk3","mk4","mk5"] as const;
+    for (const defId of legacy) {
+      for (const rarity of rarities) {
+        const save: any = {
+          schemaVersion: 6, resources: {}, flags: {}, ships: [], crew: [],
+          flagshipId: null, currentSystemId: "amaranthBelt", poiState: {},
+          capturedShips: [], alliedShips: [],
+          modules: [{ id: "x", defId, rarity, level: 3, traits: ["crit"], lockedTraitSlot: null, quality: 0.5 }],
+        };
+        const out = migrateForTest(save);
+        const migrated = out.modules[0];
+        expect(() => moduleDefById(migrated.defId), `${defId}/${rarity} -> "${migrated.defId}" is not a real module`).not.toThrow();
+        expect(moduleDefById(migrated.defId).baseRarity, `${defId}/${rarity} should keep its tier`).toBe(rarity);
+        expect(migrated.level, "level must be preserved — it's paid-for progress").toBe(3);
+      }
+    }
   });
 });

@@ -1,8 +1,9 @@
 import { useState } from "preact/hooks";
-import { state, flagship, equipModule, spend, canAfford, sellModule, upgradeModule } from "../../state/store";
+import { state, flagship, equipModule, spend, canAfford, sellModule, upgradeModule, isDesignEquipped } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
 import { computePowerCapacity } from "../../engine/ships";
 import { moduleDefById, fabricatorCost, MODULE_RARITY_ORDER } from "../../data/modules";
+import { moduleEffectById } from "../../data/moduleEffects";
 import { computeModuleDamage, computeModuleBlock, lockTrait, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel } from "../../engine/modules";
 import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
@@ -34,11 +35,21 @@ export function Modules() {
   if (!ship) return <div style={{ padding: "1rem" }}>{t("modules.noFlagship")}</div>;
 
   const layout = slotLayout(ship.hullClass);
-  const usedPower = ship.equipped.reduce((sum, id) => {
+  // Capacitor (data/moduleEffects.ts) trims the draw of every fitted module, so a
+  // capacitor engine buys room for a heavier loadout rather than just adding stats.
+  const capacitorStacks = ship.equipped.filter((id) => {
+    if (!id) return false;
+    const m = state.value.modules.find((x) => x.id === id);
+    if (!m) return false;
+    const d = moduleDefById(m.defId);
+    return d.signature === "capacitor" || m.traits.includes("capacitor");
+  }).length;
+  const drawMult = Math.max(0.6, 1 - 0.12 * capacitorStacks);
+  const usedPower = Math.round(ship.equipped.reduce((sum, id) => {
     if (!id) return sum;
     const mod = state.value.modules.find((m) => m.id === id);
     return sum + (mod ? moduleDefById(mod.defId).powerDraw : 0);
-  }, 0);
+  }, 0) * drawMult);
   const capacity = computePowerCapacity(ship);
   const overdrawn = usedPower > capacity;
   const equippedIds = new Set(ship.equipped.filter(Boolean));
@@ -112,6 +123,17 @@ export function Modules() {
                       <RollQualityBadge roll={mod.quality} />
                     </div>
                   )}
+                  {(() => {
+                    const sig = moduleEffectById(def.signature);
+                    if (!sig) return null;
+                    const loc = localizedTrait(def, def.signature);
+                    return (
+                      <div style={{ margin: "0.4rem 0", padding: "0.4rem 0.55rem", borderRadius: 5, border: "1px solid var(--violet)", background: "rgba(185,140,255,0.08)" }}>
+                        <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--violet)" }}>★ {loc.label}</div>
+                        <div style={{ fontSize: "0.66rem", color: "var(--text-mid)", marginTop: "0.12rem" }}>{loc.description}</div>
+                      </div>
+                    );
+                  })()}
                   <UpgradeRow mod={mod} />
                   <div style={{ display: "flex", gap: "0.4rem" }}>
                     <button className="btn" onClick={() => setPickerSlot(slot.index)}>{t("modules.swap")}</button>
@@ -140,6 +162,8 @@ export function Modules() {
             setPickerSlot(null);
           }}
           onClose={() => setPickerSlot(null)}
+          shipId={ship.id}
+          slotIndex={pickerSlot}
         />
       )}
     </div>
@@ -305,7 +329,7 @@ function LockRow({ moduleId, traits }: { moduleId: string; traits: string[] }) {
   const mod = state.value.modules.find((m) => m.id === moduleId);
   const def = mod ? moduleDefById(mod.defId) : null;
   const traitPool = def ? def.traitPool : [];
-  const pool = traitPool.map((tp) => tp.id);
+  const pool = [...traitPool];
   return (
     <div style={{ marginTop: "0.55rem" }}>
       {traits.length > 0 && (
@@ -341,11 +365,15 @@ function PickerModal({
   options,
   onPick,
   onClose,
+  shipId,
+  slotIndex,
 }: {
   type: ModuleType;
   options: ModuleInstance[];
   onPick: (id: string) => void;
   onClose: () => void;
+  shipId?: string;
+  slotIndex?: number;
 }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(3,5,9,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 45, padding: "1rem" }} onClick={onClose}>
@@ -359,14 +387,28 @@ function PickerModal({
         {options.length === 0 && <div style={{ color: "var(--text-dim)", padding: "0.5rem 0" }}>{t("modules.noneOwned")}</div>}
         {options.map((m) => {
           const def = moduleDefById(m.defId);
+          const sig = moduleEffectById(def.signature);
+          // A design already fitted elsewhere can still be picked — equipModule
+          // swaps them — but say so, so the swap isn't a surprise.
+          const fitted = shipId ? isDesignEquipped(shipId, m.defId, slotIndex) : false;
           return (
-            <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: "1px solid var(--line)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <ModuleTypeIcon type={type} size={15} />
-                <span>{localizedModuleName(def)}</span>
-                <ModuleRarityTag rarity={m.rarity} />
+            <div key={m.id} style={{ padding: "0.55rem 0", borderBottom: "1px solid var(--line)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                  <ModuleTypeIcon type={type} size={15} />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleName(def)}</span>
+                  <ModuleRarityTag rarity={m.rarity} />
+                  <span className="eyebrow" style={{ color: "var(--amber)" }}>{t("modules.levelShort", { level: m.level })}</span>
+                </div>
+                <button className="btn primary" style={{ flex: "none" }} onClick={() => onPick(m.id)}>
+                  {fitted ? t("modules.swapWithFitted") : t("modules.equip")}
+                </button>
               </div>
-              <button className="btn primary" onClick={() => onPick(m.id)}>{t("modules.equip")}</button>
+              {sig && (
+                <div style={{ marginTop: "0.25rem", fontSize: "0.68rem", color: "var(--violet)" }}>
+                  ★ {localizedTrait(def, def.signature).label} — {localizedTrait(def, def.signature).description}
+                </div>
+              )}
             </div>
           );
         })}

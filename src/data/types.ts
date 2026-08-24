@@ -71,16 +71,27 @@ export interface ModuleTrait {
   description: string;
 }
 
+export type ModuleFamily =
+  | "bauhinia" | "lionsheart" | "swanreach" | "reaver" | "swarm"
+  | "construct" | "hollow" | "rift" | "choir" | "mayeth";
+
 export interface ModuleDef {
   id: string;
   type: ModuleType;
+  /** Tech family — a faction from docs/world-bible.md. Determines the module's
+   * signature-effect pool, so how it plays reveals where it came from. */
+  family: ModuleFamily;
   name: string;
   baseRarity: ModuleRarity;
   powerDraw: number;
   cooldown: number | null;
   baseDamage?: number;
   baseBlock?: number;
-  traitPool: ModuleTrait[];
+  /** The fixed effect that defines this module — present on every instance,
+   * unlike traitPool which is rolled per instance. See docs/module-system.md. */
+  signature: string;
+  /** Effect ids (see data/moduleEffects.ts) this module can roll as variance. */
+  traitPool: string[];
   /** Issue #4 (2026-08 playtest): every weapon fired the same blue beam — the juice
    * infrastructure existed but didn't vary with what actually fired. A weapon's
    * signature color for its projectile beam and impact burst; falls back to the

@@ -2,7 +2,7 @@ import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
 import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId, ShipInstance } from "../data/types";
-import { fabricatorCost, MARKET_MAX_RARITY } from "../data/modules";
+import { fabricatorCost, MARKET_MAX_RARITY, moduleDefById } from "../data/modules";
 import { hullClassById, ascensionRequirementsMet } from "../data/hullClasses";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
 import { LIONSHEART_EXPANSE } from "../data/galaxies/lionsheartExpanse";
@@ -156,8 +156,24 @@ export function isPoiAvailable(poi: Poi): boolean {
   return Date.now() - (rt.clearedAt ?? 0) >= respawnSeconds * 1000;
 }
 
+/** How many equipped modules on the flagship carry an effect (signature counts). */
+export function equippedEffectStacks(effectId: string): number {
+  const ship = flagship.value;
+  if (!ship) return 0;
+  return ship.equipped.filter((id) => {
+    if (!id) return false;
+    const m = state.value.modules.find((x) => x.id === id);
+    if (!m) return false;
+    const d = moduleDefById(m.defId);
+    return d.signature === effectId || m.traits.includes(effectId);
+  }).length;
+}
+
 export function mineResource(poiId: string, yieldType: ResourceType, amount: number) {
-  grant({ [yieldType]: amount } as Partial<Record<ResourceType, number>>);
+  // Prospector (data/moduleEffects.ts): a real reason to fit a utility module for
+  // economy rather than combat.
+  const bonus = 1 + 0.25 * equippedEffectStacks("prospector");
+  grant({ [yieldType]: Math.max(1, Math.round(amount * bonus)) } as Partial<Record<ResourceType, number>>);
   const poi = GALAXIES.flatMap((g) => g.systems).flatMap((s) => s.pois).find((p) => p.id === poiId);
   const current = poi ? effectiveRemaining(poi) : 0;
   setPoiRuntime(poiId, { remaining: Math.max(0, current - 1), updatedAt: Date.now() });
@@ -242,19 +258,54 @@ function pickAptitude(): "S" | "A" | "B" | "C" | "D" {
   return "B";
 }
 
+/** Player direction 2026-08-24: "Every module should be unique. We don't want
+ * repeat modules on a ship." Two copies of the same design was never an
+ * interesting loadout decision — it was the absence of one. With a 200-module
+ * roster the constraint costs the player nothing and forces every socket to be a
+ * real choice.
+ *
+ * Enforced here rather than only in the picker so no path can bypass it: equipping
+ * a module whose DESIGN is already fitted elsewhere on the ship swaps the two,
+ * which is the behaviour a player expects from dragging one into an occupied
+ * loadout — never a silent rejection, and never a duplicate. */
 export function equipModule(shipId: string, slotIndex: number, moduleId: string | null) {
   const ships = state.value.ships.map((s) => {
     if (s.id !== shipId) return s;
     const equipped = [...s.equipped];
-    // unequip this module from any other slot on this ship first
     if (moduleId) {
-      for (let i = 0; i < equipped.length; i++) if (equipped[i] === moduleId) equipped[i] = null;
+      const incomingDef = state.value.modules.find((m) => m.id === moduleId)?.defId;
+      const displaced = equipped[slotIndex];
+      for (let i = 0; i < equipped.length; i++) {
+        if (i === slotIndex) continue;
+        const otherId = equipped[i];
+        if (!otherId) continue;
+        const sameInstance = otherId === moduleId;
+        const sameDesign =
+          incomingDef !== undefined &&
+          state.value.modules.find((m) => m.id === otherId)?.defId === incomingDef;
+        if (sameInstance || sameDesign) {
+          // Swap rather than blank it: the module already in the target slot takes
+          // the vacated socket, so the player doesn't silently lose a fitting.
+          equipped[i] = sameInstance ? null : displaced;
+        }
+      }
     }
     equipped[slotIndex] = moduleId;
     return { ...s, equipped };
   });
   state.value = { ...state.value, ships };
   persist();
+}
+
+/** Whether this module's design is already fitted somewhere on the ship (other
+ * than `exceptSlot`). Drives the picker's "already fitted" state. */
+export function isDesignEquipped(shipId: string, defId: string, exceptSlot?: number): boolean {
+  const ship = state.value.ships.find((s) => s.id === shipId);
+  if (!ship) return false;
+  return ship.equipped.some((id, i) => {
+    if (!id || i === exceptSlot) return false;
+    return state.value.modules.find((m) => m.id === id)?.defId === defId;
+  });
 }
 
 /** Section E (2026-08-24 player brief): crew are assigned to a fixed station,
@@ -402,6 +453,12 @@ export function resolveCombatVictory(
   if (rewards.salvage) rewards.salvage = Math.round(rewards.salvage * (1 + salvageBonus));
   if (rewards.alloy) rewards.alloy = Math.round(rewards.alloy * (1 + alloyBonus));
   if (rewards.insight && insightBonus > 0) rewards.insight = Math.round(rewards.insight * (1 + insightBonus));
+  // Insight Draw: a chance to recover the scarcest resource from a win, giving
+  // Insight a repeatable trickle instead of being purely story-gated.
+  const insightStacks = equippedEffectStacks("insightDraw");
+  if (insightStacks > 0 && Math.random() < Math.min(0.6, 0.2 * insightStacks)) {
+    rewards.insight = (rewards.insight ?? 0) + insightStacks;
+  }
   grant(rewards);
   const dropChance = enc.isBoss ? BOSS_BONUS_DROP_CHANCE : BONUS_DROP_CHANCE;
   // Section B: ordinary combat drops are capped at the market ceiling too —
