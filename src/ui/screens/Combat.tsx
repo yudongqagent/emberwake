@@ -1365,13 +1365,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
       {(guaranteedCrit || riposteArmed || shieldSec > 0 || alphaStrikeArmed || phaseShiftReady || fortifySec > 0 || bloodscentSec > 0) && (
         <div style={{ display: "flex", gap: "0.4rem", padding: "0 1rem 0.4rem", flexWrap: "wrap" }}>
-          {guaranteedCrit && <StatusBadge color="var(--amber)" text={t("combat.status.guaranteedCrit")} />}
-          {riposteArmed && <StatusBadge color="var(--cyan)" text={t("combat.status.riposteArmed")} />}
-          {shieldSec > 0 && <StatusBadge color="var(--violet)" text={t("combat.status.overrideShield", { sec: shieldSec.toFixed(1) })} />}
-          {alphaStrikeArmed && <StatusBadge color="var(--red)" text={t("combat.status.alphaStrike")} />}
-          {phaseShiftReady && <StatusBadge color="var(--cyan)" text={t("combat.status.phaseShift")} />}
-          {fortifySec > 0 && <StatusBadge color="var(--violet)" text={t("combat.status.fortified", { sec: fortifySec.toFixed(1) })} />}
-          {bloodscentSec > 0 && <StatusBadge color="var(--green)" text={t("combat.status.bloodscent", { sec: bloodscentSec.toFixed(1) })} />}
+          {/* Gacha-RPG grounding #1 (docs/design-principles.md): a distinct glyph per
+              status so the badge row reads by shape/color before the text even
+              registers, instead of requiring every badge to be read to tell them
+              apart — the same "icon over text" bar the resource/module/crew icons
+              already clear. */}
+          {guaranteedCrit && <StatusBadge glyph="🎯" color="var(--amber)" text={t("combat.status.guaranteedCrit")} />}
+          {riposteArmed && <StatusBadge glyph="↩" color="var(--cyan)" text={t("combat.status.riposteArmed")} />}
+          {shieldSec > 0 && <StatusBadge glyph="🛡" color="var(--violet)" text={t("combat.status.overrideShield", { sec: shieldSec.toFixed(1) })} />}
+          {alphaStrikeArmed && <StatusBadge glyph="⚡" color="var(--red)" text={t("combat.status.alphaStrike")} />}
+          {phaseShiftReady && <StatusBadge glyph="◈" color="var(--cyan)" text={t("combat.status.phaseShift")} />}
+          {fortifySec > 0 && <StatusBadge glyph="🔰" color="var(--violet)" text={t("combat.status.fortified", { sec: fortifySec.toFixed(1) })} />}
+          {bloodscentSec > 0 && <StatusBadge glyph="🩸" color="var(--green)" text={t("combat.status.bloodscent", { sec: bloodscentSec.toFixed(1) })} />}
         </div>
       )}
 
@@ -1509,10 +1514,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   );
 }
 
-function StatusBadge({ color, text }: { color: string; text: string }) {
+function StatusBadge({ glyph, color, text }: { glyph: string; color: string; text: string }) {
   return (
     <span
       style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.35em",
         fontSize: "0.66rem",
         fontWeight: 700,
         fontFamily: "var(--font-display)",
@@ -1523,6 +1531,7 @@ function StatusBadge({ color, text }: { color: string; text: string }) {
         textShadow: `0 0 6px ${color}`,
       }}
     >
+      <span aria-hidden="true" style={{ fontSize: "0.95em" }}>{glyph}</span>
       {text}
     </span>
   );

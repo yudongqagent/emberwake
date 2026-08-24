@@ -97,9 +97,9 @@ export const ACT1_SCENES_ZH: Record<string, Pick<StoryScene, "lines" | "choices"
       { speaker: "阿瑟·阿尔泰因爵士", text: "我的理由，我一样不缺。好好享受这堆文书吧，船长。" },
     ],
     choices: [
-      { label: "走正式渠道——让林一菲在政治上出面周旋。" },
-      { label: "花钱雇个掮客，悄悄绕过这道障碍。" },
-      { label: "当着对接法庭的面，公开揭发这次越权行为。" },
+      { label: "走正式渠道——让林一菲在政治上出面周旋。", setFlags: ["arthaineConflictStyle.political"] },
+      { label: "花钱雇个掮客，悄悄绕过这道障碍。", setFlags: ["arthaineConflictStyle.bribed"] },
+      { label: "当着对接法庭的面，公开揭发这次越权行为。", setFlags: ["arthaineConflictStyle.public"] },
     ],
   },
   emberRising: {
