@@ -1,9 +1,9 @@
 import { useState } from "preact/hooks";
-import { state, flagship, equipModule, spend, canAfford, sellModule } from "../../state/store";
+import { state, flagship, equipModule, spend, canAfford, sellModule, upgradeModule } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
 import { computePowerCapacity } from "../../engine/ships";
 import { moduleDefById, fabricatorCost, MODULE_RARITY_ORDER } from "../../data/modules";
-import { computeModuleDamage, computeModuleBlock, lockTrait, qualityMultiplier } from "../../engine/modules";
+import { computeModuleDamage, computeModuleBlock, lockTrait, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel } from "../../engine/modules";
 import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon, ResourceIcon } from "../components/Icons";
@@ -78,7 +78,12 @@ export function Modules() {
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.4rem" }}>
                     <span style={{ fontWeight: 700 }}>{localizedModuleName(def)}</span>
-                    <ModuleRarityTag rarity={mod.rarity} />
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                      <span className="eyebrow" style={{ color: "var(--amber)" }}>
+                        {t("modules.levelShort", { level: mod.level })}
+                      </span>
+                      <ModuleRarityTag rarity={mod.rarity} />
+                    </span>
                   </div>
                   <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", margin: "0.45rem 0" }}>
                     <span>{t("modules.pwr", { value: def.powerDraw })}</span>
@@ -91,6 +96,7 @@ export function Modules() {
                       <RollQualityBadge roll={mod.quality} />
                     </div>
                   )}
+                  <UpgradeRow mod={mod} />
                   <div style={{ display: "flex", gap: "0.4rem" }}>
                     <button className="btn" onClick={() => setPickerSlot(slot.index)}>{t("modules.swap")}</button>
                     <button className="btn danger" onClick={() => equipModule(ship.id, slot.index, null)}>{t("modules.remove")}</button>
@@ -212,6 +218,70 @@ function findDuplicatesToSell(inventory: ModuleInstance[]): string[] {
     toSell.push(...sorted.slice(1).map((m) => m.id));
   }
   return toSell;
+}
+
+/** Module leveling — the Alloy sink docs/systems-design.md always specified but
+ * that had never actually been wired up (levelUpModule sat callerless, so every
+ * module was stuck at level 1 and its +12%/level term never fired).
+ *
+ * Shows the concrete stat gain the next level buys rather than just a cost, so
+ * spending Alloy is an informed choice; and shows the cap explicitly, since the
+ * cap rising with rarity is what makes a high-rarity module worth investing in
+ * long after a low-rarity one has topped out. */
+function UpgradeRow({ mod }: { mod: ModuleInstance }) {
+  const def = moduleDefById(mod.defId);
+  const maxed = isModuleMaxed(mod);
+  const cost = moduleUpgradeCost(mod);
+  const affordable = state.value.resources.alloy >= cost;
+  const cap = moduleMaxLevel(mod.rarity);
+
+  // Project the next level so the player sees the actual delta they're buying.
+  const next = { ...mod, level: mod.level + 1 };
+  const isWeapon = def.baseDamage !== undefined;
+  const isArmor = def.baseBlock !== undefined;
+  const before = isWeapon ? computeModuleDamage(mod) : isArmor ? computeModuleBlock(mod) : null;
+  const after = isWeapon ? computeModuleDamage(next) : isArmor ? computeModuleBlock(next) : null;
+
+  return (
+    <div
+      style={{
+        margin: "0.5rem 0", padding: "0.5rem 0.6rem", borderRadius: 6,
+        border: `1px solid ${maxed ? "var(--line)" : "var(--amber)"}`,
+        background: maxed ? "transparent" : "rgba(255,184,77,0.07)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+        <span className="eyebrow" style={{ color: maxed ? "var(--text-dim)" : "var(--amber)" }}>
+          {t("modules.levelOf", { level: mod.level, cap })}
+        </span>
+        {maxed ? (
+          <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>{t("modules.maxed")}</span>
+        ) : (
+          <button
+            className="btn"
+            style={{ fontSize: "0.68rem", padding: "0.35em 0.6em", display: "flex", alignItems: "center", gap: "0.3em" }}
+            disabled={!affordable}
+            onClick={() => upgradeModule(mod.id)}
+            title={t("modules.upgradeTitle")}
+          >
+            {t("modules.upgrade")} <ResourceIcon type="alloy" size={11} />
+            <span style={{ color: affordable ? undefined : "var(--red)" }}>{cost}</span>
+          </button>
+        )}
+      </div>
+      <div style={{ marginTop: "0.35rem" }}>
+        <Bar fraction={(mod.level - 1) / (cap - 1)} kind="progress" />
+      </div>
+      {!maxed && before !== null && after !== null && after > before && (
+        <div style={{ marginTop: "0.3rem", fontSize: "0.66rem", color: "var(--text-dim)" }}>
+          {isWeapon ? t("modules.dmg", { value: before }) : t("modules.block", { value: before })}
+          {" → "}
+          <span style={{ color: "var(--green)", fontWeight: 700 }}>{after}</span>
+          <span style={{ color: "var(--green)" }}> (+{after - before})</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function LockRow({ moduleId, traits }: { moduleId: string; traits: string[] }) {

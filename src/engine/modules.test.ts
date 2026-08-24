@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { qualityMultiplier, drawModule, riftDropRarityFloor } from "./modules";
+import { qualityMultiplier, drawModule, riftDropRarityFloor, moduleMaxLevel, moduleUpgradeCost, isModuleMaxed, levelUpModule, computeModuleDamage } from "./modules";
 import { MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, MARKET_MAX_RARITY, fabricatorCost } from "../data/modules";
 
 // Player-Tested Anti-Patterns #6 (docs/design-principles.md): tier gaps must be
@@ -60,5 +60,39 @@ describe("module economy sourcing (section B)", () => {
         `${order[i]}→${order[i + 1]}: price should climb faster than power (a market shortcut must be a real sacrifice)`,
       ).toBeGreaterThan(powerRatio * 1.5);
     }
+  });
+});
+
+// Module leveling was specified in docs/systems-design.md ("Level: upgraded with
+// Alloy, independent of Rarity") but levelUpModule had NO callers — every module
+// sat at level 1 forever and the +12%/level term in computeModuleDamage never
+// fired. Wired up 2026-08-24; these guard the rules it now runs on.
+describe("module upgrading", () => {
+  const mk = (rarity: "mk1" | "mk3" | "mk5", level = 1) => ({
+    id: "m", defId: "pulseCannon", rarity, level, traits: [], lockedTraitSlot: null, quality: 0.5,
+  });
+
+  it("the level cap rises with rarity, so rarity buys investment headroom", () => {
+    expect(moduleMaxLevel("mk1")).toBeLessThan(moduleMaxLevel("mk3"));
+    expect(moduleMaxLevel("mk3")).toBeLessThan(moduleMaxLevel("mk5"));
+  });
+
+  it("leveling actually raises the module's real damage output", () => {
+    const base = mk("mk3", 1);
+    const leveled = levelUpModule(base);
+    expect(leveled.level).toBe(2);
+    expect(computeModuleDamage(leveled)).toBeGreaterThan(computeModuleDamage(base));
+  });
+
+  it("never levels past the rarity cap", () => {
+    let m = mk("mk1", 1);
+    for (let i = 0; i < 50; i++) m = levelUpModule(m) as typeof m;
+    expect(m.level).toBe(moduleMaxLevel("mk1"));
+    expect(isModuleMaxed(m)).toBe(true);
+  });
+
+  it("upgrade cost climbs with each level and with rarity", () => {
+    expect(moduleUpgradeCost(mk("mk3", 2))).toBeGreaterThan(moduleUpgradeCost(mk("mk3", 1)));
+    expect(moduleUpgradeCost(mk("mk5", 3))).toBeGreaterThan(moduleUpgradeCost(mk("mk1", 3)));
   });
 });

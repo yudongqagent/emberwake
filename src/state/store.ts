@@ -23,7 +23,7 @@ import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
 import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
-import { drawModule, riftDropRarityFloor } from "../engine/modules";
+import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed } from "../engine/modules";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -493,6 +493,26 @@ export function grantRiftDrop(deepestDepth: number): ModuleInstance {
   playSfx("draw");
   persist();
   return drop;
+}
+
+/** Spends Alloy to raise one owned module a level (docs/systems-design.md: Alloy
+ * is always "make something you already have better"). No-ops if the module is
+ * already at its rarity's cap or the player can't afford it — defense in depth;
+ * the UI gates both already. */
+export function upgradeModule(moduleId: string): boolean {
+  const mod = state.value.modules.find((m) => m.id === moduleId);
+  if (!mod || isModuleMaxed(mod)) return false;
+  const cost = moduleUpgradeCost(mod);
+  if (state.value.resources.alloy < cost) return false;
+  const modules = state.value.modules.map((m) => (m.id === moduleId ? levelUpModule(m) : m));
+  state.value = {
+    ...state.value,
+    modules,
+    resources: { ...state.value.resources, alloy: state.value.resources.alloy - cost },
+  };
+  playSfx("levelUp");
+  persist();
+  return true;
 }
 
 export function repairFlagship() {

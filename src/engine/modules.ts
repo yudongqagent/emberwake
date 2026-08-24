@@ -98,7 +98,36 @@ export function computeModuleBlock(mod: ModuleInstance): number {
   return Math.round(base * rarityMult * levelMult * rollMult);
 }
 
+/** Module leveling, per docs/systems-design.md: "Level: upgraded with Alloy,
+ * independent of Rarity" — and the resource split it exists to serve, "Source
+ * Points always answers 'get something new,' Alloy always answers 'make something
+ * you already have better'."
+ *
+ * This was dead code until 2026-08-24: levelUpModule existed with no caller, so
+ * every module sat at level 1 forever and the +12%/level term below never fired.
+ * Alloy correspondingly had almost nothing to spend on. Both are now live.
+ *
+ * The cap rises with rarity so rarity buys long-term investment headroom, not just
+ * a bigger starting number — a mk5 stays worth upgrading long after a mk1 has
+ * topped out. */
+export function moduleMaxLevel(rarity: ModuleRarity): number {
+  return 5 + MODULE_RARITY_ORDER.indexOf(rarity) * 2;
+}
+
+export function isModuleMaxed(mod: ModuleInstance): boolean {
+  return mod.level >= moduleMaxLevel(mod.rarity);
+}
+
+/** Alloy to take a module from its current level to the next. Superlinear in
+ * level and scaled by rarity, so topping out a mk5 is a genuine long-haul project
+ * rather than a formality once Alloy income ramps. */
+export function moduleUpgradeCost(mod: ModuleInstance): number {
+  const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
+  return Math.round(14 * rarityMult * Math.pow(mod.level, 1.55));
+}
+
 export function levelUpModule(mod: ModuleInstance): ModuleInstance {
+  if (isModuleMaxed(mod)) return mod;
   return { ...mod, level: mod.level + 1 };
 }
 
