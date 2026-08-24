@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAttack, rangeBandFromDistance, isEncounterCleared, isPlayerDefeated, RANGE_MODIFIERS } from "./combat";
+import { resolveAttack, advanceRangeBand, isEncounterCleared, isPlayerDefeated, RANGE_MODIFIERS, type RangeState } from "./combat";
 import { ENCOUNTER_DEFS } from "../data/encounters";
 
 describe("resolveAttack", () => {
@@ -51,14 +51,53 @@ describe("resolveAttack", () => {
   });
 });
 
-describe("rangeBandFromDistance", () => {
-  it("reads close/mid/long off live distance between ships", () => {
-    expect(rangeBandFromDistance(0)).toBe("close");
-    expect(rangeBandFromDistance(159)).toBe("close");
-    expect(rangeBandFromDistance(160)).toBe("mid");
-    expect(rangeBandFromDistance(339)).toBe("mid");
-    expect(rangeBandFromDistance(340)).toBe("long");
-    expect(rangeBandFromDistance(1000)).toBe("long");
+// Bridge-command redesign (docs/story/research-notes-bridge-command.md, section
+// H): range is a discrete tug-of-war advanced per tick, not read off live pixel
+// distance — replaces the old rangeBandFromDistance model entirely.
+describe("advanceRangeBand", () => {
+  it("closing under a close order with no enemy contest transitions once progress reaches 1", () => {
+    let state: RangeState = { band: "long", progress: 0 };
+    // rate=0.1/sec, dt=5s → 0.5 progress after one tick, not yet transitioned
+    state = advanceRangeBand(state, "close", "long", 0.1, 0, 5);
+    expect(state.band).toBe("long");
+    expect(state.progress).toBeCloseTo(0.5);
+    // another 5s tick pushes total to 1.0 → transitions to mid, remainder carried
+    state = advanceRangeBand(state, "close", "long", 0.1, 0, 5);
+    expect(state.band).toBe("mid");
+    expect(state.progress).toBeCloseTo(0);
+  });
+
+  it("holding still drifts if the enemy prefers a different band, but the player contributes nothing", () => {
+    const state = advanceRangeBand({ band: "long", progress: 0 }, "hold", "close", 0, 0.1, 5);
+    expect(state.band).toBe("long");
+    expect(state.progress).toBeCloseTo(0.5); // enemy alone pulls toward closing
+  });
+
+  it("an enemy preferring the current band contributes no pull either way", () => {
+    const state = advanceRangeBand({ band: "mid", progress: 0 }, "hold", "mid", 0.1, 0.1, 10);
+    expect(state.progress).toBe(0);
+  });
+
+  it("reversing direction mid-transition costs back the progress already made, not a free flip", () => {
+    let state: RangeState = { band: "mid", progress: 0.6 }; // 60% of the way toward closing
+    state = advanceRangeBand(state, "retreat", "mid", 0.1, 0, 3); // retreat pulls the other way
+    expect(state.band).toBe("mid"); // hasn't transitioned
+    expect(state.progress).toBeCloseTo(0.3); // 0.6 - 0.1*3
+  });
+
+  it("cannot close past the closest band or retreat past the farthest", () => {
+    const atClose = advanceRangeBand({ band: "close", progress: 0 }, "close", "close", 0.1, 0, 10);
+    expect(atClose.band).toBe("close");
+    expect(atClose.progress).toBeLessThanOrEqual(0);
+    const atLong = advanceRangeBand({ band: "long", progress: 0 }, "retreat", "long", 0.1, 0, 10);
+    expect(atLong.band).toBe("long");
+    expect(atLong.progress).toBeGreaterThanOrEqual(0);
+  });
+
+  it("a faster ship (higher playerRate) closes range in less time", () => {
+    const slow = advanceRangeBand({ band: "long", progress: 0 }, "close", "long", 0.05, 0, 5);
+    const fast = advanceRangeBand({ band: "long", progress: 0 }, "close", "long", 0.15, 0, 5);
+    expect(fast.progress).toBeGreaterThan(slow.progress);
   });
 });
 

@@ -55,12 +55,53 @@ export function isPlayerDefeated(playerHull: number): boolean {
   return playerHull <= 0;
 }
 
-export const RANGE_BAND_DISTANCE = { close: 160, mid: 340 };
+/** Bridge-command redesign (section G/H of the 2026-08-24 player brief, see
+ * docs/story/research-notes-bridge-command.md): the player no longer flies the
+ * ship in continuous space, so range is no longer a literal pixel distance — it's
+ * a discrete tug-of-war between the player's stance order and the enemy faction's
+ * own preferred range, advanced once per combat tick. This replaces
+ * rangeBandFromDistance/RANGE_BAND_DISTANCE entirely. */
+export type StanceOrder = "close" | "hold" | "retreat";
 
-/** Combat arenas use free-flight positioning, not discrete range steps — the band is
- * just read off live distance between two ships. */
-export function rangeBandFromDistance(distance: number): RangeBand {
-  if (distance < RANGE_BAND_DISTANCE.close) return "close";
-  if (distance < RANGE_BAND_DISTANCE.mid) return "mid";
-  return "long";
+export const RANGE_ORDER: RangeBand[] = ["close", "mid", "long"];
+
+export interface RangeState {
+  band: RangeBand;
+  /** Signed progress toward the next transition: positive = toward closing
+   * (lower index), negative = toward opening (higher index). Resets toward 0 the
+   * instant a transition actually happens — reversing direction mid-transition
+   * genuinely costs back the ground already gained, it isn't free to flip-flop. */
+  progress: number;
+}
+
+/** Advances range by one tick. `playerRate`/`enemyRate` are progress-per-second at
+ * full pull (0 disables that side entirely) — the caller derives these from ship
+ * speed and a faction baseline respectively, keeping this function pure/testable.
+ * The enemy pulls toward its own `enemyPreferred` band whenever it differs from
+ * the current one; contributes nothing once already there. */
+export function advanceRangeBand(
+  current: RangeState,
+  playerOrder: StanceOrder,
+  enemyPreferred: RangeBand,
+  playerRate: number,
+  enemyRate: number,
+  dt: number,
+): RangeState {
+  const idx = RANGE_ORDER.indexOf(current.band);
+  const enemyIdx = RANGE_ORDER.indexOf(enemyPreferred);
+  const playerDelta = playerOrder === "close" ? playerRate * dt : playerOrder === "retreat" ? -playerRate * dt : 0;
+  const enemyDelta = enemyIdx < idx ? enemyRate * dt : enemyIdx > idx ? -enemyRate * dt : 0;
+  let progress = current.progress + playerDelta + enemyDelta;
+
+  if (progress >= 1 && idx > 0) {
+    return { band: RANGE_ORDER[idx - 1], progress: progress - 1 };
+  }
+  if (progress <= -1 && idx < RANGE_ORDER.length - 1) {
+    return { band: RANGE_ORDER[idx + 1], progress: progress + 1 };
+  }
+  // At an extreme, there's nowhere further to go in that direction — clamp
+  // instead of letting progress build up invisibly past the wall.
+  if (idx === 0) progress = Math.min(progress, 0);
+  if (idx === RANGE_ORDER.length - 1) progress = Math.max(progress, 0);
+  return { band: current.band, progress };
 }

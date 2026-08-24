@@ -4,7 +4,7 @@ import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, rangeBandFromDistance, CRIT_MULTIPLIER, type RangeBand } from "../../engine/combat";
+import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend } from "../../state/store";
 import { crewDefById } from "../../data/crew";
 import { hullClassAbility } from "../../data/namedShips";
@@ -54,11 +54,10 @@ const ENEMY_ATTACK_JITTER = 0.7;
 const CHARGE_WINDUP_SEC = 1.9;
 const REGEN_INTERVAL_SEC = TURN_SECONDS;
 
-/** Issue #9 (docs/design-principles.md Player-Tested Anti-Patterns #7): before this,
- * enemies only bobbed in place around a fixed slot — range band was something the
- * player set once and forgot, not a contested space. Each faction now actively
- * closes to (or holds) the distance its doctrine wants, so staying put has a real
- * cost and repositioning is a continuous tactical choice, not a one-time setup step. */
+/** Issue #9 (docs/design-principles.md Player-Tested Anti-Patterns #7): each faction
+ * actively pulls toward the range its doctrine wants (see advanceRangeBand in
+ * engine/combat.ts) — staying put has a real cost, contesting range is a continuous
+ * tactical choice, not a one-time setup step. */
 const FACTION_PREFERRED_RANGE: Partial<Record<FactionId, RangeBand>> = {
   reavers: "close",
   swarm: "close",
@@ -70,11 +69,22 @@ const FACTION_PREFERRED_RANGE: Partial<Record<FactionId, RangeBand>> = {
   riftEchoes: "mid",
   choir: "mid",
 };
-const RANGE_TARGET_DISTANCE: Record<RangeBand, number> = { close: 100, mid: 250, long: 420 };
-/** World-units/sec an enemy closes/opens distance at — deliberately slower than the
- * player's own speed (see computeSpeed), so the player can always out-position them
- * with attention, but standing still lets the enemy dictate the range instead. */
-const ENEMY_REPOSITION_SPEED = 70;
+/** Bridge-command redesign (docs/story/research-notes-bridge-command.md, section
+ * H): the player no longer flies the ship — range is a discrete tug-of-war (see
+ * advanceRangeBand) advanced once per combatTick (150ms), not a per-frame physics
+ * simulation. BASE_CLOSE_SECONDS is how long closing one band takes at a
+ * "reference" ship speed (see the playerRate derivation below) — order-of-
+ * magnitude longer than the old ~1.6s so range/positioning is a real tactical
+ * resource held over time, not something that resolves instantly. */
+const BASE_CLOSE_SECONDS = 16;
+const REFERENCE_SHIP_SPEED = 220;
+const ENEMY_RANGE_RATE = 1 / 18;
+/** Fixed screen-space x-anchor per range band — replaces continuous position.
+ * The player's ship anchor never moves; only the enemy formation's anchor shifts
+ * with the current band (see arena-update in the render loop), interpolated
+ * smoothly by rangeProgress so a transition reads as real movement, not a snap. */
+const BAND_ANCHOR_X: Record<RangeBand, number> = { close: 300, mid: 480, long: 680 };
+const PLAYER_ANCHOR: ArenaPoint = { x: 130, y: REF_H / 2 };
 
 interface EnemyState {
   name: string;
@@ -206,7 +216,6 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const shipBaseEvasion = computeBaseEvasion(ship);
   const shipBaseCrit = computeBaseCritChance(ship);
   const shipSpeed = computeSpeed(ship);
-  const shipAccel = shipSpeed * 2.4;
 
   const [enemies, setEnemies] = useState<EnemyState[]>(
     encounter.enemies.map((e) => ({ ...e, name: localizedEnemyName(e.name), maxHull: e.hull })),
@@ -225,7 +234,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [levelUpHullGain, setLevelUpHullGain] = useState(0);
   const [levelUpPowerGain, setLevelUpPowerGain] = useState(0);
-  const [displayRange, setDisplayRange] = useState<RangeBand>("mid");
+  // Bridge-command redesign (section G/H): range is now commanded, not flown. The
+  // player picks a stance order; range band/progress advance in combatTick via
+  // advanceRangeBand (engine/combat.ts), contested by the enemy faction's own
+  // preferred range (FACTION_PREFERRED_RANGE).
+  const [stanceOrder, setStanceOrder] = useState<StanceOrder>("hold");
+  const [rangeBand, setRangeBand] = useState<RangeBand>("mid");
+  const [rangeProgress, setRangeProgress] = useState(0);
   const [comboCount, setComboCount] = useState(0);
   const [overcharged, setOvercharged] = useState(false);
   const [guaranteedCrit, setGuaranteedCrit] = useState(false);
@@ -296,9 +311,6 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const CHORAL_RESONANCE_MAX = 100;
   const choralResonanceRef = useRef(0);
   choralResonanceRef.current = choralResonance;
-  // Shared with the physics loop below so Displacement Charge (fired from
-  // fireModuleImpl) can shove an enemy's chase position directly, not just read it.
-  const enemyChaseXRef = useRef<number[]>([]);
   // Issue #8: each enemy's independent real-time attack clock — see EnemyTimer.
   // Initialized lazily (per index, on first tick) with a staggered random start so
   // a multi-enemy fight doesn't open with every enemy firing in lockstep.
@@ -306,10 +318,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // Ion Disruptor's Overload: a per-module shot counter, keyed by module instance id
   // so two Ion Disruptors equipped at once track independently.
   const overloadCountersRef = useRef<Record<string, number>>({});
-  // Vector Drive's Surge: distance covered since the last shot fired, any weapon —
-  // an engine-wide bonus, not a per-weapon one, so it accumulates regardless of what
-  // eventually spends it.
-  const distanceSinceLastShotRef = useRef(0);
+  // Vector Drive's Surge: rewards actually contesting range since the last shot,
+  // any weapon — an engine-wide bonus, not a per-weapon one. Bridge-command
+  // redesign: there's no more literal flight distance to measure, so this now
+  // tracks whether the range band actually changed since the last shot (i.e. a
+  // stance order paid off) rather than raw pixels covered — same spirit ("rewards
+  // actively contesting the positioning game, not holding a lane"), new mechanic
+  // to hang it on.
+  const bandChangedSinceLastShotRef = useRef(false);
   // Ablative Plating's Absorb: negates exactly the first hit landed each fight, then
   // behaves like ordinary block for the rest of it — a ref because it must mutate
   // synchronously mid-resolution, before any re-render, same pattern as bossPhaseRef.
@@ -374,6 +390,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const firstBloodArmedRef = useRef(firstBloodArmed);
   const aegisWardSecRef = useRef(aegisWardSec);
   const sanctuaryFieldSecRef = useRef(sanctuaryFieldSec);
+  const stanceOrderRef = useRef(stanceOrder);
+  const rangeBandRef = useRef(rangeBand);
+  const rangeProgressRef = useRef(rangeProgress);
   enemiesRef.current = enemies;
   targetIdxRef.current = targetIdx;
   statusRef.current = status;
@@ -388,6 +407,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   firstBloodArmedRef.current = firstBloodArmed;
   aegisWardSecRef.current = aegisWardSec;
   sanctuaryFieldSecRef.current = sanctuaryFieldSec;
+  stanceOrderRef.current = stanceOrder;
+  rangeBandRef.current = rangeBand;
+  rangeProgressRef.current = rangeProgress;
 
   useEffect(() => {
     if (enemies[targetIdx] && enemies[targetIdx].hull <= 0) {
@@ -648,10 +670,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const deadHiveAllies = encounter.faction === "swarm" ? currentEnemies.filter((e) => e.hull <= 0).length : 0;
     const hiveBonus = 1 + 0.15 * deadHiveAllies;
     const enemyPos = arenaRef.current.enemyPos[idx] ?? enemySlot(idx, currentEnemies.length);
-    const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
-    const band = rangeBandFromDistance(dist);
-    // A charge telegraph is a real spatial tell, not just a stat flag: burning
-    // distance to long range during the windup negates the charged bonus entirely.
+    const band = rangeBandRef.current;
+    // A charge telegraph is a real spatial tell, not just a stat flag: an order to
+    // retreat to long range during the windup negates the charged bonus entirely.
     const chargeDodged = charged && band === "long";
     const dmgMultiplier = (charged && !chargeDodged ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus;
     // Interceptor's Blink Vector: a flat evasion buff over time.
@@ -851,6 +872,35 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setAegisWardSec((t) => Math.max(0, t - dt));
     setSanctuaryFieldSec((t) => Math.max(0, t - dt));
 
+    // Bridge-command redesign (section H): range advances as a discrete tug-of-war
+    // instead of continuous flight — see advanceRangeBand (engine/combat.ts).
+    // playerRate scales with the ship's own rolled speed stat (a real payoff for
+    // engine-slot choices and the Interceptor/Corsair speed-leaning hull identity —
+    // previously speed only affected the system map). enemyRate is a flat baseline
+    // (enemies have no individual speed stat yet).
+    {
+      const preferredRange = FACTION_PREFERRED_RANGE[encounter.faction] ?? "mid";
+      const playerRate = (1 / BASE_CLOSE_SECONDS) * (shipSpeed / REFERENCE_SHIP_SPEED);
+      const prevBand = rangeBandRef.current;
+      const next = advanceRangeBand(
+        { band: rangeBandRef.current, progress: rangeProgressRef.current },
+        stanceOrderRef.current,
+        preferredRange,
+        playerRate,
+        ENEMY_RANGE_RATE,
+        dt,
+      );
+      rangeBandRef.current = next.band;
+      rangeProgressRef.current = next.progress;
+      setRangeProgress(next.progress);
+      if (next.band !== prevBand) {
+        setRangeBand(next.band);
+        bandChangedSinceLastShotRef.current = true;
+        const closed = RANGE_ORDER.indexOf(next.band) < RANGE_ORDER.indexOf(prevBand);
+        pushLog(t(closed ? "combat.log.rangeClosed" : "combat.log.rangeOpened", { band: t(`combat.rangeBand.${next.band}`) }));
+      }
+    }
+
     setEnemies((prev) => prev.map((e) => (e.hull <= 0 ? e : {
       ...e,
       evasionDebuffSec: Math.max(0, (e.evasionDebuffSec ?? 0) - dt),
@@ -998,8 +1048,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     }
 
     const enemyPos = arenaRef.current.enemyPos[targetIdx] ?? enemySlot(targetIdx, enemies.length);
-    const dist = Math.hypot(enemyPos.x - arenaRef.current.player.x, enemyPos.y - arenaRef.current.player.y);
-    const band = rangeBandFromDistance(dist);
+    const band = rangeBand;
     const outgoingMult = RANGE_MODIFIERS[band].outgoing;
 
     const wasOvercharged = overcharged;
@@ -1016,11 +1065,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // an automatic charge-up rhythm, distinct from Alpha Strike's manual one-shot arm.
     const overloadShotCount = mod.traits.includes("overload") ? (overloadCountersRef.current[mod.id] ?? 0) + 1 : 0;
     const overloadMult = overloadShotCount > 0 && overloadShotCount % 3 === 0 ? 2 : 1;
-    // Vector Drive's Surge: a real burst of movement since the last shot (any
-    // weapon) charges the next one — rewards actually using the positioning game,
-    // not just picking a lane and holding it.
+    // Vector Drive's Surge: range actually shifting since the last shot (any
+    // weapon) charges the next one — rewards actually contesting range, not just
+    // holding whatever band you started at.
     const hasSurgeEngine = equippedModuleList.some((m) => moduleDefById(m.defId).type === "engine" && m.traits.includes("surge"));
-    const surgeMult = hasSurgeEngine && distanceSinceLastShotRef.current > 150 ? 1.25 : 1;
+    const surgeMult = hasSurgeEngine && bandChangedSinceLastShotRef.current ? 1.25 : 1;
     // Nightfall Vow's Alpha Strike: doubles this one shot, at the cost of that
     // weapon's cooldown locking out 2 extra turns (see the cooldown-set below).
     // Issue #10: Rift Anchor — once any Rift Echo has died this fight, every
@@ -1028,7 +1077,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // effect keyed on [enemies]).
     const riftAnchorMult = encounter.faction === "riftEchoes" && riftAnchoredRef.current ? 1.5 : 1;
     const dmg = Math.round(baseDmg * ratchetBonus * (wasOvercharged ? 1.5 : 1) * (vulnerable ? 1.25 : 1) * executeMult * (wasAlphaStrike ? 2 : 1) * overloadMult * surgeMult * riftAnchorMult);
-    distanceSinceLastShotRef.current = 0;
+    bandChangedSinceLastShotRef.current = false;
     const nextEnemies = [...enemies];
     if (dmg > 0) {
       const targetEvasion = (target.evasionDebuffSec ?? 0) > 0 ? target.evasion * 0.5 : target.evasion;
@@ -1186,12 +1235,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         setCorrodedBlock(0);
         pushLog(t("combat.log.purgeField", { amount: corrodedBlock }));
       }
-      // Displacement Charge's Displace: shoves the target to whichever horizontal
-      // extreme is farthest from Whisper right now — the only module that moves an
-      // enemy instead of the player, buying breathing room without you spending it.
+      // Displacement Charge's Displace: under free flight this used to shove the
+      // target away bodily. Bridge-command redesign — there's no per-enemy
+      // position left to shove, so this now buys the same "breathing room without
+      // spending an order" effect the old push did, mechanically: a brief evasion
+      // spike, as if the charge scattered the formation just long enough to duck
+      // clear (reuses the same evasion-boost state Blink Vector uses).
       if (mod.traits.includes("displace") && target.hull > 0) {
-        const awayX = arenaRef.current.player.x < REF_W / 2 ? REF_W - 40 : 60;
-        enemyChaseXRef.current[targetIdx] = awayX;
+        setEvasionBoostSec((s) => Math.max(s, 1.5 * TURN_SECONDS));
         pushLog(t("combat.log.displace", { target: target.name }));
       }
     }
@@ -1535,7 +1586,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setEnemies(nextEnemies);
   }
 
-  // --- Arena render/physics loop ---
+  // --- Arena render loop ---
+  // Bridge-command redesign (section G): the player no longer flies the ship, so
+  // this is a pure render/animation loop now (projectiles, particles, VFX decay,
+  // idle formation motion) — no physics integration. Position is derived each
+  // frame from rangeBandRef/rangeProgressRef (advanced once per combatTick, see
+  // combatTick's advanceRangeBand call), not simulated here.
   useEffect(() => {
     const canvas = canvasRef.current!;
     const container = canvas.parentElement as HTMLElement;
@@ -1543,21 +1599,21 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const vp = attachResponsiveCanvas(canvas, container, REF_W, REF_H);
     vpRef.current = vp;
     const arena = arenaRef.current;
-    const keys = new Set<string>();
-    let pointerTarget: ArenaPoint | null = null;
     let last = performance.now();
-    let lastDisplayRange: RangeBand | null = null;
 
     const stars = Array.from({ length: 90 }, () => ({
       x: Math.random(), y: Math.random(), r: Math.random() * 1.3 + 0.3, a: Math.random() * 0.5 + 0.2,
     }));
 
+    // Target selection: tapping a contact on the viewscreen designates it as
+    // focus fire — this is still an order (pointing at the tactical display), not
+    // twitch input, so it stays click/tap-driven; there's just nothing left to
+    // "fly toward" if the tap misses every contact.
     function onPointer(e: PointerEvent) {
       try {
         if (statusRef.current === "victory" || statusRef.current === "defeat") return;
         const world = vp.toWorld(e.clientX, e.clientY);
         if (!Number.isFinite(world.x) || !Number.isFinite(world.y)) return;
-        // Tapping near a living enemy selects it as target instead of flying there.
         const enemies = enemiesRef.current;
         for (let i = 0; i < enemies.length; i++) {
           if (enemies[i].hull <= 0) continue;
@@ -1568,112 +1624,45 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             return;
           }
         }
-        pointerTarget = world;
       } catch (err) {
         reportError("Combat.onPointer", err);
       }
     }
-    function onKeyDown(e: KeyboardEvent) { keys.add(e.key.toLowerCase()); }
-    function onKeyUp(e: KeyboardEvent) { keys.delete(e.key.toLowerCase()); }
     canvas.addEventListener("pointerdown", onPointer);
-    canvas.addEventListener("pointermove", (e) => { if (e.buttons > 0) onPointer(e); });
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-
-    const player = { vx: 0, vy: 0, angle: 0 };
-    // Persistent per-enemy "chase" X position — separate from the fixed Y lane and
-    // the decorative bob, so an enemy that closed distance last frame stays closed
-    // this frame instead of snapping back to its spawn slot. Lives in a ref (not a
-    // local array) so Displacement Charge can push it from outside this effect.
-    const enemyChaseX = enemyChaseXRef.current;
-    const preferredRange = FACTION_PREFERRED_RANGE[encounter.faction] ?? "mid";
-    const preferredDistance = RANGE_TARGET_DISTANCE[preferredRange];
 
     function step(now: number) {
       const frozen = now < hitStopUntilRef.current;
       const dt = frozen ? 0 : Math.min(0.25, Math.max(0, (now - last) / 1000));
       last = now;
-
-      // player free movement — frozen once the encounter has ended
-      let ax = 0, ay = 0;
       const combatOver = statusRef.current === "victory" || statusRef.current === "defeat";
-      const usingKeys = !combatOver && (
-        keys.has("w") || keys.has("a") || keys.has("s") || keys.has("d") ||
-        keys.has("arrowup") || keys.has("arrowdown") || keys.has("arrowleft") || keys.has("arrowright")
-      );
-      if (combatOver) {
-        pointerTarget = null;
-      } else if (usingKeys) {
-        if (keys.has("w") || keys.has("arrowup")) ay -= 1;
-        if (keys.has("s") || keys.has("arrowdown")) ay += 1;
-        if (keys.has("a") || keys.has("arrowleft")) ax -= 1;
-        if (keys.has("d") || keys.has("arrowright")) ax += 1;
-        pointerTarget = null;
-      } else if (pointerTarget) {
-        const dx = pointerTarget.x - arena.player.x;
-        const dy = pointerTarget.y - arena.player.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > 6) { ax = dx / dist; ay = dy / dist; } else pointerTarget = null;
-      }
-      const mag = Math.hypot(ax, ay) || 1;
-      player.vx += (ax / mag) * shipAccel * dt;
-      player.vy += (ay / mag) * shipAccel * dt;
-      const spd = Math.hypot(player.vx, player.vy);
-      if (spd > shipSpeed) { player.vx = (player.vx / spd) * shipSpeed; player.vy = (player.vy / spd) * shipSpeed; }
-      const drag = Math.pow(0.02, dt);
-      player.vx *= drag; player.vy *= drag;
-      const nextX = arena.player.x + player.vx * dt;
-      const nextY = arena.player.y + player.vy * dt;
-      // Defense in depth: NaN/Infinity anywhere upstream (a bad pointerTarget, a
-      // momentary zero-size viewport) would otherwise poison position/velocity
-      // permanently — every later frame's arithmetic on a NaN stays NaN forever,
-      // which reads to a player as the ship silently freezing. If either axis ever
-      // goes non-finite, drop the velocity and pointer target and hold the last
-      // good position instead of propagating the corruption.
-      if (Number.isFinite(nextX) && Number.isFinite(nextY)) {
-        const prevX = arena.player.x;
-        const prevY = arena.player.y;
-        arena.player.x = Math.max(24, Math.min(REF_W - 24, nextX));
-        arena.player.y = Math.max(24, Math.min(REF_H - 24, nextY));
-        distanceSinceLastShotRef.current += Math.hypot(arena.player.x - prevX, arena.player.y - prevY);
-      } else {
-        reportError("Combat.step (player position)", new Error(`non-finite position: vx=${player.vx} vy=${player.vy}`));
-        player.vx = 0;
-        player.vy = 0;
-        pointerTarget = null;
-      }
-      if (Math.hypot(player.vx, player.vy) > 8) player.angle = Math.atan2(player.vy, player.vx);
 
-      // Enemies actively close to (or hold) their faction's preferred range instead
-      // of just bobbing in place — see FACTION_PREFERRED_RANGE. A dead enemy stops
-      // repositioning (no point chasing after it's destroyed).
+      // Player anchor never moves — a small idle drift for life, same texture the
+      // old thrusting ship had at rest.
+      arena.player = { x: PLAYER_ANCHOR.x + Math.sin(now / 1400) * 4, y: PLAYER_ANCHOR.y + Math.cos(now / 1100) * 6 };
+
+      // Enemy formation anchor follows the current range band, interpolated by
+      // rangeProgressRef toward whichever neighboring band is being contested —
+      // both refs are advanced in combatTick (150ms), read here every frame purely
+      // for smooth animation between those ticks.
+      const band = rangeBandRef.current;
+      const progress = rangeProgressRef.current;
+      const idx = RANGE_ORDER.indexOf(band);
+      let anchorX = BAND_ANCHOR_X[band];
+      if (progress > 0 && idx > 0) {
+        anchorX += (BAND_ANCHOR_X[RANGE_ORDER[idx - 1]] - BAND_ANCHOR_X[band]) * progress;
+      } else if (progress < 0 && idx < RANGE_ORDER.length - 1) {
+        anchorX += (BAND_ANCHOR_X[RANGE_ORDER[idx + 1]] - BAND_ANCHOR_X[band]) * -progress;
+      }
+
       const liveEnemies = enemiesRef.current;
-      arena.enemyPos = liveEnemies.map((enemy, i) => {
+      arena.enemyPos = liveEnemies.map((_enemy, i) => {
         const slot = enemySlot(i, liveEnemies.length);
-        if (enemyChaseX[i] === undefined) enemyChaseX[i] = slot.x;
-        if (!combatOver && enemy.hull > 0) {
-          const dist = Math.hypot(arena.player.x - enemyChaseX[i], arena.player.y - slot.y) || 1;
-          const diff = dist - preferredDistance;
-          if (Math.abs(diff) > 8) {
-            const step = Math.sign(diff) * Math.min(Math.abs(diff), ENEMY_REPOSITION_SPEED * dt);
-            const dirX = (arena.player.x - enemyChaseX[i]) / dist;
-            enemyChaseX[i] = Math.max(60, Math.min(REF_W - 40, enemyChaseX[i] + dirX * step));
-          }
-        }
         const seed = i * 1.7;
         return {
-          x: enemyChaseX[i] + Math.sin(now / 900 + seed) * 10,
+          x: anchorX + Math.sin(now / 900 + seed) * 10,
           y: slot.y + Math.cos(now / 760 + seed * 1.3) * 14,
         };
       });
-
-      // live range-band readout for the HUD
-      const tIdx = targetIdxRef.current;
-      const tPos = arena.enemyPos[tIdx];
-      if (tPos && liveEnemies[tIdx] && liveEnemies[tIdx].hull > 0) {
-        const band = rangeBandFromDistance(Math.hypot(tPos.x - arena.player.x, tPos.y - arena.player.y));
-        if (band !== lastDisplayRange) { lastDisplayRange = band; setDisplayRange(band); }
-      }
 
       // projectiles
       projectilesRef.current = projectilesRef.current.filter((p) => p.t < 1);
@@ -1689,8 +1678,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       explosionsRef.current = explosionsRef.current.filter((e) => now - e.start < 500);
       ringsRef.current = ringsRef.current.filter((r) => now - r.start < r.maxAge);
 
-      const thrusting = Math.hypot(player.vx, player.vy) > 12;
-      draw(ctx, vp, arena, { ...player, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, ringsRef.current, hitPulseRef.current);
+      // Engines read as "lit" while an order is actively contesting range, not
+      // while literally accelerating — there's no velocity left to check.
+      const thrusting = !combatOver && stanceOrderRef.current !== "hold";
+      draw(ctx, vp, arena, { angle: 0, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, ringsRef.current, hitPulseRef.current);
     }
 
     // A throw anywhere in step() (physics, draw, anything reachable from a frame
@@ -1707,8 +1698,6 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       clearInterval(interval);
       vp.destroy();
       canvas.removeEventListener("pointerdown", onPointer);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1736,9 +1725,24 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           </span>
         )}
         <span>
-          {t("combat.range")}: <span style={{ color: displayRange === "close" ? "var(--red)" : displayRange === "mid" ? "var(--amber)" : "var(--cyan)" }}>{displayRange}</span>
+          {t("combat.range")}: <span style={{ color: rangeBand === "close" ? "var(--red)" : rangeBand === "mid" ? "var(--amber)" : "var(--cyan)" }}>{t(`combat.rangeBand.${rangeBand}`)}</span>
           {" · "}{t("combat.power")} {capacity}
         </span>
+      </div>
+
+      <div style={{ display: "flex", gap: "0.4rem", padding: "0.5rem 1rem 0" }} role="group" aria-label={t("combat.stanceLabel")}>
+        {(["close", "hold", "retreat"] as StanceOrder[]).map((order) => (
+          <button
+            key={order}
+            className={`btn ${stanceOrder === order ? "primary" : "ghost"}`}
+            style={{ flex: 1, fontSize: "0.72rem", padding: "0.5em 0.3em" }}
+            disabled={status !== "active"}
+            onClick={() => { setStanceOrder(order); playSfx("click"); }}
+            title={t(`combat.stance.${order}Title`)}
+          >
+            {t(`combat.stance.${order}`)}
+          </button>
+        ))}
       </div>
 
       {encounter.faction === "choir" && (
@@ -2027,12 +2031,15 @@ function PopupOverlay({
   );
 }
 
+/** Fallback/initial position before the render loop's first tick has run — uses
+ * the "mid" band anchor since that's the range every fight now starts at (see
+ * the rangeBand state default). */
 function enemySlot(index: number, total: number): ArenaPoint {
   const marginY = 90;
   const usable = REF_H - marginY * 2;
   const y = total <= 1 ? REF_H / 2 : marginY + (usable * index) / (total - 1);
   const xJitter = index % 2 === 0 ? 0 : 40;
-  return { x: REF_W - 190 + xJitter, y };
+  return { x: BAND_ANCHOR_X.mid + xJitter, y };
 }
 
 function draw(
