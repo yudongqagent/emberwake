@@ -8,6 +8,7 @@ import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon, ResourceIcon } from "../components/Icons";
 import { Bar, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
+import { LoadoutDiagram } from "../components/LoadoutDiagram";
 import type { ModuleType, ModuleInstance } from "../../data/types";
 import { t } from "../../i18n/strings";
 import { localizedModuleName, localizedTrait } from "../../i18n/data";
@@ -60,6 +61,21 @@ export function Modules() {
         <div style={{ marginTop: "0.5rem" }}>
           <Bar fraction={capacity ? usedPower / capacity : 0} kind={overdrawn ? "danger" : "warn"} />
         </div>
+      </div>
+
+      {/* The loadout, shown as a ship rather than a form — hardpoints arranged
+          around the hull, filled sockets glowing in their type colour. Clicking a
+          socket jumps to that slot's picker. */}
+      <div className="panel" style={{ padding: "0.5rem" }}>
+        <LoadoutDiagram
+          slots={layout.map((slot) => ({
+            index: slot.index,
+            type: slot.type,
+            filled: !!ship.equipped[slot.index],
+            active: pickerSlot === slot.index,
+          }))}
+          onSelectSlot={(i) => setPickerSlot(i)}
+        />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "0.65rem" }}>

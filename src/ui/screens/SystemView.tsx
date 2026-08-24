@@ -80,6 +80,9 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   const [nearPoi, setNearPoi] = useState<Poi | null>(null);
   /** Set by the contacts panel to order a course for a POI. The canvas effect
    * is frozen at mount, so it reads this ref every frame instead of a prop. */
+  /** Mirrored for the canvas loop, which is frozen at mount — same pattern as
+   * navTargetRef. Feeds the in-world hull ring on the player ship. */
+  const hullFracRef = useRef(1);
   const navTargetRef = useRef<{ x: number; y: number } | null>(null);
   const [navTargetId, setNavTargetId] = useState<string | null>(null);
   const [playerPos, setPlayerPos] = useState<{ x: number; y: number }>({ x: 120, y: 300 });
@@ -416,7 +419,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       }
       ctx2d.globalAlpha = 1;
 
-      drawPlayer(ctx2d, player, now, Math.hypot(player.vx, player.vy) > 12);
+      drawPlayer(ctx2d, player, now, Math.hypot(player.vx, player.vy) > 12, hullFracRef.current);
       ctx2d.restore();
     }
     // A fixed-interval tick (rather than requestAnimationFrame) keeps the loop running
@@ -445,6 +448,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   const isBounty = !!nearPoi?.data?.bounty;
   const ship = flagship.value;
   const shipHullFrac = ship ? ship.currentHp / effectiveMaxHull(ship) : 0;
+  hullFracRef.current = shipHullFrac;
   const visiblePois = system.pois.filter((p) => isPoiAvailable(p));
 
   return (
@@ -609,9 +613,48 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   );
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, p: { x: number; y: number; angle: number }, now: number, thrusting: boolean) {
+/** Player direction 2026-08-24: "内容应该在canvas里最合适的地方用图形方式展现".
+ * The most appropriate place for your hull state is ON your ship, not only in a
+ * readout bar at the top of the screen — so the ship carries a status ring in
+ * the world: a full circle when healthy, visibly eaten away and reddening as the
+ * hull drops, pulsing once it's critical. */
+function drawPlayer(
+  ctx: CanvasRenderingContext2D,
+  p: { x: number; y: number; angle: number },
+  now: number,
+  thrusting: boolean,
+  hullFrac: number,
+) {
   ctx.save();
   ctx.translate(p.x, p.y);
+
+  const r = 26;
+  const clamped = Math.max(0, Math.min(1, hullFrac));
+  const color = clamped > 0.5 ? "#5dffb0" : clamped > 0.2 ? "#ffb84d" : "#ff5c5c";
+  const critical = clamped <= 0.2;
+  const pulse = critical ? 0.55 + 0.45 * Math.sin(now / 180) : 1;
+
+  // Unfilled remainder — a faint track, so the ring reads as a gauge not a halo.
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  if (clamped > 0) {
+    ctx.beginPath();
+    ctx.arc(0, 0, r, -Math.PI / 2, -Math.PI / 2 + clamped * Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = pulse;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.shadowColor = color;
+    ctx.shadowBlur = critical ? 12 : 7;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+
   ctx.rotate(p.angle);
   drawPlayerHull(ctx, 1.05, now, thrusting);
   ctx.restore();

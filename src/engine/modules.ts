@@ -118,12 +118,23 @@ export function isModuleMaxed(mod: ModuleInstance): boolean {
   return mod.level >= moduleMaxLevel(mod.rarity);
 }
 
-/** Alloy to take a module from its current level to the next. Superlinear in
- * level and scaled by rarity, so topping out a mk5 is a genuine long-haul project
- * rather than a formality once Alloy income ramps. */
+/** Alloy to take a module from its current level to the next: superlinear in level,
+ * scaled by rarity.
+ *
+ * Calibrated 2026-08-24 against measured income rather than guessed. Every story
+ * encounter in all six acts combined pays 4,535 Alloy; a deep (depth-7) rift run
+ * pays ~920. The first pass (base 14, exponent 1.55) put a full mk5 at 10,451 —
+ * more than 2x the entire campaign's story income for ONE module, with a single
+ * late level costing 2,003 (~44% of it). That's a wall, not a curve.
+ *
+ * At base 12 / exponent 1.35 the ladder reads:
+ *   mk1  174 · mk2 546 · mk3 1,355 · mk4 2,944 · mk5 5,865 (full max)
+ * so the market-ceiling mk3 is comfortably maxable mid-campaign from story income
+ * alone, while a mk5 stays a real endgame chase (~6 deep rift runs) — which is
+ * where the rift-exclusive top tiers are supposed to send you anyway. */
 export function moduleUpgradeCost(mod: ModuleInstance): number {
   const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
-  return Math.round(14 * rarityMult * Math.pow(mod.level, 1.55));
+  return Math.round(12 * rarityMult * Math.pow(mod.level, 1.35));
 }
 
 export function levelUpModule(mod: ModuleInstance): ModuleInstance {
