@@ -278,6 +278,17 @@ export function availableScene(systemId: string): StoryScene | null {
 
 export function completeScene(scene: StoryScene) {
   setFlags(scene.onCompleteFlags);
+  // Section A (2026-08-24 player brief): a scripted, guaranteed rarity upgrade —
+  // e.g. the "second ship" shipyard beat — not a draw. Whisper is still the only
+  // ship (see docs/story/research-notes-ship-ascension.md); this just raises the
+  // one-time-fixed quality she was set at game start, exactly once, on a specific
+  // story beat's own terms.
+  if (scene.grantRarityUpgrade) {
+    const ship = flagship.value;
+    if (ship) {
+      state.value = { ...state.value, ships: [{ ...ship, rarity: scene.grantRarityUpgrade }] };
+    }
+  }
   persist();
 }
 

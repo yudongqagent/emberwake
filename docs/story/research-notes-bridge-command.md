@@ -13,7 +13,14 @@ explicitly below, and the gaps are filled with original design, not invented sou
 - **源点 (Source Points / Origin Points)** is a real, load-bearing in-novel resource
   term — appears across every synopsis of the system's core loop ("源点获取翻倍" /
   "harvest source points"). Already matches Emberwake's existing `sourcePoints`
-  resource directly; no rename needed.
+  resource directly (already labeled "源点" in the Chinese UI) — no rename needed.
+- **文明本源 ("civilization's origin")** is also a real phrase describing what the
+  system harvests ("收割文明本源，强化自身" — "harvest civilization's origin to
+  strengthen oneself"). Emberwake's `originEssence` (labeled "本源精华" in the
+  Chinese UI) is a natural derivative of this phrase, not an exact quoted resource
+  name from the novel — close enough that no rename is warranted, but worth noting
+  precisely: 文明本源 reads as descriptive phrasing in the sources I could reach,
+  not confirmed as a standalone named resource the way 源点 is.
 - **A shipyard visit is a real story beat, not a menu.** Per
   `research-notes-ship-ascension.md`'s comic-index findings: ep.37 "曙光号，沉没"
   (a ship lost in battle) → ep.39 "皇家造船厂" (Royal Shipyard) → ep.40 "幽鹏号" (a

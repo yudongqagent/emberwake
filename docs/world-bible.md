@@ -130,11 +130,14 @@ derelicts, and patrols — see `docs/architecture.md` for the map model.
 ## Resource glossary
 
 - **Salvage** — basic currency, earned everywhere. Early upgrades, repairs.
-- **Source Points** — earned from expeditions and Rift dives. Module leveling, crew
-  recruitment.
+- **Source Points** (源点) — the source novel's own term for this, confirmed directly
+  (see `docs/story/research-notes-bridge-command.md`). Earned from expeditions and
+  Rift dives. Spent at the Fabricator.
 - **Alloy** — earned from combat wreck salvage. Module leveling specifically.
-- **Origin Essence** — earned only from story missions and major boss fights. The only
-  currency that raises a ship's Hull Class ceiling. Deliberately story-gated.
+- **Origin Essence** (本源精华) — drawn from the novel's 文明本源 ("civilization's
+  origin"), confirmed as a real in-novel concept though not this exact compound
+  term. Earned only from story missions and major boss fights. The only resource
+  that lets Whisper ascend to her next Hull Class — deliberately story-gated.
 - **Faction Favor** (per faction) — earned by aligned missions and choices. Unlocks
   faction-exclusive modules, crew, and story branches.
 - **Insight** — scarce, slow-drip resource powering the Cinder's Lock ability

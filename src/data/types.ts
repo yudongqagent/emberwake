@@ -233,4 +233,8 @@ export interface StoryScene {
   onCompleteFlags: string[];
   startEncounter?: string;
   unlockHullClass?: HullClassId;
+  /** Section A of the 2026-08-24 player brief: a scripted, guaranteed rarity
+   * upgrade tied to a specific story beat (e.g. the "second ship" shipyard
+   * moment) — not a draw, not RNG. Applied directly in completeScene. */
+  grantRarityUpgrade?: ShipRarity;
 }
