@@ -7,6 +7,7 @@ import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, SlotsIcon, AptitudeIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
 import { StatReadout, Bar, hullBarKind, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 import { t } from "../../i18n/strings";
+import { localizedNamedShipActive, localizedNamedShipFlavor } from "../../i18n/data";
 
 export function Fleet() {
   const activeId = flagship.value?.id;
@@ -53,8 +54,8 @@ export function Fleet() {
               return (
                 <div style={{ margin: "0.6rem 0 0", padding: "0.55rem 0.7rem", borderRadius: 6, border: "1px solid var(--amber)", background: "rgba(255,193,71,0.08)" }}>
                   <div className="eyebrow" style={{ color: "var(--amber)", marginBottom: "0.25rem" }}>{t("fleet.namedShipAbility")}</div>
-                  <div style={{ fontSize: "0.78rem", color: "var(--text-mid)" }}>{namedDef.active}</div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem", fontStyle: "italic" }}>{namedDef.flavor}</div>
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-mid)" }}>{localizedNamedShipActive(namedDef)}</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem", fontStyle: "italic" }}>{localizedNamedShipFlavor(namedDef)}</div>
                 </div>
               );
             })()}

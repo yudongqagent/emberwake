@@ -8,6 +8,7 @@ import { HullIcon, PowerIcon, AptitudeIcon, LevelIcon, LocationIcon, CrewRoleIco
 import { StatReadout, Bar, hullBarKind, AnimatedFraction } from "../components/StatBlock";
 import { BridgeViewscreen } from "../components/BridgeViewscreen";
 import { t } from "../../i18n/strings";
+import { localizedCrewName } from "../../i18n/data";
 
 export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void }) {
   const ship = flagship.value;
@@ -96,7 +97,7 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
                   <CrewRoleIcon role={def.role} size={15} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "0.9rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{def.name}</div>
+                  <div style={{ fontSize: "0.9rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedCrewName(def)}</div>
                 </div>
                 <span className="eyebrow" style={{ color: "var(--text-dim)" }}>{t(`crewRole.${def.role}`)}</span>
               </div>

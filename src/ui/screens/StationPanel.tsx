@@ -15,6 +15,7 @@ import { RollQualityBadge } from "../components/StatBlock";
 import type { ShipInstance, ModuleInstance } from "../../data/types";
 import { pickOne } from "../../engine/rng";
 import { t } from "../../i18n/strings";
+import { localizedModuleName, localizedTrait, localizedCrewName, localizedCrewPassive, localizedNamedShipName, localizedNamedShipActive } from "../../i18n/data";
 
 type Tab = "trade" | "shipwright" | "fabricator" | "recruit";
 
@@ -126,7 +127,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
           : null;
         return (
           <DrawReveal title={t("station.moduleAcquired")} accent="var(--cyan)" onClose={() => setDrawnModule(null)}>
-            <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{def.name}</div>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{localizedModuleName(def)}</div>
             <div style={{ color: "var(--text-mid)", margin: "0.4rem 0", textTransform: "capitalize" }}>{t(`moduleType.${def.type}`)}</div>
             <ModuleRarityTag rarity={drawnModule.rarity} />
             <div style={{ marginTop: "0.5rem" }}>
@@ -134,9 +135,9 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
             </div>
             {drawnModule.traits.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", justifyContent: "center", marginTop: "0.6rem" }}>
-                {drawnModule.traits.map((t, i) => (
+                {drawnModule.traits.map((traitId, i) => (
                   <span key={i} style={{ fontSize: "0.68rem", padding: "0.15em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
-                    {def.traitPool.find((tp) => tp.id === t)?.label ?? t}
+                    {localizedTrait(def, traitId).label}
                   </span>
                 ))}
               </div>
@@ -296,14 +297,14 @@ function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
           <div key={i} className={`panel compact ${namedDef ? "accent" : ""}`} style={{ padding: "0.75rem 0.9rem", ["--accent" as any]: namedDef ? "var(--amber)" : undefined }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
               <div>
-                <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{namedDef ? namedDef.name : def.name}</div>
+                <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{namedDef ? localizedNamedShipName(namedDef) : def.name}</div>
                 <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{def.name} ({def.nameCn})</div>
               </div>
               <ShipRarityTag rarity={candidate.rarity} showPips={false} />
             </div>
             {namedDef && (
               <div style={{ fontSize: "0.72rem", color: "var(--amber)", marginBottom: "0.5rem" }}>
-                {t("station.namedShipLine", { active: namedDef.active })}
+                {t("station.namedShipLine", { active: localizedNamedShipActive(namedDef) })}
               </div>
             )}
             <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.6rem" }}>
@@ -377,7 +378,7 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <ModuleTypeIcon type={def.type} size={16} />
                 <div>
-                  <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{def.name}</div>
+                  <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{localizedModuleName(def)}</div>
                   <div style={{ color: "var(--text-dim)", fontSize: "0.72rem", textTransform: "capitalize" }}>{t(`moduleType.${def.type}`)}</div>
                 </div>
               </div>
@@ -386,9 +387,9 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
             <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.5rem", flexWrap: "wrap" }}>
               {def.baseDamage !== undefined && <span style={{ color: "var(--red)" }}>{t("modules.dmg", { value: computeModuleDamage(candidate) })}</span>}
               {def.baseBlock !== undefined && <span style={{ color: "var(--cyan)" }}>{t("modules.block", { value: computeModuleBlock(candidate) })}</span>}
-              {candidate.traits.map((t, ti) => (
+              {candidate.traits.map((traitId, ti) => (
                 <span key={ti} style={{ fontSize: "0.68rem", padding: "0.1em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
-                  {def.traitPool.find((tp) => tp.id === t)?.label ?? t}
+                  {localizedTrait(def, traitId).label}
                 </span>
               ))}
             </div>
@@ -438,9 +439,9 @@ function RecruitTab() {
             </div>
             <div>
               <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                {c.name} <span style={{ textTransform: "capitalize", color: "var(--text-dim)", fontWeight: 400 }}>· {t(`crewRole.${c.role}`)}</span>
+                {localizedCrewName(c)} <span style={{ textTransform: "capitalize", color: "var(--text-dim)", fontWeight: 400 }}>· {t(`crewRole.${c.role}`)}</span>
               </div>
-              <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{c.passive}</div>
+              <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{localizedCrewPassive(c)}</div>
             </div>
           </div>
           <button

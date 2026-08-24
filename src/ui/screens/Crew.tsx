@@ -3,6 +3,7 @@ import { crewDefById } from "../../data/crew";
 import { CrewRoleIcon, CREW_ROLE_COLOR, CREW_RARITY_COLOR } from "../components/Icons";
 import { Bar } from "../components/StatBlock";
 import { t } from "../../i18n/strings";
+import { localizedCrewName, localizedCrewPassive, localizedCrewActive } from "../../i18n/data";
 
 export function Crew() {
   const ship = flagship.value;
@@ -34,7 +35,7 @@ export function Crew() {
                   <CrewRoleIcon role={def.role} size={20} />
                 </div>
                 <div>
-                  <div style={{ fontSize: "1rem", fontWeight: 700 }}>{def.name}</div>
+                  <div style={{ fontSize: "1rem", fontWeight: 700 }}>{localizedCrewName(def)}</div>
                   <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginTop: "0.15rem" }}>
                     <span className="eyebrow" style={{ color: CREW_ROLE_COLOR[def.role] }}>{t(`crewRole.${def.role}`)}</span>
                     <span style={{ color: "var(--text-dim)" }}>&middot;</span>
@@ -52,8 +53,8 @@ export function Crew() {
               </button>
             </div>
             <div style={{ fontSize: "0.8rem", color: "var(--text-mid)", marginTop: "0.7rem", lineHeight: 1.5 }}>
-              <div><strong style={{ color: "var(--text-hi)" }}>{t("crew.passive")}</strong> — {def.passive}</div>
-              <div><strong style={{ color: "var(--text-hi)" }}>{t("crew.active")}</strong> — {def.active} <span style={{ color: "var(--text-dim)" }}>{t("crew.cooldown", { value: def.activeCooldown })}</span></div>
+              <div><strong style={{ color: "var(--text-hi)" }}>{t("crew.passive")}</strong> — {localizedCrewPassive(def)}</div>
+              <div><strong style={{ color: "var(--text-hi)" }}>{t("crew.active")}</strong> — {localizedCrewActive(def)} <span style={{ color: "var(--text-dim)" }}>{t("crew.cooldown", { value: def.activeCooldown })}</span></div>
             </div>
             <div style={{ marginTop: "0.6rem" }}>
               <div className="eyebrow" style={{ marginBottom: "0.25rem", display: "flex", justifyContent: "space-between" }}>

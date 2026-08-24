@@ -17,6 +17,7 @@ import { AnimatedFraction } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
 import { t } from "../../i18n/strings";
+import { localizedModuleName, localizedCrewActive, localizedNamedShipActive } from "../../i18n/data";
 
 const REF_W = 900;
 const REF_H = 520;
@@ -878,10 +879,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
       if (result.hit) {
         const hitLogKey = wasGuaranteedCrit ? "combat.log.weaponHitFocusFire" : result.crit ? "combat.log.weaponHitCrit" : "combat.log.weaponHit";
-        pushLog(t(hitLogKey, { weapon: def.name, target: target.name, dmg: result.damageDealt }));
+        pushLog(t(hitLogKey, { weapon: localizedModuleName(def), target: target.name, dmg: result.damageDealt }));
         if (pointDefense) pushLog(t("combat.log.pointDefense", { target: target.name }));
       } else {
-        pushLog(t("combat.log.weaponMiss", { weapon: def.name, target: target.name }));
+        pushLog(t("combat.log.weaponMiss", { weapon: localizedModuleName(def), target: target.name }));
         // Lionsheart doctrine: Honor Duel. A duelist culture doesn't let a wasted
         // swing go unanswered — a wild miss draws an immediate free counter.
         if (encounter.faction === "lionsheart" && hitTarget.hull > 0) {
@@ -979,7 +980,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         }
       }
     } else {
-      pushLog(t("combat.log.moduleActivated", { module: def.name }));
+      pushLog(t("combat.log.moduleActivated", { module: localizedModuleName(def) }));
       // Purge Field's Cleanse: the only removal effect in combat — instantly clears
       // Hollow's permanent Corrosion stack, restoring the ship's real armor value.
       if (mod.traits.includes("cleanse") && corrodedBlock > 0) {
@@ -1409,7 +1410,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               disabled={status !== "active" || cd > 0}
               onClick={() => fireModule(mod.id)}
             >
-              {def.name}{cd > 0 ? ` (${cd.toFixed(1)}s)` : ""}
+              {localizedModuleName(def)}{cd > 0 ? ` (${cd.toFixed(1)}s)` : ""}
             </button>
           );
         })}
@@ -1418,7 +1419,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           const cd = crewCooldowns[c.id] ?? 0;
           return (
             <button key={c.id} className="btn" disabled={status !== "active" || cd > 0} onClick={() => useCrewActive(c.id, def.abilityId)}>
-              {def.active.split(" — ")[0]}{cd > 0 ? ` (${cd.toFixed(1)}s)` : ""}
+              {localizedCrewActive(def).split(" — ")[0]}{cd > 0 ? ` (${cd.toFixed(1)}s)` : ""}
             </button>
           );
         })}
@@ -1429,9 +1430,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               className="btn primary"
               disabled={status !== "active" || namedAbilityCooldown > 0}
               onClick={useShipActive}
-              title={namedDef.active}
+              title={localizedNamedShipActive(namedDef)}
             >
-              {namedDef.active.split(" — ")[0]}{namedAbilityCooldown > 0 ? ` (${namedAbilityCooldown.toFixed(1)}s)` : ""}
+              {localizedNamedShipActive(namedDef).split(" — ")[0]}{namedAbilityCooldown > 0 ? ` (${namedAbilityCooldown.toFixed(1)}s)` : ""}
             </button>
           );
         })()}
@@ -1488,7 +1489,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               <div className="panel accent pop-in scanline" style={{ padding: "0.8rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: `var(--rarity-${bonusDrop.rarity})` }}>
                 <div className="eyebrow" style={{ color: `var(--rarity-${bonusDrop.rarity})` }}>{t("combat.bonusDrop")}</div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginTop: "0.4rem" }}>
-                  <span style={{ fontWeight: 700 }}>{def.name}</span>
+                  <span style={{ fontWeight: 700 }}>{localizedModuleName(def)}</span>
                   <ModuleRarityTag rarity={bonusDrop.rarity} />
                 </div>
                 <div style={{ fontSize: "0.76rem", color: "var(--text-mid)", marginTop: "0.3rem" }}>

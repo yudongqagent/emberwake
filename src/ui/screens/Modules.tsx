@@ -10,6 +10,7 @@ import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon, ResourceIcon } from "../c
 import { Bar, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 import type { ModuleType, ModuleInstance } from "../../data/types";
 import { t } from "../../i18n/strings";
+import { localizedModuleName, localizedTrait } from "../../i18n/data";
 
 const TYPE_ORDER: ModuleType[] = ["weapon", "armor", "engine", "utility"];
 
@@ -76,7 +77,7 @@ export function Modules() {
               {mod && def ? (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.4rem" }}>
-                    <span style={{ fontWeight: 700 }}>{def.name}</span>
+                    <span style={{ fontWeight: 700 }}>{localizedModuleName(def)}</span>
                     <ModuleRarityTag rarity={mod.rarity} />
                   </div>
                   <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", margin: "0.45rem 0" }}>
@@ -169,7 +170,7 @@ function InventoryPanel({ inventory }: { inventory: ModuleInstance[] }) {
               <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.35rem 0", borderBottom: "1px solid var(--line)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
                   <ModuleTypeIcon type={def.type} size={14} />
-                  <span style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{def.name}</span>
+                  <span style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleName(def)}</span>
                   <ModuleRarityTag rarity={m.rarity} />
                 </div>
                 <button
@@ -216,15 +217,16 @@ function findDuplicatesToSell(inventory: ModuleInstance[]): string[] {
 function LockRow({ moduleId, traits }: { moduleId: string; traits: string[] }) {
   const cost = 8;
   const mod = state.value.modules.find((m) => m.id === moduleId);
-  const traitPool = mod ? moduleDefById(mod.defId).traitPool : [];
-  const pool = traitPool.map((t) => t.id);
+  const def = mod ? moduleDefById(mod.defId) : null;
+  const traitPool = def ? def.traitPool : [];
+  const pool = traitPool.map((tp) => tp.id);
   return (
     <div style={{ marginTop: "0.55rem" }}>
       {traits.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginBottom: "0.4rem" }}>
-          {traits.map((t, i) => (
-            <span key={i} title={traitPool.find((tp) => tp.id === t)?.description} style={{ fontSize: "0.68rem", padding: "0.15em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
-              {traitPool.find((tp) => tp.id === t)?.label ?? t}
+          {traits.map((traitId, i) => (
+            <span key={i} title={def ? localizedTrait(def, traitId).description : ""} style={{ fontSize: "0.68rem", padding: "0.15em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
+              {def ? localizedTrait(def, traitId).label : traitId}
             </span>
           ))}
         </div>
@@ -275,7 +277,7 @@ function PickerModal({
             <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: "1px solid var(--line)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <ModuleTypeIcon type={type} size={15} />
-                <span>{def.name}</span>
+                <span>{localizedModuleName(def)}</span>
                 <ModuleRarityTag rarity={m.rarity} />
               </div>
               <button className="btn primary" onClick={() => onPick(m.id)}>{t("modules.equip")}</button>
