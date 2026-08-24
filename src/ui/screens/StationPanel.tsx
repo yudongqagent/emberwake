@@ -1,32 +1,25 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, ascendShipAction, repairFlagship } from "../../state/store";
-import { hullClassById, nextHullClassOptions, ascensionRequirementsMet } from "../../data/hullClasses";
+import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, repairFlagship } from "../../state/store";
 import { CREW_DEFS } from "../../data/crew";
 import { moduleDefById, fabricatorCost } from "../../data/modules";
-import { hullClassAbility } from "../../data/namedShips";
-import { computeModuleDamage, computeModuleBlock } from "../../engine/modules";
-import { computeMaxHull, computePowerCapacity, computeSpeed } from "../../engine/ships";
-import { drawModule } from "../../engine/modules";
-import { ShipRarityTag, ModuleRarityTag } from "../components/RarityTag";
-import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon, HullIcon, PowerIcon, SpeedIcon } from "../components/Icons";
+import { computeModuleDamage, computeModuleBlock, drawModule } from "../../engine/modules";
+import { ModuleRarityTag } from "../components/RarityTag";
+import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon, HullIcon } from "../components/Icons";
 import { RollQualityBadge } from "../components/StatBlock";
-import type { ModuleInstance, HullClassId } from "../../data/types";
+import type { ModuleInstance } from "../../data/types";
 import { t } from "../../i18n/strings";
-import { localizedModuleName, localizedTrait, localizedCrewName, localizedCrewPassive, localizedNamedShipActive, localizedHullClassDisplay } from "../../i18n/data";
-
-type Tab = "trade" | "shipwright" | "fabricator" | "recruit";
+import { localizedModuleName, localizedTrait, localizedCrewName, localizedCrewPassive } from "../../i18n/data";
+type Tab = "trade" | "fabricator" | "recruit";
 
 const TAB_META: { id: Tab; labelKey: string; icon: preact.ComponentChildren }[] = [
   { id: "trade", labelKey: "station.tab.trade", icon: <TradeIcon size={16} /> },
-  { id: "shipwright", labelKey: "station.tab.shipwright", icon: <NavIcon name="fleet" size={16} /> },
   { id: "fabricator", labelKey: "station.tab.fabricator", icon: <NavIcon name="modules" size={16} /> },
   { id: "recruit", labelKey: "station.tab.recruit", icon: <NavIcon name="crew" size={16} /> },
 ];
 
 export function StationPanel({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>("trade");
-  const [ascendedTo, setAscendedTo] = useState<HullClassId | null>(null);
   const [drawnModule, setDrawnModule] = useState<ModuleInstance | null>(null);
 
   return (
@@ -71,40 +64,10 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
         </div>
         <div style={{ padding: "0 1rem 1rem", overflowY: "auto" }}>
           {tab === "trade" && <TradeTab />}
-          {tab === "shipwright" && (
-            <AscensionTab
-              onAscend={(hullClass) => {
-                ascendShipAction(hullClass);
-                setAscendedTo(hullClass);
-              }}
-            />
-          )}
           {tab === "fabricator" && <FabricatorTab onBuy={setDrawnModule} />}
           {tab === "recruit" && <RecruitTab />}
         </div>
       </div>
-
-      {ascendedTo && (() => {
-        const def = hullClassById(ascendedTo);
-        const ability = hullClassAbility(ascendedTo);
-        const ship = flagship.value!;
-        return (
-          <DrawReveal title={t("station.ascended")} accent="var(--green)" onClose={() => setAscendedTo(null)}>
-            <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{ship.name}</div>
-            <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{localizedHullClassDisplay(def)}</div>
-            {ability && (
-              <div style={{ fontSize: "0.78rem", color: "var(--amber)", marginBottom: "0.5rem" }}>
-                {localizedNamedShipActive(ability)}
-              </div>
-            )}
-            <div style={{ display: "flex", gap: "1rem", justifyContent: "center", marginTop: "0.6rem", fontSize: "0.85rem", color: "var(--text-mid)" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><HullIcon size={13} /> {computeMaxHull(ship)}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><PowerIcon size={13} /> {computePowerCapacity(ship)}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}><SpeedIcon size={13} /> {computeSpeed(ship)}</span>
-            </div>
-          </DrawReveal>
-        );
-      })()}
       {drawnModule && (() => {
         const def = moduleDefById(drawnModule.defId);
         const cur = flagship.value;
@@ -236,94 +199,13 @@ const OFFER_COUNT = 4;
 /** Issue #9 (2026-08 playtest, docs/design-principles.md Player-Tested
  * Anti-Patterns #4): a free, unlimited Refresh let a player just reroll until they
  * got something great — this still applies to the Fabricator's module showcase
- * below. It no longer applies to ships: ascension has no RNG to reroll (see
- * AscensionTab), the player always sees and picks between the same two real
- * options. Cost escalates per refresh within one visit (resets when the tab
- * remounts) so a first look is still cheap but fishing for a perfect roll isn't free. */
+ * below. It no longer applies to ships at all: the station doesn't touch ship
+ * advancement any more (player report 2026-08-24 — "跟商店没关系"), which now
+ * lives in its own screen, ui/screens/Ascension.tsx, with no RNG to reroll.
+ * Cost escalates per refresh within one visit (resets when the tab remounts) so a
+ * first look is still cheap but fishing for a perfect roll isn't free. */
 function refreshCost(count: number): number {
   return 10 + count * 15;
-}
-
-/** Ship-ascension redesign (docs/story/research-notes-ship-ascension.md): replaces
- * the old gacha showcase (draw a new candidate ship) — Whisper is the only ship,
- * and grows by ascending into the next hull-class tier in place. No RNG: the two
- * next-tier options (if any) are always both shown, same "shown-then-chosen"
- * agency principle the old showcase had (Player-Tested Anti-Patterns #4), just
- * without a draw underneath it. */
-function AscensionTab({ onAscend }: { onAscend: (hullClass: HullClassId) => void }) {
-  const ship = flagship.value;
-  if (!ship) return null;
-  const currentDef = hullClassById(ship.hullClass);
-  const currentAbility = hullClassAbility(ship.hullClass);
-  const options = nextHullClassOptions(ship.hullClass);
-  const res = state.value.resources;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-      <div className="panel compact" style={{ padding: "0.75rem 0.9rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
-          <div>
-            <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{ship.name}</div>
-            <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{localizedHullClassDisplay(currentDef)}</div>
-          </div>
-          <ShipRarityTag rarity={ship.rarity} showPips={false} />
-        </div>
-        <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><HullIcon size={12} /> {computeMaxHull(ship)}</span>
-          <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><PowerIcon size={12} /> {computePowerCapacity(ship)}</span>
-          <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><SpeedIcon size={12} /> {computeSpeed(ship)}</span>
-        </div>
-        {currentAbility && (
-          <div style={{ fontSize: "0.72rem", color: "var(--amber)", marginTop: "0.5rem" }}>
-            {t("station.namedShipLine", { active: localizedNamedShipActive(currentAbility) })}
-          </div>
-        )}
-      </div>
-
-      <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
-        {options.length > 0 ? t("station.ascensionHint") : t("station.ascensionMaxed")}
-      </div>
-
-      {options.map((target) => {
-        const req = ascensionRequirementsMet(target, ship.level, res.originEssence, state.value.flags);
-        const ready = req.flag && req.essence && req.level;
-        const ability = hullClassAbility(target.id);
-        return (
-          <div key={target.id} className={`panel compact ${ready ? "accent" : ""}`} style={{ padding: "0.75rem 0.9rem", ["--accent" as any]: ready ? "var(--green)" : undefined }}>
-            <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{localizedHullClassDisplay(target)}</div>
-            <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", margin: "0.4rem 0 0.6rem" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><HullIcon size={12} /> {target.baseHull}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><PowerIcon size={12} /> {target.basePower}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}><SpeedIcon size={12} /> {target.baseSpeed}</span>
-            </div>
-            {ability && (
-              <div style={{ fontSize: "0.72rem", color: "var(--amber)", marginBottom: "0.6rem" }}>
-                {t("station.namedShipLine", { active: localizedNamedShipActive(ability) })}
-              </div>
-            )}
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginBottom: "0.65rem" }}>
-              <AscensionRequirement met={req.level} label={t("station.reqLevel", { level: target.minLevel })} />
-              <AscensionRequirement met={req.essence} label={t("station.reqEssence", { amount: target.essenceCost })} icon={<ResourceIcon type="originEssence" size={12} />} />
-              {target.unlockFlag !== null && <AscensionRequirement met={req.flag} label={t("station.reqStory")} />}
-            </div>
-            <button className="btn primary" disabled={!ready} style={{ width: "100%" }} onClick={() => onAscend(target.id)}>
-              {t("station.ascend")}
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function AscensionRequirement({ met, label, icon }: { met: boolean; label: string; icon?: preact.ComponentChildren }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.72rem", color: met ? "var(--green)" : "var(--text-dim)" }}>
-      <span aria-hidden="true">{met ? "✓" : "○"}</span>
-      {icon}
-      {label}
-    </div>
-  );
 }
 
 function generateModuleOffers(): ModuleInstance[] {

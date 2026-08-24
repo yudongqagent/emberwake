@@ -930,7 +930,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // (enemies have no individual speed stat yet).
     {
       const preferredRange = FACTION_PREFERRED_RANGE[encounter.faction] ?? "mid";
-      const playerRate = (1 / BASE_CLOSE_SECONDS) * (shipSpeed / REFERENCE_SHIP_SPEED);
+      // Square-rooted, not linear: hull speeds became monotonic on 2026-08-24 (see
+      // hullClasses.ts), so an endgame hull is now ~2.8x the starting corvette's
+      // speed instead of slower than it. Linear scaling would have collapsed a
+      // band transition from ~16s to under 6s and undone the whole point of the
+      // real-timescale rework — sqrt keeps speed a genuine, felt advantage
+      // (~16s → ~10s) without erasing range as a tactical resource.
+      const playerRate = (1 / BASE_CLOSE_SECONDS) * Math.sqrt(shipSpeed / REFERENCE_SHIP_SPEED);
       const prevBand = rangeBandRef.current;
       const next = advanceRangeBand(
         { band: rangeBandRef.current, progress: rangeProgressRef.current },

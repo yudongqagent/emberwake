@@ -309,7 +309,7 @@ export function RarityPips({ rarity, size = 6 }: { rarity: ShipRarity; size?: nu
 
 // --- Nav / chrome icons ---
 
-export function NavIcon({ name, size = 20, color = "currentColor" }: { name: "bridge" | "system" | "galaxy" | "fleet" | "modules" | "crew"; size?: number; color?: string }) {
+export function NavIcon({ name, size = 20, color = "currentColor" }: { name: "bridge" | "system" | "galaxy" | "ascension" | "fleet" | "modules" | "crew"; size?: number; color?: string }) {
   const paths: Record<string, preact.ComponentChildren> = {
     bridge: (
       <>
@@ -323,6 +323,15 @@ export function NavIcon({ name, size = 20, color = "currentColor" }: { name: "br
         <circle cx="12" cy="12" r="2.4" fill={color} />
         <ellipse cx="12" cy="12" rx="9" ry="3.6" stroke={color} strokeWidth="1.3" />
         <ellipse cx="12" cy="12" rx="9" ry="3.6" stroke={color} strokeWidth="1.3" transform="rotate(60 12 12)" />
+      </>
+    ),
+    // Ascension: an upward chevron stack over a hull silhouette — the ship
+    // itself rising a tier, distinct from the fleet/roster glyph.
+    ascension: (
+      <>
+        <path d="M12 3 L17 9 H14 V13 H10 V9 H7 Z" stroke={color} strokeWidth="1.4" strokeLinejoin="round" fill="none" />
+        <path d="M5 17 H19 L17 21 H7 Z" stroke={color} strokeWidth="1.4" strokeLinejoin="round" fill="none" />
+        <path d="M9 15 H15" stroke={color} strokeWidth="1.2" strokeLinecap="round" opacity="0.6" />
       </>
     ),
     galaxy: (

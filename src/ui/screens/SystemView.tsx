@@ -78,7 +78,13 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
     const ctx2d = canvas.getContext("2d")!;
     const vp = attachResponsiveCanvas(canvas, container, REF_W, REF_H);
     const player = { x: 120, y: REF_H / 2, vx: 0, vy: 0, angle: 0 };
-    const shipSpeed = flagship.value ? computeSpeed(flagship.value) : 200;
+    // Hull speeds became monotonic on 2026-08-24 (ascension must never reduce a
+    // stat), which raised the top end from ~352 to ~616 — fast enough to make the
+    // system map feel twitchy. Compressed toward the old comfortable range here so
+    // a bigger hull still flies faster, just not disproportionately: the map is a
+    // place to navigate, not a race track.
+    const rawSpeed = flagship.value ? computeSpeed(flagship.value) : 200;
+    const shipSpeed = 200 + (rawSpeed - 200) * 0.45;
     const shipAccel = shipSpeed * 2.4;
     let target: { x: number; y: number } | null = null;
     const keys = new Set<string>();

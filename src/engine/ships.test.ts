@@ -75,10 +75,16 @@ describe("attribute rolls", () => {
     expect(a).not.toBe(b);
   });
 
-  it("bigger hull classes move slower even at the same speed roll", () => {
-    const corvette = computeSpeed(makeShip({ hullClass: "corvette", rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
-    const sovereign = computeSpeed(makeShip({ hullClass: "sovereign", rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 } }));
-    expect(sovereign).toBeLessThan(corvette);
+  // Replaces an older test that asserted the OPPOSITE ("bigger hull classes move
+  // slower"). That was the pre-2026-08-24 design, and it's exactly the stat
+  // regression the player reported: ascending into a bigger hull made Whisper
+  // slower. Bigger hulls are now never slower — the lateral tradeoff at a tier is
+  // which stat grows more, not which one shrinks.
+  it("a bigger hull class is never slower than a smaller one at the same speed roll", () => {
+    const neutral = { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 };
+    const corvette = computeSpeed(makeShip({ hullClass: "corvette", rolls: neutral }));
+    const sovereign = computeSpeed(makeShip({ hullClass: "sovereign", rolls: neutral }));
+    expect(sovereign).toBeGreaterThanOrEqual(corvette);
   });
 
   it("base evasion and crit chance scale with their own rolls", () => {
@@ -154,6 +160,61 @@ describe("hull class order gaps (no overlap between adjacent ascension tiers)", 
   });
 });
 
+// Player report (2026-08-24): "进阶后不应该出现属性下降的情况" — ascending must
+// never reduce anything. It used to: 24 separate stat decreases existed across the
+// possible ascension paths (e.g. Interceptor speed 8 → Cruiser speed 4, Bulwark
+// armor slots 4 → Corsair 2, which also silently unequipped modules). The lateral
+// tradeoff at each tier is now "which stat grows MORE", never "which shrinks".
+describe("ascension never reduces any stat or slot (player report 2026-08-24)", () => {
+  const STATS = ["baseHull", "basePower", "baseSpeed"] as const;
+  const SLOTS = ["weapon", "armor", "engine", "utility"] as const;
+
+  it("every order-N+1 hull matches or beats every order-N hull on every stat and slot", () => {
+    const maxOrder = Math.max(...HULL_CLASSES.map((h) => h.order));
+    for (let order = 0; order < maxOrder; order++) {
+      const from = HULL_CLASSES.filter((h) => h.order === order);
+      const to = HULL_CLASSES.filter((h) => h.order === order + 1);
+      for (const lower of from) {
+        for (const higher of to) {
+          for (const s of STATS) {
+            expect(
+              higher[s],
+              `ascending ${lower.id} → ${higher.id} would DROP ${s} (${lower[s]} → ${higher[s]})`,
+            ).toBeGreaterThanOrEqual(lower[s]);
+          }
+          for (const s of SLOTS) {
+            expect(
+              higher.slots[s],
+              `ascending ${lower.id} → ${higher.id} would DROP ${s} slots (${lower.slots[s]} → ${higher.slots[s]}) and unequip a module`,
+            ).toBeGreaterThanOrEqual(lower.slots[s]);
+          }
+        }
+      }
+    }
+  });
+
+  it("ascending never unequips a module, for every possible path", () => {
+    const maxOrder = Math.max(...HULL_CLASSES.map((h) => h.order));
+    for (let order = 0; order < maxOrder; order++) {
+      for (const lower of HULL_CLASSES.filter((h) => h.order === order)) {
+        const total = lower.slots.weapon + lower.slots.armor + lower.slots.engine + lower.slots.utility;
+        // Fill every slot, then ascend and confirm all of them survived.
+        const filled = Array.from({ length: total }, (_, i) => `mod${i}`);
+        for (const higher of HULL_CLASSES.filter((h) => h.order === order + 1)) {
+          const ship = makeShip({ hullClass: lower.id, equipped: filled });
+          const after = ascendShip(ship, higher.id);
+          for (const m of filled) {
+            expect(
+              after.equipped.includes(m),
+              `${lower.id} → ${higher.id} dropped equipped module ${m}`,
+            ).toBe(true);
+          }
+        }
+      }
+    }
+  });
+});
+
 describe("ascension gating (canAscend/ascendShip)", () => {
   it("cannot ascend when level, essence, or the story flag isn't met", () => {
     const ship = makeShip({ hullClass: "corvette", level: 1 });
@@ -175,19 +236,10 @@ describe("ascension gating (canAscend/ascendShip)", () => {
     expect(ascended.currentHp).toBe(computeMaxHull(ascended));
   });
 
-  it("slot remapping preserves equipped modules within their own type group when slots grow", () => {
-    // Corvette: 1 weapon/1 armor/1 engine/1 utility. Destroyer: 2 weapon/1 armor/1 engine/2 utility.
+  it("slot remapping keeps each module inside its own type group as slots grow", () => {
+    // Corvette: 1 weapon/1 armor/1 engine/1 utility. Destroyer: 2 weapon/2 armor/1 engine/2 utility.
     const ship = makeShip({ hullClass: "corvette", equipped: ["w", "a", "e", "u"] });
     const ascended = ascendShip(ship, "destroyer");
-    expect(ascended.equipped).toEqual(["w", null, "a", "e", "u", null]);
-  });
-
-  it("slot remapping drops (never misplaces) modules that no longer fit when a type's slots shrink", () => {
-    // Vanguard (order2): 3 weapon/1 armor/2 engine/2 utility. Bulwark (order3): 2 weapon/4 armor/1 engine/3 utility.
-    const ship = makeShip({ hullClass: "vanguard", equipped: ["w1", "w2", "w3", "a1", "e1", "e2", "u1", "u2"] });
-    const ascended = ascendShip(ship, "bulwark");
-    // weapon: keeps the first 2 of 3 (w3 dropped); armor: a1 kept, 3 new empty slots;
-    // engine: keeps the first 1 of 2 (e2 dropped); utility: both kept, 1 new empty slot.
-    expect(ascended.equipped).toEqual(["w1", "w2", "a1", null, null, null, "e1", "u1", "u2", null]);
+    expect(ascended.equipped).toEqual(["w", null, "a", null, "e", "u", null]);
   });
 });

@@ -9,6 +9,7 @@ import { StationPanel } from "./ui/screens/StationPanel";
 import { Fleet } from "./ui/screens/Fleet";
 import { Modules } from "./ui/screens/Modules";
 import { Crew } from "./ui/screens/Crew";
+import { Ascension } from "./ui/screens/Ascension";
 import { StoryOverlay } from "./ui/screens/StoryOverlay";
 import { Combat } from "./ui/screens/Combat";
 import type { StoryScene } from "./data/types";
@@ -18,12 +19,13 @@ import { ErrorToast } from "./ui/components/ErrorToast";
 import { t } from "./i18n/strings";
 import { language, setLanguage } from "./i18n/language";
 
-type Screen = "bridge" | "system" | "galaxy" | "fleet" | "modules" | "crew";
+type Screen = "bridge" | "system" | "galaxy" | "ascension" | "fleet" | "modules" | "crew";
 
 const NAV_ITEMS: { id: Screen; labelKey: string }[] = [
   { id: "bridge", labelKey: "nav.bridge" },
   { id: "system", labelKey: "nav.system" },
   { id: "galaxy", labelKey: "nav.galaxy" },
+  { id: "ascension", labelKey: "nav.ascension" },
   { id: "fleet", labelKey: "nav.fleet" },
   { id: "modules", labelKey: "nav.modules" },
   { id: "crew", labelKey: "nav.crew" },
@@ -122,6 +124,7 @@ export function App() {
                 onEngage={(encounterId, poiId, victoryFlag) => setCombat({ encounterId, poiId, victoryFlag })}
               />
             )}
+            {screen === "ascension" && <Ascension />}
             {screen === "fleet" && <Fleet />}
             {screen === "modules" && <Modules />}
             {screen === "crew" && <Crew />}
