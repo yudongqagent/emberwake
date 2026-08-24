@@ -17,7 +17,7 @@ import { AnimatedFraction } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
 import { t } from "../../i18n/strings";
-import { localizedModuleName, localizedCrewActive, localizedNamedShipActive } from "../../i18n/data";
+import { localizedModuleName, localizedCrewActive, localizedNamedShipActive, localizedEncounterName, localizedEnemyName } from "../../i18n/data";
 
 const REF_W = 900;
 const REF_H = 520;
@@ -182,14 +182,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const shipAccel = shipSpeed * 2.4;
 
   const [enemies, setEnemies] = useState<EnemyState[]>(
-    encounter.enemies.map((e) => ({ ...e, maxHull: e.hull })),
+    encounter.enemies.map((e) => ({ ...e, name: localizedEnemyName(e.name), maxHull: e.hull })),
   );
   const maxHull = Math.round(computeMaxHull(ship) * (1 + hullBonusFraction));
   const [playerHull, setPlayerHull] = useState(Math.min(maxHull, Math.round(ship.currentHp * (1 + hullBonusFraction))));
   const [cooldowns, setCooldowns] = useState<Record<string, number>>({});
   const [crewCooldowns, setCrewCooldowns] = useState<Record<string, number>>({});
   const [targetIdx, setTargetIdx] = useState(0);
-  const [log, setLog] = useState<string[]>([t("combat.log.contact", { name: encounter.name })]);
+  const [log, setLog] = useState<string[]>([t("combat.log.contact", { name: localizedEncounterName(encounter) })]);
   const [status, setStatus] = useState<"active" | "victory" | "defeat">("active");
   const [popups, setPopups] = useState<Popup[]>([]);
   const [playerShakeToken, setPlayerShakeToken] = useState(0);
@@ -1342,7 +1342,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "0.6rem 1rem 0" }} className="title">{encounter.name}</div>
+      <div style={{ padding: "0.6rem 1rem 0" }} className="title">{localizedEncounterName(encounter)}</div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.3rem 1rem 0.5rem", fontSize: "0.78rem", color: "var(--text-mid)" }}>
         <span>{ship.name} — Hull <AnimatedFraction current={playerHull} max={maxHull} /></span>

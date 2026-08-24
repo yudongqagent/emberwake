@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { MODULE_DEFS } from "../../data/modules";
 import { CREW_DEFS } from "../../data/crew";
 import { NAMED_SHIP_DEFS } from "../../data/namedShips";
+import { ENCOUNTER_DEFS, BOUNTY_ENCOUNTER_DEFS } from "../../data/encounters";
 import { MODULES_ZH } from "./modules";
 import { CREW_ZH } from "./crew";
 import { NAMED_SHIPS_ZH } from "./namedShips";
+import { ENCOUNTER_NAMES_ZH, ENEMY_NAMES_ZH } from "./encounters";
 
 // Issue #11: the module/crew/named-ship translation overlays are looked up by id at
 // render time (see i18n/data/index.ts) — a typo'd or stale id here just silently
@@ -57,6 +59,15 @@ describe("module/crew/named-ship translation overlays stay in sync with English 
       const zh = NAMED_SHIPS_ZH[def.id];
       if (!zh) continue;
       expect(zh.active.includes(" — "), `named ship "${def.id}": translated active ability is missing the ' — ' separator Combat.tsx splits on`).toBe(true);
+    }
+  });
+
+  it("every encounter (story and bounty) has a Chinese title, and every enemy in it has a Chinese name", () => {
+    for (const def of [...ENCOUNTER_DEFS, ...BOUNTY_ENCOUNTER_DEFS]) {
+      expect(ENCOUNTER_NAMES_ZH[def.id], `encounter "${def.id}" has no Chinese title`).toBeDefined();
+      for (const enemy of def.enemies) {
+        expect(ENEMY_NAMES_ZH[enemy.name], `encounter "${def.id}": enemy "${enemy.name}" has no Chinese name`).toBeDefined();
+      }
     }
   });
 });

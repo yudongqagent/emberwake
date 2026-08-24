@@ -2,7 +2,8 @@ import { language } from "../language";
 import { MODULES_ZH } from "./modules";
 import { CREW_ZH } from "./crew";
 import { NAMED_SHIPS_ZH } from "./namedShips";
-import type { ModuleDef, ModuleTrait, CrewDef } from "../../data/types";
+import { ENCOUNTER_NAMES_ZH, ENEMY_NAMES_ZH } from "./encounters";
+import type { ModuleDef, ModuleTrait, CrewDef, EncounterDef } from "../../data/types";
 import type { NamedShipDef } from "../../data/namedShips";
 
 /** Issue #11: thin localization wrappers around the module/crew/named-ship data
@@ -50,4 +51,19 @@ export function localizedNamedShipActive(def: NamedShipDef): string {
 export function localizedNamedShipFlavor(def: NamedShipDef): string {
   if (language.value !== "zh") return def.flavor;
   return NAMED_SHIPS_ZH[def.id]?.flavor ?? def.flavor;
+}
+
+export function localizedEncounterName(def: Pick<EncounterDef, "id" | "name">): string {
+  if (language.value !== "zh") return def.name;
+  return ENCOUNTER_NAMES_ZH[def.id] ?? def.name;
+}
+
+/** Enemy names are looked up by the literal English name string itself (see
+ * i18n/data/encounters.ts), not by encounter+index — the same name is reused
+ * verbatim across many encounters. Call this once at combat setup (see Combat.tsx's
+ * `enemies` initializer) rather than at every individual render call site, since
+ * `enemy.name`/`target.name` are read in dozens of places throughout combat. */
+export function localizedEnemyName(name: string): string {
+  if (language.value !== "zh") return name;
+  return ENEMY_NAMES_ZH[name] ?? name;
 }
