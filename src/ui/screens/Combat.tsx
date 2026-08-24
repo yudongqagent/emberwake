@@ -33,6 +33,16 @@ const PROJECTILE_DURATION = 0.3;
  * fast enough to feel continuous, slow enough to keep state updates cheap. */
 const TURN_SECONDS = 2.4;
 const COMBAT_TICK_MS = 150;
+/** Item #2 (2026-08-23 playtest): weapon-type modules now fire themselves the
+ * instant they're off cooldown — see the auto-fire effect below — instead of
+ * waiting for a manual click. Most weapons' authored cooldowns (converted via
+ * TURN_SECONDS) already give a readable rhythm, but a couple (Pulse Cannon) are
+ * authored at 0 turns, meaning "as fast as the player can click." Automated,
+ * that would fire every render — a floor keeps every auto-fired weapon on a
+ * legible cadence instead of buzzing like a machine gun. Only applied to
+ * weapon-type modules (see fireModuleImpl's cooldown-set); utility actives keep
+ * their authored cooldown untouched since they're still manually triggered. */
+const AUTO_FIRE_MIN_INTERVAL = 1.6;
 const COMBAT_TICK_SEC = COMBAT_TICK_MS / 1000;
 /** Baseline seconds between one enemy's attacks, jittered per-enemy so a multi-enemy
  * fight doesn't just relocate the old synchronized volley to a shorter clock — each
@@ -157,6 +167,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     .map((id) => state.value.modules.find((m) => m.id === id))
     .filter((m): m is NonNullable<typeof m> => !!m);
   const equippedModules = equippedModuleList.filter((m) => moduleDefById(m.defId).cooldown !== null);
+  // Item #2: the "main gun" — every weapon-type module — auto-fires (see the effect
+  // below); utility actives (EMP Burst, Purge Field, Salvage Drone, Displacement
+  // Charge) stay manual, since those are situational calls, not baseline damage.
+  const autoFireWeapons = equippedModules.filter((m) => moduleDefById(m.defId).type === "weapon");
+  const manualModules = equippedModules.filter((m) => moduleDefById(m.defId).type !== "weapon");
   const armorBlock = equippedModuleList
     .filter((m) => moduleDefById(m.defId).baseBlock !== undefined)
     .reduce((sum, m) => sum + (moduleDefById(m.defId).baseBlock ?? 0), 0);
@@ -418,6 +433,33 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Item #2 (2026-08-23 playtest): the main gun no longer waits for a click — every
+  // weapon-type module fires itself the instant it's off cooldown and a living,
+  // unphased target is selected, so the player's attention goes to targeting,
+  // positioning, and ability/ultimate timing instead of repeatedly pressing a
+  // basic-attack button. Unlike combatTick (a setInterval closure frozen at mount),
+  // this is a normal effect that reruns on every render, so it reads cooldowns/
+  // status/enemies/targetIdx directly — no ref mirror needed. It fires at most one
+  // weapon per pass (see the comment below) and relies on the state update that
+  // causes to trigger its own rerun, cascading until every ready weapon has fired.
+  useEffect(() => {
+    if (status !== "active") return;
+    const target = enemies[targetIdx];
+    if (!target || target.hull <= 0 || target.phased) return;
+    for (const mod of autoFireWeapons) {
+      if ((cooldowns[mod.id] ?? 0) <= 0) {
+        // Only one shot per pass: fireModuleImpl reads one-shot buffs (overcharge,
+        // guaranteed crit, alpha strike) from render-scope state and clears them at
+        // the end, but two calls within the same render would both read the buff as
+        // still-armed before either clears it. Firing one lets the resulting
+        // setCooldowns re-trigger this effect on the next render for the rest.
+        fireModule(mod.id);
+        break;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cooldowns, status, enemies, targetIdx]);
 
   // Issue #4 (2026-08 playtest): spawnBurst takes "r,g,b" (used as rgb(...) in the
   // particle fillStyle), but every weapon's signature color is authored as hex — one
@@ -1052,7 +1094,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const overchargePenalty = wasOvercharged ? 2 : 0;
     const alphaStrikePenalty = wasAlphaStrike ? 2 : 0;
     const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
-    setCooldowns((prev) => ({ ...prev, [moduleId]: Math.max(0, ((def.cooldown ?? 0) + overchargePenalty + alphaStrikePenalty - cooldownReduction) * TURN_SECONDS) }));
+    const rawCooldownSec = Math.max(0, ((def.cooldown ?? 0) + overchargePenalty + alphaStrikePenalty - cooldownReduction) * TURN_SECONDS);
+    // Item #2: weapon-type modules only ever fire via auto-fire now — floor their
+    // cadence at AUTO_FIRE_MIN_INTERVAL so a 0-cooldown weapon (e.g. Pulse Cannon)
+    // doesn't refire every render. Utility actives keep their raw authored cooldown.
+    const nextCooldownSec = def.type === "weapon" ? Math.max(AUTO_FIRE_MIN_INTERVAL, rawCooldownSec) : rawCooldownSec;
+    setCooldowns((prev) => ({ ...prev, [moduleId]: nextCooldownSec }));
     if (overloadShotCount > 0) overloadCountersRef.current[mod.id] = overloadShotCount >= 3 ? 0 : overloadShotCount;
     if (wasOvercharged) setOvercharged(false);
     if (wasGuaranteedCrit) setGuaranteedCrit(false);
@@ -1479,7 +1526,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         ))}
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", padding: "0.6rem 1rem 0" }}>
+      {/* Item #2 (2026-08-23 playtest): the main gun(s) auto-fire — see the effect
+          above — so this row is a status readout, not a button row. It only exists
+          to make WHY nothing needs clicking legible: a glowing dot means "ready and
+          about to fire," a dim one means "charging." The manual-decision row (below)
+          is where clicks still happen. */}
+      {autoFireWeapons.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", padding: "0.6rem 1rem 0" }}>
+          {autoFireWeapons.map((mod) => {
+            const def = moduleDefById(mod.defId);
+            const cd = cooldowns[mod.id] ?? 0;
+            return <WeaponAutoStatus key={mod.id} name={localizedModuleName(def)} color={def.color ?? "#8ff3ff"} cd={cd} />;
+          })}
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", padding: "0.5rem 1rem 0" }}>
         <button
           className={`btn ${overcharged ? "danger" : "ghost"}`}
           disabled={status !== "active"}
@@ -1488,13 +1550,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         >
           {overcharged ? t("combat.overcharged") : t("combat.overcharge")}
         </button>
-        {equippedModules.map((mod) => {
+        {manualModules.map((mod) => {
           const def = moduleDefById(mod.defId);
           const cd = cooldowns[mod.id] ?? 0;
           return (
             <button
               key={mod.id}
-              className={`btn ${overcharged && def.baseDamage ? "primary" : ""}`}
+              className="btn"
               disabled={status !== "active" || cd > 0}
               onClick={() => fireModule(mod.id)}
             >
@@ -1623,6 +1685,51 @@ function StatusBadge({ glyph, color, text }: { glyph: string; color: string; tex
       <span aria-hidden="true" style={{ fontSize: "0.95em" }}>{glyph}</span>
       {text}
     </span>
+  );
+}
+
+/** Item #2: a passive per-weapon readout replacing the old fire button — a glowing
+ * dot in the weapon's own signature color (def.color, the same hue its beam/impact
+ * VFX use) means "ready, about to auto-fire"; dim means "still charging." Text-only
+ * cooldown numbers elsewhere in this file (crew/named-ship buttons) stay adequate
+ * since those are still manual triggers a player consciously watches for; this one
+ * needed the shape/color cue since there's no click to anchor attention to it. */
+function WeaponAutoStatus({ name, color, cd }: { name: string; color: string; cd: number }) {
+  const ready = cd <= 0;
+  return (
+    <div
+      title={t("combat.autoFireTitle")}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.45em",
+        fontSize: "0.66rem",
+        fontWeight: 700,
+        fontFamily: "var(--font-display)",
+        color: ready ? color : "var(--text-dim)",
+        border: `1px solid ${ready ? color : "var(--line)"}`,
+        borderRadius: 999,
+        padding: "0.3em 0.75em 0.3em 0.55em",
+        background: "rgba(5,8,16,0.4)",
+        transition: "color 200ms ease, border-color 200ms ease",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          flex: "none",
+          background: ready ? color : "var(--line)",
+          boxShadow: ready ? `0 0 7px ${color}` : "none",
+        }}
+      />
+      {name}
+      <span style={{ opacity: 0.75, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+        {ready ? t("combat.autoFireReady") : `${cd.toFixed(1)}s`}
+      </span>
+    </div>
   );
 }
 
