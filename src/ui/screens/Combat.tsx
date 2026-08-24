@@ -12,7 +12,7 @@ import { playSfx } from "../../audio/engine";
 import type { FactionId, ResourceType, ModuleInstance } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
-import { ResourceIcon, resourceLabel } from "../components/Icons";
+import { ResourceIcon, resourceLabel, CloseOrderIcon, HoldOrderIcon, RetreatOrderIcon, BoardIcon } from "../components/Icons";
 import { AnimatedFraction, Bar } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing, drawFieldRing } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
@@ -1776,18 +1776,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       </div>
 
       <div style={{ display: "flex", gap: "0.4rem", padding: "0.5rem 1rem 0" }} role="group" aria-label={t("combat.stanceLabel")}>
-        {(["close", "hold", "retreat"] as StanceOrder[]).map((order) => (
-          <button
-            key={order}
-            className={`btn ${stanceOrder === order ? "primary" : "ghost"}`}
-            style={{ flex: 1, fontSize: "0.72rem", padding: "0.5em 0.3em" }}
-            disabled={status !== "active"}
-            onClick={() => { setStanceOrder(order); playSfx("click"); }}
-            title={t(`combat.stance.${order}Title`)}
-          >
-            {t(`combat.stance.${order}`)}
-          </button>
-        ))}
+        {(["close", "hold", "retreat"] as StanceOrder[]).map((order) => {
+          const OrderIcon = order === "close" ? CloseOrderIcon : order === "hold" ? HoldOrderIcon : RetreatOrderIcon;
+          return (
+            <button
+              key={order}
+              className={`btn ${stanceOrder === order ? "primary" : "ghost"}`}
+              style={{ flex: 1, fontSize: "0.72rem", padding: "0.5em 0.3em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35em" }}
+              disabled={status !== "active"}
+              onClick={() => { setStanceOrder(order); playSfx("click"); }}
+              title={t(`combat.stance.${order}Title`)}
+            >
+              <OrderIcon size={13} />
+              {t(`combat.stance.${order}`)}
+            </button>
+          );
+        })}
       </div>
 
       {encounter.capturable && enemies[0] && enemies[0].hull > 0 && (
@@ -1800,11 +1804,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               window auto-fire leaves before a crit finishes the target off. */}
           <button
             className={`btn ${boardingOrder ? "primary" : "ghost"}`}
-            style={{ width: "100%", fontSize: "0.72rem", padding: "0.5em 0.3em" }}
+            style={{ width: "100%", fontSize: "0.72rem", padding: "0.5em 0.3em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35em" }}
             disabled={status !== "active"}
             onClick={() => { setBoardingOrder((b) => !b); playSfx("click"); }}
             title={t("combat.boardTitle")}
           >
+            <BoardIcon size={13} />
             {boardingOrder ? t("combat.boarding", { pct: Math.round(boardProgress * 100) }) : t("combat.board")}
           </button>
           {boardingOrder && (

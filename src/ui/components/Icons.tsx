@@ -416,6 +416,45 @@ export function SpeedIcon({ size = 16, color = "currentColor" }: IconProps) {
   );
 }
 
+// --- Bridge-command order iconography (section G/F of the 2026-08-24 player
+// brief): the stance/boarding orders read as actions, not stats, but tenet 1
+// (icon-heavy, not text-heavy) still applies — a glance at the shape should say
+// "closing/holding/retreating/boarding" before the label is even read. ---
+
+export function CloseOrderIcon({ size = 16, color = "currentColor" }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M5 6 L11 12 L5 18 M12 6 L18 12 L12 18" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+export function HoldOrderIcon({ size = 16, color = "currentColor" }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M9 5 V19 M15 5 V19" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function RetreatOrderIcon({ size = 16, color = "currentColor" }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M13 6 L7 12 L13 18 M20 6 L14 12 L20 18" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+export function BoardIcon({ size = 16, color = "currentColor" }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M12 3 L12 15" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M6 9 L12 3 L18 9" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M5 15 H19 L17 21 H7 Z" stroke={color} strokeWidth="1.6" strokeLinejoin="round" fill="none" opacity="0.85" />
+    </Svg>
+  );
+}
+
 export function EvasionIcon({ size = 16, color = "currentColor" }: IconProps) {
   return (
     <Svg size={size}>
