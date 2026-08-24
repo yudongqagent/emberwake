@@ -14,14 +14,15 @@ import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, Module
 import { RollQualityBadge } from "../components/StatBlock";
 import type { ShipInstance, ModuleInstance } from "../../data/types";
 import { pickOne } from "../../engine/rng";
+import { t } from "../../i18n/strings";
 
 type Tab = "trade" | "shipwright" | "fabricator" | "recruit";
 
-const TAB_META: { id: Tab; label: string; icon: preact.ComponentChildren }[] = [
-  { id: "trade", label: "Trade", icon: <TradeIcon size={16} /> },
-  { id: "shipwright", label: "Shipwright", icon: <NavIcon name="fleet" size={16} /> },
-  { id: "fabricator", label: "Fabricator", icon: <NavIcon name="modules" size={16} /> },
-  { id: "recruit", label: "Recruit", icon: <NavIcon name="crew" size={16} /> },
+const TAB_META: { id: Tab; labelKey: string; icon: preact.ComponentChildren }[] = [
+  { id: "trade", labelKey: "station.tab.trade", icon: <TradeIcon size={16} /> },
+  { id: "shipwright", labelKey: "station.tab.shipwright", icon: <NavIcon name="fleet" size={16} /> },
+  { id: "fabricator", labelKey: "station.tab.fabricator", icon: <NavIcon name="modules" size={16} /> },
+  { id: "recruit", labelKey: "station.tab.recruit", icon: <NavIcon name="crew" size={16} /> },
 ];
 
 export function StationPanel({ onClose }: { onClose: () => void }) {
@@ -45,11 +46,11 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
     >
       <div className="panel pop-in" style={{ width: "min(560px, 100%)", maxWidth: "100%", boxSizing: "border-box", maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1rem 0" }}>
-          <div className="title">Station</div>
-          <button className="btn ghost" onClick={onClose}>Close</button>
+          <div className="title">{t("station.title")}</div>
+          <button className="btn ghost" onClick={onClose}>{t("common.close")}</button>
         </div>
         <div style={{ display: "flex", gap: "0.3rem", padding: "0.75rem 1rem" }}>
-          {TAB_META.map(({ id, label, icon }) => (
+          {TAB_META.map(({ id, labelKey, icon }) => (
             <button
               key={id}
               className={`btn ${tab === id ? "primary" : "ghost"}`}
@@ -65,7 +66,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
               }}
             >
               {icon}
-              {label}
+              {t(labelKey)}
             </button>
           ))}
         </div>
@@ -83,7 +84,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
         const curHull = cur ? effectiveMaxHull(cur) : 0;
         const delta = newHull - curHull;
         return (
-          <DrawReveal title={drawnShip.namedShipId ? "Named Ship Acquired!" : "Hull Acquired"} accent={drawnShip.namedShipId ? "var(--amber)" : `var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
+          <DrawReveal title={drawnShip.namedShipId ? t("station.namedShipAcquired") : t("station.hullAcquired")} accent={drawnShip.namedShipId ? "var(--amber)" : `var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
             <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{drawnShip.name}</div>
             <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{hullClassById(drawnShip.hullClass).name}</div>
             {drawnShip.namedShipId && (
@@ -95,12 +96,12 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
             <div style={{ marginTop: "0.5rem" }}>
               <RollQualityBadge
                 roll={(drawnShip.rolls.hull + drawnShip.rolls.power + drawnShip.rolls.speed + drawnShip.rolls.evasion + drawnShip.rolls.crit) / 5}
-                label="Overall roll"
+                label={t("station.overallRoll")}
               />
             </div>
             {cur && (
               <div style={{ marginTop: "0.75rem", fontFamily: "var(--font-display)", fontWeight: 700, color: delta >= 0 ? "var(--green)" : "var(--red)" }}>
-                {delta >= 0 ? "+" : ""}{delta} Hull vs {cur.name}
+                {t("station.hullVs", { sign: delta >= 0 ? "+" : "", delta, ship: cur.name })}
               </div>
             )}
           </DrawReveal>
@@ -114,7 +115,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
               .map((id) => state.value.modules.find((m) => m.id === id))
               .find((m): m is NonNullable<typeof m> => !!m && moduleDefById(m.defId).type === def.type)
           : null;
-        const statLabel = def.baseDamage !== undefined ? "Damage" : def.baseBlock !== undefined ? "Block" : null;
+        const statLabel = def.baseDamage !== undefined ? t("station.stat.damage") : def.baseBlock !== undefined ? t("station.stat.block") : null;
         const newStat = def.baseDamage !== undefined ? computeModuleDamage(drawnModule) : def.baseBlock !== undefined ? computeModuleBlock(drawnModule) : null;
         const curStat = equippedSameType
           ? def.baseDamage !== undefined
@@ -124,9 +125,9 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
               : null
           : null;
         return (
-          <DrawReveal title="Module Acquired" accent="var(--cyan)" onClose={() => setDrawnModule(null)}>
+          <DrawReveal title={t("station.moduleAcquired")} accent="var(--cyan)" onClose={() => setDrawnModule(null)}>
             <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{def.name}</div>
-            <div style={{ color: "var(--text-mid)", margin: "0.4rem 0", textTransform: "capitalize" }}>{def.type}</div>
+            <div style={{ color: "var(--text-mid)", margin: "0.4rem 0", textTransform: "capitalize" }}>{t(`moduleType.${def.type}`)}</div>
             <ModuleRarityTag rarity={drawnModule.rarity} />
             <div style={{ marginTop: "0.5rem" }}>
               <RollQualityBadge roll={drawnModule.quality} />
@@ -143,8 +144,8 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
             {statLabel && newStat !== null && (
               <div style={{ marginTop: "0.75rem", fontFamily: "var(--font-display)", fontWeight: 700, color: curStat === null || newStat >= curStat ? "var(--green)" : "var(--red)" }}>
                 {curStat === null
-                  ? `${newStat} ${statLabel} — nothing equipped in this slot yet`
-                  : `${newStat >= curStat ? "+" : ""}${newStat - curStat} ${statLabel} vs equipped`}
+                  ? t("station.newStatNoSlot", { value: newStat, stat: statLabel })
+                  : t("station.statVsEquipped", { sign: newStat >= curStat ? "+" : "", value: newStat - curStat, stat: statLabel })}
               </div>
             )}
           </DrawReveal>
@@ -164,7 +165,7 @@ function DrawReveal({ title, children, accent, onClose }: { title: string; child
         <div className="eyebrow" style={{ marginBottom: "0.75rem" }}>{title}</div>
         {children}
         <div style={{ marginTop: "1.25rem" }}>
-          <button className="btn primary" onClick={onClose}>Nice.</button>
+          <button className="btn primary" onClick={onClose}>{t("station.nice")}</button>
         </div>
       </div>
     </div>
@@ -195,9 +196,9 @@ function TradeTab() {
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
             <HullIcon size={16} />
             {missingHp > 0 ? (
-              <>Repair {missingHp} Hull <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="salvage" size={16} /> {repairCost}</>
+              <>{t("station.repairHull", { amount: missingHp })} <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="salvage" size={16} /> {repairCost}</>
             ) : (
-              "Hull at full"
+              t("station.hullFull")
             )}
           </div>
           <button
@@ -205,19 +206,19 @@ function TradeTab() {
             disabled={missingHp <= 0 || res.salvage < repairCost}
             onClick={() => { spend({ salvage: repairCost }); repairFlagship(); }}
           >
-            Repair
+            {t("common.repair")}
           </button>
         </Row>
       )}
       <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
-        Fence salvage for refined alloy, or break down alloy stock back into quick salvage.
+        {t("station.tradeHint")}
       </div>
       <Row>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
           <ResourceIcon type="salvage" size={16} /> 30 <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="alloy" size={16} /> {alloyOut}
         </div>
         <button className="btn" disabled={res.salvage < 30} onClick={() => { spend({ salvage: 30 }); grant({ alloy: alloyOut }); }}>
-          Exchange
+          {t("station.exchange")}
         </button>
       </Row>
       <Row>
@@ -225,7 +226,7 @@ function TradeTab() {
           <ResourceIcon type="alloy" size={16} /> 10 <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="salvage" size={16} /> {salvageOut}
         </div>
         <button className="btn" disabled={res.alloy < 10} onClick={() => { spend({ alloy: 10 }); grant({ salvage: salvageOut }); }}>
-          Exchange
+          {t("station.exchange")}
         </button>
       </Row>
     </div>
@@ -272,7 +273,7 @@ function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
-          Today's hulls. Rarity and stats are visible now — pick the one you want.
+          {t("station.shipwrightHint")}
         </div>
         <button
           className="btn ghost"
@@ -284,7 +285,7 @@ function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
             setRefreshCount((c) => c + 1);
           }}
         >
-          Refresh <ResourceIcon type="sourcePoints" size={11} /> {cost}
+          {t("common.refresh")} <ResourceIcon type="sourcePoints" size={11} /> {cost}
         </button>
       </div>
       {offers.map((candidate, i) => {
@@ -302,7 +303,7 @@ function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
             </div>
             {namedDef && (
               <div style={{ fontSize: "0.72rem", color: "var(--amber)", marginBottom: "0.5rem" }}>
-                ★ Named Ship — {namedDef.active}
+                {t("station.namedShipLine", { active: namedDef.active })}
               </div>
             )}
             <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.6rem" }}>
@@ -329,7 +330,7 @@ function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
                   setOffers((prev) => prev.map((o, idx) => (idx === i ? drawShip(pickOne(HULL_CLASSES.filter((h) => h.unlockFlag === null || state.value.flags[h.unlockFlag])).id, ownedNamedShipIds()) : o)));
                 }}
               >
-                Buy
+                {t("station.buy")}
               </button>
             </div>
           </div>
@@ -352,7 +353,7 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
-          Today's modules. Type, rarity, and traits are visible now — pick the one you want.
+          {t("station.fabricatorHint")}
         </div>
         <button
           className="btn ghost"
@@ -364,7 +365,7 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
             setRefreshCount((c) => c + 1);
           }}
         >
-          Refresh <ResourceIcon type="sourcePoints" size={11} /> {cost}
+          {t("common.refresh")} <ResourceIcon type="sourcePoints" size={11} /> {cost}
         </button>
       </div>
       {offers.map((candidate, i) => {
@@ -377,14 +378,14 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
                 <ModuleTypeIcon type={def.type} size={16} />
                 <div>
                   <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{def.name}</div>
-                  <div style={{ color: "var(--text-dim)", fontSize: "0.72rem", textTransform: "capitalize" }}>{def.type}</div>
+                  <div style={{ color: "var(--text-dim)", fontSize: "0.72rem", textTransform: "capitalize" }}>{t(`moduleType.${def.type}`)}</div>
                 </div>
               </div>
               <ModuleRarityTag rarity={candidate.rarity} />
             </div>
             <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.5rem", flexWrap: "wrap" }}>
-              {def.baseDamage !== undefined && <span style={{ color: "var(--red)" }}>Dmg {computeModuleDamage(candidate)}</span>}
-              {def.baseBlock !== undefined && <span style={{ color: "var(--cyan)" }}>Block {computeModuleBlock(candidate)}</span>}
+              {def.baseDamage !== undefined && <span style={{ color: "var(--red)" }}>{t("modules.dmg", { value: computeModuleDamage(candidate) })}</span>}
+              {def.baseBlock !== undefined && <span style={{ color: "var(--cyan)" }}>{t("modules.block", { value: computeModuleBlock(candidate) })}</span>}
               {candidate.traits.map((t, ti) => (
                 <span key={ti} style={{ fontSize: "0.68rem", padding: "0.1em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
                   {def.traitPool.find((tp) => tp.id === t)?.label ?? t}
@@ -405,7 +406,7 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
                   setOffers((prev) => prev.map((o, idx) => (idx === i ? drawModule() : o)));
                 }}
               >
-                Buy
+                {t("station.buy")}
               </button>
             </div>
           </div>
@@ -427,7 +428,7 @@ function RecruitTab() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
       <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
-        Named crew join through the story. Generic reinforcements can be recruited here.
+        {t("station.recruitHint")}
       </div>
       {genericDefs.map((c) => (
         <Row key={c.id}>
@@ -437,7 +438,7 @@ function RecruitTab() {
             </div>
             <div>
               <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                {c.name} <span style={{ textTransform: "capitalize", color: "var(--text-dim)", fontWeight: 400 }}>· {c.role}</span>
+                {c.name} <span style={{ textTransform: "capitalize", color: "var(--text-dim)", fontWeight: 400 }}>· {t(`crewRole.${c.role}`)}</span>
               </div>
               <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{c.passive}</div>
             </div>
@@ -450,7 +451,7 @@ function RecruitTab() {
               recruitGenericCrew(c.id);
             }}
           >
-            Recruit <ResourceIcon type="alloy" size={12} /> {cost}
+            {t("station.recruit")} <ResourceIcon type="alloy" size={12} /> {cost}
           </button>
         </Row>
       ))}

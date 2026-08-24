@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import { unlockedGalaxies, currentGalaxy, state, travelToSystem, getNextObjective } from "../../state/store";
 import { playSfx } from "../../audio/engine";
 import { FACTION_HULL_COLOR } from "../render/shipArt";
+import { t } from "../../i18n/strings";
 
 function hashSeed(id: string): number {
   let h = 0;
@@ -60,7 +61,7 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
       <div style={{ padding: "0.75rem 1rem" }} className="title">{galaxy.name}</div>
       {objective && (
         <div style={{ margin: "0 1rem 0.5rem", fontSize: "0.8rem", color: "var(--amber)" }}>
-          ▸ Next: {objective.label} at {objective.systemName}
+          {t("galaxy.nextAt", { label: objective.label, system: objective.systemName })}
         </div>
       )}
       <div style={{ flex: 1, position: "relative" }}>
@@ -162,7 +163,7 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
         </svg>
       </div>
       <div style={{ padding: "0.75rem 1rem", color: "var(--text-dim)", fontSize: "0.8rem" }}>
-        {galaxies.length > 1 ? "Tap any discovered system to jump there directly." : "More galaxies open as the campaign progresses."}
+        {galaxies.length > 1 ? t("galaxy.hintMulti") : t("galaxy.hintSingle")}
       </div>
     </div>
   );

@@ -12,10 +12,11 @@ import { playSfx } from "../../audio/engine";
 import type { FactionId, ResourceType, ModuleInstance } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
-import { ResourceIcon, RESOURCE_LABEL } from "../components/Icons";
+import { ResourceIcon, resourceLabel } from "../components/Icons";
 import { AnimatedFraction } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
+import { t } from "../../i18n/strings";
 
 const REF_W = 900;
 const REF_H = 520;
@@ -187,7 +188,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [cooldowns, setCooldowns] = useState<Record<string, number>>({});
   const [crewCooldowns, setCrewCooldowns] = useState<Record<string, number>>({});
   const [targetIdx, setTargetIdx] = useState(0);
-  const [log, setLog] = useState<string[]>([`Contact: ${encounter.name}.`]);
+  const [log, setLog] = useState<string[]>([t("combat.log.contact", { name: encounter.name })]);
   const [status, setStatus] = useState<"active" | "victory" | "defeat">("active");
   const [popups, setPopups] = useState<Popup[]>([]);
   const [playerShakeToken, setPlayerShakeToken] = useState(0);
@@ -345,7 +346,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // against every survivor (see fireModuleImpl's riftAnchorMult).
     if (anyDiedThisUpdate && encounter.faction === "riftEchoes" && !riftAnchoredRef.current && enemies.some((e) => e.hull > 0)) {
       riftAnchoredRef.current = true;
-      pushLog("The rift's stability breaks — the survivors are exposed, and your weapons hit them harder.");
+      pushLog(t("combat.log.riftAnchor"));
     }
     prevHullsRef.current = enemies.map((e) => e.hull);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -363,7 +364,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setEnemies((prev) => prev.map((e, i) => (i === 0
       ? { ...e, damage: Math.round(e.damage * 1.3), block: Math.max(0, Math.round(e.block * 0.75)), enraged: true }
       : e)));
-    pushLog(`${boss.name} is enraged — its strikes land harder now.`);
+    pushLog(t("combat.log.bossEnrage", { boss: boss.name }));
     const pos = arenaRef.current.enemyPos[0];
     if (pos) {
       spawnBurst(pos.x, pos.y, "255,92,92", 24, 120);
@@ -491,7 +492,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
     if (enemy.stunned) {
       setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, stunned: false } : e)));
-      pushLog(`${enemy.name} is disabled and can't fire.`);
+      pushLog(t("combat.log.disabled", { enemy: enemy.name }));
       return;
     }
 
@@ -558,7 +559,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               addPopup(idx, `-${riposteDmg}`, "#ffe25d");
             });
           }
-          pushLog(`Riposte! Whisper counters ${enemy.name} for ${riposteDmg}.`);
+          pushLog(t("combat.log.riposte", { enemy: enemy.name, dmg: riposteDmg }));
           playSfx("laser");
         }, 220);
       }
@@ -567,12 +568,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     fireProjectile(enemyPos, arenaRef.current.player, charged ? "#ffe25d" : "#ff6b6b", () => {
       if (result.hit && shieldActive) {
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 10, 90);
-        addPopup("player", "DEFLECTED", "#8ff3ff");
-        pushLog(`Construct Override deflects ${enemy.name}'s attack.`);
+        addPopup("player", t("combat.popup.deflected"), "#8ff3ff");
+        pushLog(t("combat.log.overrideDeflect", { enemy: enemy.name }));
       } else if (result.hit && absorbedHit) {
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "180,220,255", 10, 90);
-        addPopup("player", "ABSORBED", "#b4dcff");
-        pushLog(`Ablative Plating absorbs ${enemy.name}'s hit completely.`);
+        addPopup("player", t("combat.popup.absorbed"), "#b4dcff");
+        pushLog(t("combat.log.absorbFull", { enemy: enemy.name }));
       } else if (result.hit) {
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", charged ? 20 : 10, charged ? 130 : 90);
         addPopup("player", `-${result.damageDealt}`, "#ff5c5c", charged);
@@ -580,11 +581,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         setPlayerShakeToken((t) => t + 1);
         triggerHitStop(charged ? 100 : 45);
         hitPulseRef.current.player = performance.now();
-        pushLog(`${enemy.name}${charged ? (chargeDodged ? "'s charged strike (blunted by range)" : "'s charged strike") : ""}${deadHiveAllies > 0 ? " (hive-enraged)" : ""} hits Whisper for ${result.damageDealt}.`);
+        const hitKey = charged ? (chargeDodged ? "combat.log.enemyHitChargedDodged" : "combat.log.enemyHitCharged") : "combat.log.enemyHitPlain";
+        pushLog(t(hitKey, { enemy: enemy.name, dmg: result.damageDealt }) + (deadHiveAllies > 0 ? t("combat.log.hiveSuffix") : ""));
         if (reflectDmg > 0) {
           spawnBurst(enemyPos.x, enemyPos.y, "255,143,102", 8, 90);
           addPopup(idx, `-${reflectDmg}`, "#ff8f66");
-          pushLog(`Kinetic Reflector throws ${reflectDmg} back at ${enemy.name}.`);
+          pushLog(t("combat.log.reflect", { dmg: reflectDmg, enemy: enemy.name }));
         }
 
         // Construct doctrine: a precise EMP pulse on hit has a chance to lock out
@@ -596,7 +598,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             const jammed = targetable[Math.floor(Math.random() * targetable.length)];
             const jammedDef = moduleDefById(jammed.defId);
             setCooldowns((prev) => ({ ...prev, [jammed.id]: Math.max(prev[jammed.id] ?? 0, TURN_SECONDS) }));
-            pushLog(`${enemy.name}'s EMP pulse jams ${jammedDef.name}.`);
+            pushLog(t("combat.log.empJam", { enemy: enemy.name, module: jammedDef.name }));
           }
         }
         // Hollow doctrine: it doesn't just damage the hull, it drains what's inside it.
@@ -606,18 +608,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           const actualDrain = Math.min(drain, state.value.resources[pool]);
           if (actualDrain > 0) {
             spend({ [pool]: actualDrain } as Partial<Record<ResourceType, number>>);
-            addPopup("player", `-${actualDrain} ${RESOURCE_LABEL[pool]}`, "#e8d9ff");
-            pushLog(`${enemy.name} drains ${actualDrain} ${RESOURCE_LABEL[pool]} straight from Whisper's stores.`);
+            addPopup("player", `-${actualDrain} ${resourceLabel(pool)}`, "#e8d9ff");
+            pushLog(t("combat.log.hollowDrain", { enemy: enemy.name, amount: actualDrain, resource: resourceLabel(pool) }));
           }
           // Hollow doctrine, axis 2: Corrosion. A permanent (not decaying) block
           // reduction for the rest of the fight.
           if (armorBlock - corrodedBlockRef.current > 0) {
             setCorrodedBlock((c) => c + 1);
-            pushLog(`${enemy.name}'s touch corrodes Whisper's plating — armor weakened for the rest of the fight.`);
+            pushLog(t("combat.log.corrode", { enemy: enemy.name }));
           }
         }
       } else {
-        pushLog(phaseShiftBlocksThis ? `Phase Shift — ${enemy.name}'s attack passes through nothing.` : `${enemy.name} misses.`);
+        pushLog(phaseShiftBlocksThis ? t("combat.log.phaseShiftMiss", { enemy: enemy.name }) : t("combat.log.enemyMiss", { enemy: enemy.name }));
       }
       if (dealt > 0) setPlayerHull((prev) => Math.max(0, Math.min(maxHull, prev - dealt)));
       // Inertial Dampers' Momentum: real-time reinterpretation of "a clean enemy
@@ -674,7 +676,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           setPlayerHull((prev) => {
             if (prev <= 0 || prev >= maxHull) return prev;
             const next = Math.min(maxHull, prev + tick);
-            if (next > prev) pushLog(`Field systems recover ${next - prev} hull.`);
+            if (next > prev) pushLog(t("combat.log.fieldRegen", { amount: next - prev }));
             return next;
           });
         }
@@ -694,7 +696,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             const healed = Math.min(e.maxHull, e.hull + e.regen);
             if (healed > e.hull) {
               addPopup(idx, `+${healed - e.hull}`, "#5dffb0");
-              pushLog(`${e.name} regenerates ${healed - e.hull} hull.`);
+              pushLog(t("combat.log.enemyRegen", { enemy: e.name, amount: healed - e.hull }));
             }
             return { ...e, hull: healed };
           }));
@@ -712,9 +714,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           timer.phased = !timer.phased;
           timer.phaseRemaining = timer.phased ? 1.6 : 2.2 + Math.random() * 1.2;
           setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, phased: timer.phased } : e)));
-          pushLog(timer.phased
-            ? `${enemy.name} flickers out of phase — attacks will pass through it.`
-            : `${enemy.name} phases back into reach.`);
+          pushLog(t(timer.phased ? "combat.log.riftFlickerOut" : "combat.log.riftFlickerIn", { enemy: enemy.name }));
         }
         if (timer.phased) return;
       }
@@ -737,7 +737,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           timer.charging = true;
           timer.chargeRemaining = CHARGE_WINDUP_SEC;
           setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, charging: true } : e)));
-          pushLog(`${enemy.name} is charging a devastating strike — brace for it!`);
+          pushLog(t("combat.log.bossCharging", { enemy: enemy.name }));
           playSfx("alarm");
         } else {
           enemyAttack(i, false);
@@ -800,7 +800,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     // entirely; block the shot (and don't burn the weapon's cooldown for nothing)
     // rather than let it fire and silently miss, so the player retargets instead.
     if (target.phased) {
-      pushLog(`${target.name} is phased — the shot finds nothing there.`);
+      pushLog(t("combat.log.phased", { enemy: target.name }));
       return;
     }
 
@@ -863,7 +863,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       fireProjectile(playerPos, impactPos, beamColor, () => {
         if (result.hit) {
           spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : hexToRgbString(weaponColor), result.crit ? 22 : 12, result.crit ? 150 : 110);
-          addPopup(targetIdx, `${result.crit ? "CRIT " : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : weaponColor, result.crit);
+          addPopup(targetIdx, `${result.crit ? t("combat.critPrefix") : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : weaponColor, result.crit);
           triggerHitStop(result.crit ? 90 : 35);
           hitPulseRef.current.enemy[targetIdx] = performance.now();
           if (result.crit) setPlayerShakeToken((t) => t + 1);
@@ -877,11 +877,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (result.hit && blockBroken) hitTarget.blockBrokenHits = Math.max(0, (target.blockBrokenHits ?? 0) - 1);
 
       if (result.hit) {
-        const critNote = wasGuaranteedCrit ? " — Focus Fire's mark guarantees the critical hit on" : result.crit ? " lands a CRITICAL hit on" : " hits";
-        pushLog(`${def.name}${critNote} ${target.name} for ${result.damageDealt}.`);
-        if (pointDefense) pushLog(`${target.name}'s point-defense grid blunts the critical strike.`);
+        const hitLogKey = wasGuaranteedCrit ? "combat.log.weaponHitFocusFire" : result.crit ? "combat.log.weaponHitCrit" : "combat.log.weaponHit";
+        pushLog(t(hitLogKey, { weapon: def.name, target: target.name, dmg: result.damageDealt }));
+        if (pointDefense) pushLog(t("combat.log.pointDefense", { target: target.name }));
       } else {
-        pushLog(`${def.name} missed ${target.name}.`);
+        pushLog(t("combat.log.weaponMiss", { weapon: def.name, target: target.name }));
         // Lionsheart doctrine: Honor Duel. A duelist culture doesn't let a wasted
         // swing go unanswered — a wild miss draws an immediate free counter.
         if (encounter.faction === "lionsheart" && hitTarget.hull > 0) {
@@ -892,7 +892,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "93,214,255", 10, 90);
             playSfx("hit");
           }, 180);
-          pushLog(`${target.name} answers the missed swing with an honor riposte for ${counterDmg}.`);
+          pushLog(t("combat.log.honorRiposte", { target: target.name, dmg: counterDmg }));
         }
       }
 
@@ -900,11 +900,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // its block outright so follow-up hits land at full force.
       if (result.hit && mod.traits.includes("disable") && hitTarget.hull > 0 && Math.random() < 0.35) {
         hitTarget.stunned = true;
-        pushLog(`${target.name}'s systems lock up — it won't fire next turn.`);
+        pushLog(t("combat.log.stunned", { target: target.name }));
       }
       if (result.hit && def.type === "utility" && mod.traits.includes("shieldBreak") && hitTarget.hull > 0) {
         hitTarget.blockBrokenHits = 3;
-        pushLog(`${target.name}'s plating is stripped — the next few hits land unblocked.`);
+        pushLog(t("combat.log.shieldStripped", { target: target.name }));
       }
       nextEnemies[targetIdx] = hitTarget;
 
@@ -925,9 +925,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           }, 90);
           if (arcResult.hit) {
             nextEnemies[arcIdx] = { ...arcTarget, hull: Math.max(0, arcTarget.hull - arcResult.damageDealt) };
-            pushLog(`Chain Arc jumps to ${arcTarget.name} for ${arcResult.damageDealt}.`);
+            pushLog(t("combat.log.chainArcHit", { target: arcTarget.name, dmg: arcResult.damageDealt }));
           } else {
-            pushLog(`Chain Arc jumps to ${arcTarget.name} but misses.`);
+            pushLog(t("combat.log.chainArcMiss", { target: arcTarget.name }));
           }
         }
       }
@@ -951,7 +951,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           }, 90);
           if (splashResult.hit) {
             nextEnemies[splashIdx] = { ...splashTarget, hull: Math.max(0, splashTarget.hull - splashResult.damageDealt) };
-            pushLog(`Splash catches ${splashTarget.name} for ${splashResult.damageDealt}.`);
+            pushLog(t("combat.log.splashHit", { target: splashTarget.name, dmg: splashResult.damageDealt }));
           }
         });
       }
@@ -973,18 +973,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         }, 120);
         if (volleyResult.hit) {
           nextEnemies[targetIdx] = { ...volleyTarget, hull: Math.max(0, volleyTarget.hull - volleyResult.damageDealt) };
-          pushLog(`Volley's second shot hits ${volleyTarget.name} for ${volleyResult.damageDealt}.`);
+          pushLog(t("combat.log.volleyHit", { target: volleyTarget.name, dmg: volleyResult.damageDealt }));
         } else {
-          pushLog(`Volley's second shot misses ${volleyTarget.name}.`);
+          pushLog(t("combat.log.volleyMiss", { target: volleyTarget.name }));
         }
       }
     } else {
-      pushLog(`${def.name} activated.`);
+      pushLog(t("combat.log.moduleActivated", { module: def.name }));
       // Purge Field's Cleanse: the only removal effect in combat — instantly clears
       // Hollow's permanent Corrosion stack, restoring the ship's real armor value.
       if (mod.traits.includes("cleanse") && corrodedBlock > 0) {
         setCorrodedBlock(0);
-        pushLog(`Purge Field clears ${corrodedBlock} points of corroded plating.`);
+        pushLog(t("combat.log.purgeField", { amount: corrodedBlock }));
       }
       // Displacement Charge's Displace: shoves the target to whichever horizontal
       // extreme is farthest from Whisper right now — the only module that moves an
@@ -992,7 +992,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (mod.traits.includes("displace") && target.hull > 0) {
         const awayX = arenaRef.current.player.x < REF_W / 2 ? REF_W - 40 : 60;
         enemyChaseXRef.current[targetIdx] = awayX;
-        pushLog(`Displacement Charge shoves ${target.name} out to long range.`);
+        pushLog(t("combat.log.displace", { target: target.name }));
       }
     }
     const overchargePenalty = wasOvercharged ? 2 : 0;
@@ -1011,7 +1011,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (healed > 0) {
         setPlayerHull((h) => Math.min(maxHull, h + healed));
         addPopup("player", `+${healed}`, "#5dffb0");
-        pushLog(`Bloodscent draws ${healed} hull back from ${target.name}.`);
+        pushLog(t("combat.log.bloodscentDraw", { amount: healed, target: target.name }));
       }
     }
     setEnemies(nextEnemies);
@@ -1036,32 +1036,32 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       const heal = Math.round(maxHull * 0.15);
       setPlayerHull((h) => Math.min(maxHull, h + heal));
       addPopup("player", `+${heal}`, "#5dffb0");
-      pushLog(`Field Patch restores ${heal} hull.`);
+      pushLog(t("combat.log.fieldPatch", { amount: heal }));
       playSfx("dock");
     } else if (abilityId === "focusFire") {
       // Ratchet Koi: no damage now — the next weapon fired this fight is a guaranteed crit.
       setGuaranteedCrit(true);
-      pushLog("Focus Fire locks in a guaranteed critical hit on the next weapon volley.");
+      pushLog(t("combat.log.focusFireArm"));
       playSfx("click");
     } else if (abilityId === "riposte") {
       // Kaan Ferrous: arms a free counter-attack the next time an enemy misses.
       setRiposteArmed(true);
-      pushLog("Riposte primed — the next evaded hit draws an automatic counter.");
+      pushLog(t("combat.log.riposteArm"));
       playSfx("click");
     } else if (abilityId === "undercut") {
       // Priya Osei: halves every living enemy's block for a short window.
       nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, blockDebuffSec: 2 * TURN_SECONDS } : e));
-      pushLog("Undercut strips block fleet-wide.");
+      pushLog(t("combat.log.undercutArm"));
       playSfx("click");
     } else if (abilityId === "reaversCut") {
       // Kessa Vray: every living enemy takes +25% damage for a short window.
       nextEnemies = enemies.map((e, i) => (livingIdx.includes(i) ? { ...e, vulnerableSec: TURN_SECONDS } : e));
-      pushLog("Reaver's Cut marks every hostile — bonus damage incoming.");
+      pushLog(t("combat.log.reaversCutArm"));
       playSfx("click");
     } else if (abilityId === "constructOverride") {
       // Unit 7-Requiem: negates incoming damage for a short window.
       setShieldSec(TURN_SECONDS);
-      pushLog("Construct Override primes a full damage negation for the next assault.");
+      pushLog(t("combat.log.overrideArm"));
       playSfx("click");
     } else if (abilityId === "evasiveBurn") {
       // Generic recruit helm: an instant burst toward the target, closing or opening range.
@@ -1075,14 +1075,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         arenaRef.current.player.x = Math.max(20, Math.min(REF_W - 20, arenaRef.current.player.x + (dx / dist) * 140 * dir));
         arenaRef.current.player.y = Math.max(20, Math.min(REF_H - 20, arenaRef.current.player.y + (dy / dist) * 140 * dir));
       }
-      pushLog("Evasive Burn repositions Whisper instantly.");
+      pushLog(t("combat.log.evasiveBurn"));
       playSfx("jump");
     } else if (abilityId === "targetLock") {
       // Generic recruit tactician: halves the current target's evasion for a short window.
       const target = enemies[targetIdx];
       if (target && target.hull > 0) {
         nextEnemies = enemies.map((e, i) => (i === targetIdx ? { ...e, evasionDebuffSec: 2 * TURN_SECONDS } : e));
-        pushLog(`Target Lock cuts ${target.name}'s evasion.`);
+        pushLog(t("combat.log.targetLock", { target: target.name }));
       }
     }
     const cooldownValue = crewDefById(state.value.crew.find((c) => c.id === crewId)!.defId).activeCooldown;
@@ -1104,23 +1104,23 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     const namedDef = namedShipDefById(ship.namedShipId);
     if (namedDef.abilityId === "alphaStrike") {
       setAlphaStrikeArmed(true);
-      pushLog("Alpha Strike arms the next weapon volley for double damage.");
+      pushLog(t("combat.log.alphaStrikeArm"));
     } else if (namedDef.abilityId === "phaseShift") {
       setPhaseShiftReady(true);
-      pushLog("Phase Shift primes — the next enemy attack will find nothing there.");
+      pushLog(t("combat.log.phaseShiftArm"));
     } else if (namedDef.abilityId === "fortify") {
       setFortifySec(2 * TURN_SECONDS);
-      pushLog("Fortify doubles Whisper's armor block.");
+      pushLog(t("combat.log.fortifyArm"));
     } else if (namedDef.abilityId === "bloodscent") {
       const target = enemies[targetIdx];
       if (target && target.hull > 0) {
         setBloodscentSec(2 * TURN_SECONDS);
         bloodscentTargetRef.current = targetIdx;
-        pushLog(`Bloodscent marks ${target.name} — damage dealt to it will heal Whisper.`);
+        pushLog(t("combat.log.bloodscentMark", { target: target.name }));
       }
     } else if (namedDef.abilityId === "overdrive") {
       setCooldowns({});
-      pushLog("Overdrive resets every weapon's cooldown.");
+      pushLog(t("combat.log.overdriveArm"));
     }
     setNamedAbilityCooldown(namedDef.activeCooldown * TURN_SECONDS);
     playSfx("click");
@@ -1150,7 +1150,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
       return { ...enemy, hull: Math.max(0, enemy.hull - novaDamage) };
     });
-    pushLog(`Ember Nova erupts — ${novaDamage} damage to every enemy in the field.`);
+    pushLog(t("combat.log.emberNovaFire", { dmg: novaDamage }));
     playSfx("explosion");
     shakeRef.current = 22;
     triggerHitStop(140);
@@ -1354,24 +1354,24 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               fontWeight: 700,
             }}
           >
-            Combo ×{comboCount}
+            {t("combat.combo", { count: comboCount })}
           </span>
         )}
         <span>
-          Range: <span style={{ color: displayRange === "close" ? "var(--red)" : displayRange === "mid" ? "var(--amber)" : "var(--cyan)" }}>{displayRange}</span>
-          {" · "}Power {capacity}
+          {t("combat.range")}: <span style={{ color: displayRange === "close" ? "var(--red)" : displayRange === "mid" ? "var(--amber)" : "var(--cyan)" }}>{displayRange}</span>
+          {" · "}{t("combat.power")} {capacity}
         </span>
       </div>
 
       {(guaranteedCrit || riposteArmed || shieldSec > 0 || alphaStrikeArmed || phaseShiftReady || fortifySec > 0 || bloodscentSec > 0) && (
         <div style={{ display: "flex", gap: "0.4rem", padding: "0 1rem 0.4rem", flexWrap: "wrap" }}>
-          {guaranteedCrit && <StatusBadge color="var(--amber)" text="Guaranteed Crit Armed" />}
-          {riposteArmed && <StatusBadge color="var(--cyan)" text="Riposte Armed" />}
-          {shieldSec > 0 && <StatusBadge color="var(--violet)" text={`Override Shield (${shieldSec.toFixed(1)}s)`} />}
-          {alphaStrikeArmed && <StatusBadge color="var(--red)" text="Alpha Strike Armed" />}
-          {phaseShiftReady && <StatusBadge color="var(--cyan)" text="Phase Shift Primed" />}
-          {fortifySec > 0 && <StatusBadge color="var(--violet)" text={`Fortified (${fortifySec.toFixed(1)}s)`} />}
-          {bloodscentSec > 0 && <StatusBadge color="var(--green)" text={`Bloodscent (${bloodscentSec.toFixed(1)}s)`} />}
+          {guaranteedCrit && <StatusBadge color="var(--amber)" text={t("combat.status.guaranteedCrit")} />}
+          {riposteArmed && <StatusBadge color="var(--cyan)" text={t("combat.status.riposteArmed")} />}
+          {shieldSec > 0 && <StatusBadge color="var(--violet)" text={t("combat.status.overrideShield", { sec: shieldSec.toFixed(1) })} />}
+          {alphaStrikeArmed && <StatusBadge color="var(--red)" text={t("combat.status.alphaStrike")} />}
+          {phaseShiftReady && <StatusBadge color="var(--cyan)" text={t("combat.status.phaseShift")} />}
+          {fortifySec > 0 && <StatusBadge color="var(--violet)" text={t("combat.status.fortified", { sec: fortifySec.toFixed(1) })} />}
+          {bloodscentSec > 0 && <StatusBadge color="var(--green)" text={t("combat.status.bloodscent", { sec: bloodscentSec.toFixed(1) })} />}
         </div>
       )}
 
@@ -1390,9 +1390,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           className={`btn ${overcharged ? "danger" : "ghost"}`}
           disabled={status !== "active"}
           onClick={() => setOvercharged((o) => !o)}
-          title="Overcharge: next weapon shot deals +50% damage, but that weapon locks out for 2 extra turns."
+          title={t("combat.overchargeTitle")}
         >
-          {overcharged ? "Overcharged ⚡" : "Overcharge"}
+          {overcharged ? t("combat.overcharged") : t("combat.overcharge")}
         </button>
         {equippedModules.map((mod) => {
           const def = moduleDefById(mod.defId);
@@ -1434,10 +1434,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           className={`btn ${emberNovaCharge >= EMBER_NOVA_MAX ? "danger" : "ghost"}`}
           disabled={status !== "active" || emberNovaCharge < EMBER_NOVA_MAX}
           onClick={useEmberNova}
-          title="Ember Nova — every hit landed charges it. At full charge, deals heavy damage to every living enemy at once, scaled with your ship's Power Capacity."
+          title={t("combat.emberNovaTitle")}
           style={emberNovaCharge >= EMBER_NOVA_MAX ? { boxShadow: "0 0 14px var(--red)", fontWeight: 800 } : undefined}
         >
-          {emberNovaCharge >= EMBER_NOVA_MAX ? "★ EMBER NOVA ★" : `Ember Nova ${emberNovaCharge}/${EMBER_NOVA_MAX}`}
+          {emberNovaCharge >= EMBER_NOVA_MAX ? t("combat.emberNova") : t("combat.emberNovaCharging", { charge: emberNovaCharge, max: EMBER_NOVA_MAX })}
         </button>
       </div>
 
@@ -1447,22 +1447,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
       {status === "victory" && (
         <div className="panel pop-in" style={{ margin: "0 1rem 1rem", padding: "1rem", textAlign: "center" }}>
-          <div className="title" style={{ marginBottom: "0.5rem" }}>Victory</div>
+          <div className="title" style={{ marginBottom: "0.5rem" }}>{t("combat.victory")}</div>
           {levelUp && (
             <div className="panel accent scanline pop-in" style={{ padding: "0.9rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: "var(--amber)" }}>
               <div style={{ fontFamily: "var(--font-display)", fontSize: "1.15rem", fontWeight: 800, color: "var(--amber)", letterSpacing: "0.03em" }}>
-                LEVEL {levelUp}
+                {t("combat.levelUp", { level: levelUp })}
               </div>
-              <div className="eyebrow" style={{ marginTop: "0.15rem" }}>{ship.name} — Power Jump</div>
+              <div className="eyebrow" style={{ marginTop: "0.15rem" }}>{t("combat.powerJump", { ship: ship.name })}</div>
               <div style={{ display: "flex", justifyContent: "center", gap: "1.25rem", marginTop: "0.55rem" }}>
                 {levelUpHullGain > 0 && (
                   <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--text-hi)" }}>
-                    +{levelUpHullGain} <span style={{ fontSize: "0.68rem", color: "var(--text-dim)", fontWeight: 500 }}>Max Hull</span>
+                    +{levelUpHullGain} <span style={{ fontSize: "0.68rem", color: "var(--text-dim)", fontWeight: 500 }}>{t("combat.maxHull")}</span>
                   </div>
                 )}
                 {levelUpPowerGain > 0 && (
                   <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--amber)" }}>
-                    +{levelUpPowerGain} <span style={{ fontSize: "0.68rem", color: "var(--text-dim)", fontWeight: 500 }}>Power</span>
+                    +{levelUpPowerGain} <span style={{ fontSize: "0.68rem", color: "var(--text-dim)", fontWeight: 500 }}>{t("combat.power")}</span>
                   </div>
                 )}
               </div>
@@ -1472,7 +1472,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             <div style={{ display: "flex", justifyContent: "center", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.75rem", fontSize: "0.8rem", color: "var(--text-mid)" }}>
               {Object.entries(rewardsEarned).map(([k, v]) => (
                 <span key={k} className="resource-chip">
-                  <ResourceIcon type={k as ResourceType} size={13} />+{v} {RESOURCE_LABEL[k as ResourceType]}
+                  <ResourceIcon type={k as ResourceType} size={13} />+{v} {resourceLabel(k as ResourceType)}
                 </span>
               ))}
             </div>
@@ -1481,28 +1481,28 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             const def = moduleDefById(bonusDrop.defId);
             return (
               <div className="panel accent pop-in scanline" style={{ padding: "0.8rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: `var(--rarity-${bonusDrop.rarity})` }}>
-                <div className="eyebrow" style={{ color: `var(--rarity-${bonusDrop.rarity})` }}>Bonus Drop!</div>
+                <div className="eyebrow" style={{ color: `var(--rarity-${bonusDrop.rarity})` }}>{t("combat.bonusDrop")}</div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginTop: "0.4rem" }}>
                   <span style={{ fontWeight: 700 }}>{def.name}</span>
                   <ModuleRarityTag rarity={bonusDrop.rarity} />
                 </div>
                 <div style={{ fontSize: "0.76rem", color: "var(--text-mid)", marginTop: "0.3rem" }}>
-                  {def.baseDamage !== undefined && `Dmg ${computeModuleDamage(bonusDrop)}`}
-                  {def.baseBlock !== undefined && `Block ${computeModuleBlock(bonusDrop)}`}
+                  {def.baseDamage !== undefined && t("combat.dmgLabel", { value: computeModuleDamage(bonusDrop) })}
+                  {def.baseBlock !== undefined && t("combat.blockLabel", { value: computeModuleBlock(bonusDrop) })}
                 </div>
               </div>
             );
           })()}
-          <button className="btn primary" onClick={() => onResolve("victory")}>Continue</button>
+          <button className="btn primary" onClick={() => onResolve("victory")}>{t("common.continue")}</button>
         </div>
       )}
       {status === "defeat" && (
         <div className="panel pop-in" style={{ margin: "0 1rem 1rem", padding: "1rem", textAlign: "center" }}>
-          <div className="title" style={{ marginBottom: "0.5rem", color: "var(--red)" }}>Fleet Limps Home</div>
+          <div className="title" style={{ marginBottom: "0.5rem", color: "var(--red)" }}>{t("combat.defeatTitle")}</div>
           <div style={{ fontSize: "0.85rem", color: "var(--text-mid)", marginBottom: "0.5rem" }}>
-            Whisper's hull is patched enough to fly. The fight isn't over — try again when ready.
+            {t("combat.defeatBody")}
           </div>
-          <button className="btn primary" onClick={() => onResolve("defeat")}>Continue</button>
+          <button className="btn primary" onClick={() => onResolve("defeat")}>{t("common.continue")}</button>
         </div>
       )}
     </div>

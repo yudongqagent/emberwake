@@ -23,6 +23,7 @@ import {
   drawDerelictArt,
 } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
+import { t } from "../../i18n/strings";
 
 const REF_W = 1000;
 const REF_H = 600;
@@ -407,7 +408,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div className="title">{system.name}</div>
-        <button className="btn" onClick={() => onNavigate("galaxy")}>Jump Out</button>
+        <button className="btn" onClick={() => onNavigate("galaxy")}>{t("common.jumpOut")}</button>
       </div>
       {objectiveElsewhere && (
         <button
@@ -415,7 +416,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
           style={{ margin: "0 1rem 0.5rem", textAlign: "left" }}
           onClick={() => onNavigate("galaxy")}
         >
-          ▸ Next: {objectiveElsewhere.label} — jump to {objectiveElsewhere.systemName}
+          {t("system.next", { label: objectiveElsewhere.label, system: objectiveElsewhere.systemName })}
         </button>
       )}
       <div style={{ flex: 1, position: "relative" }}>
@@ -426,12 +427,12 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
         {nearPoi && nearPoi.kind === "station" && (
           <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", display: "flex", gap: "0.75rem", alignItems: "center" }}>
             <span>{nearPoi.name}</span>
-            <button className="btn primary" onClick={() => onDock(nearPoi.id)}>Dock</button>
+            <button className="btn primary" onClick={() => onDock(nearPoi.id)}>{t("common.dock")}</button>
           </div>
         )}
         {nearPoi && nearPoi.kind === "asteroidField" && (
           <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", minWidth: 220 }}>
-            <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>Mining {nearPoi.name}...</div>
+            <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>{t("system.mining", { name: nearPoi.name })}</div>
             <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${progressPct * 100}%`, background: "var(--cyan)" }} />
             </div>
@@ -439,7 +440,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
         )}
         {nearPoi && nearPoi.kind === "wreck" && (
           <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", minWidth: 220 }}>
-            <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>Salvaging {nearPoi.name}...</div>
+            <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>{t("system.salvaging", { name: nearPoi.name })}</div>
             <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${progressPct * 100}%`, background: "var(--violet)" }} />
             </div>
@@ -453,24 +454,24 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
             <div className="panel accent scanline" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", minWidth: 260, textAlign: "center", ["--accent" as any]: "var(--violet)" }}>
               <div style={{ fontSize: "0.85rem", marginBottom: "0.15rem", fontWeight: 700 }}>{nearPoi.name}</div>
               <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "0.55rem" }}>
-                The rift is stable enough to enter. Choose how deep.
+                {t("system.riftPrompt")}
               </div>
               <div style={{ display: "flex", gap: "0.4rem", justifyContent: "center", flexWrap: "wrap" }}>
-                <button className="btn" onClick={() => onEngage(tiers.shallow, nearPoi.id)}>Shallow Dive</button>
-                <button className="btn" onClick={() => onEngage(tiers.deep, nearPoi.id)}>Deep Dive</button>
-                <button className="btn danger" onClick={() => onEngage(tiers.abyssal, nearPoi.id)}>Abyssal Dive</button>
+                <button className="btn" onClick={() => onEngage(tiers.shallow, nearPoi.id)}>{t("system.riftShallow")}</button>
+                <button className="btn" onClick={() => onEngage(tiers.deep, nearPoi.id)}>{t("system.riftDeep")}</button>
+                <button className="btn danger" onClick={() => onEngage(tiers.abyssal, nearPoi.id)}>{t("system.riftAbyssal")}</button>
               </div>
             </div>
           );
         })()}
         {isBounty && nearPoi && (
           <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", fontSize: "0.72rem", color: "var(--amber)", background: "rgba(3,5,9,0.7)", padding: "0.3rem 0.7rem", borderRadius: 999, border: "1px solid var(--amber)" }}>
-            Bounty contact — repeatable
+            {t("system.bountyContact")}
           </div>
         )}
       </div>
       <div style={{ padding: "0.5rem 1rem", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-        Drag/tap to fly, or WASD / arrow keys. Approach stations, fields, wrecks, rifts, and contacts to interact.
+        {t("system.hint")}
       </div>
     </div>
   );

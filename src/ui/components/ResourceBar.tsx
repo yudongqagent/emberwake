@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { state } from "../../state/store";
 import type { ResourceType } from "../../data/types";
-import { ResourceIcon, RESOURCE_LABEL, RESOURCE_INFO } from "./Icons";
+import { ResourceIcon, resourceLabel, resourceInfo } from "./Icons";
 import { useAnimatedInt } from "../hooks/useAnimatedNumber";
 
 const ORDER: ResourceType[] = ["salvage", "sourcePoints", "alloy", "originEssence", "insight"];
@@ -58,7 +58,7 @@ function ResourceChip({
           e.stopPropagation();
           onToggle();
         }}
-        aria-label={`${RESOURCE_LABEL[type]}: what is this for?`}
+        aria-label={`${resourceLabel(type)}: what is this for?`}
       >
         <ResourceIcon type={type} size={14} />
         {shown}
@@ -80,9 +80,9 @@ function ResourceChip({
         >
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
             <ResourceIcon type={type} size={15} />
-            <span style={{ fontWeight: 700, color: "var(--text-hi)" }}>{RESOURCE_LABEL[type]}</span>
+            <span style={{ fontWeight: 700, color: "var(--text-hi)" }}>{resourceLabel(type)}</span>
           </div>
-          <div style={{ color: "var(--text-mid)" }}>{RESOURCE_INFO[type]}</div>
+          <div style={{ color: "var(--text-mid)" }}>{resourceInfo(type)}</div>
         </div>
       )}
     </span>

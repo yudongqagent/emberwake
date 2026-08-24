@@ -1,6 +1,7 @@
 import { Component } from "preact";
 import type { ComponentChildren } from "preact";
 import { reportError } from "../../engine/errorReporting";
+import { t } from "../../i18n/strings";
 
 interface Props {
   children: ComponentChildren;
@@ -39,13 +40,13 @@ export class ErrorBoundary extends Component<Props, State> {
           style={{ margin: "1rem", padding: "1.25rem", textAlign: "center", ["--accent" as any]: "var(--red)" }}
         >
           <div className="title" style={{ color: "var(--red)", marginBottom: "0.5rem" }}>
-            {this.props.label} glitched
+            {t("errorBoundary.glitched", { label: this.props.label })}
           </div>
           <div style={{ color: "var(--text-mid)", fontSize: "0.85rem", marginBottom: "0.85rem" }}>
-            Something unexpected happened here and recovered instead of freezing. Your progress is saved.
+            {t("errorBoundary.body")}
           </div>
           <button className="btn primary" onClick={() => this.setState({ error: null })}>
-            Continue
+            {t("common.continue")}
           </button>
         </div>
       );

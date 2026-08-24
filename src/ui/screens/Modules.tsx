@@ -9,6 +9,7 @@ import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon, ResourceIcon } from "../components/Icons";
 import { Bar, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 import type { ModuleType, ModuleInstance } from "../../data/types";
+import { t } from "../../i18n/strings";
 
 const TYPE_ORDER: ModuleType[] = ["weapon", "armor", "engine", "utility"];
 
@@ -28,7 +29,7 @@ function slotLayout(hullClassId: string) {
 export function Modules() {
   const ship = flagship.value;
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
-  if (!ship) return <div style={{ padding: "1rem" }}>No flagship assigned.</div>;
+  if (!ship) return <div style={{ padding: "1rem" }}>{t("modules.noFlagship")}</div>;
 
   const layout = slotLayout(ship.hullClass);
   const usedPower = ship.equipped.reduce((sum, id) => {
@@ -43,13 +44,13 @@ export function Modules() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <div className="title" style={{ fontSize: "1.2rem" }}>Modules — {ship.name}</div>
+      <div className="title" style={{ fontSize: "1.2rem" }}>{t("modules.titleFor", { ship: ship.name })}</div>
 
       <div className="panel" style={{ padding: "0.9rem 1rem" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <PowerIcon size={18} color="var(--amber)" />
-            <span className="eyebrow">Power Draw</span>
+            <span className="eyebrow">{t("modules.powerDraw")}</span>
           </div>
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, color: overdrawn ? "var(--red)" : "var(--text-hi)" }}>
             <AnimatedFraction current={usedPower} max={capacity} />
@@ -70,7 +71,7 @@ export function Modules() {
             <div key={slot.index} className={`panel ${mod ? "accent" : ""}`} style={{ padding: "0.85rem", ["--accent" as any]: typeColor }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
                 <ModuleTypeIcon type={slot.type} size={15} />
-                <span className="eyebrow" style={{ color: typeColor }}>{slot.type}</span>
+                <span className="eyebrow" style={{ color: typeColor }}>{t(`moduleType.${slot.type}`)}</span>
               </div>
               {mod && def ? (
                 <>
@@ -79,10 +80,10 @@ export function Modules() {
                     <ModuleRarityTag rarity={mod.rarity} />
                   </div>
                   <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", margin: "0.45rem 0" }}>
-                    <span>Pwr {def.powerDraw}</span>
-                    <span>CD {def.cooldown ?? "—"}</span>
-                    {def.baseDamage ? <span style={{ color: "var(--red)" }}>Dmg {computeModuleDamage(mod)}</span> : null}
-                    {def.baseBlock ? <span style={{ color: "var(--cyan)" }}>Block {computeModuleBlock(mod)}</span> : null}
+                    <span>{t("modules.pwr", { value: def.powerDraw })}</span>
+                    <span>{t("modules.cd", { value: def.cooldown ?? "—" })}</span>
+                    {def.baseDamage ? <span style={{ color: "var(--red)" }}>{t("modules.dmg", { value: computeModuleDamage(mod) })}</span> : null}
+                    {def.baseBlock ? <span style={{ color: "var(--cyan)" }}>{t("modules.block", { value: computeModuleBlock(mod) })}</span> : null}
                   </div>
                   {(def.baseDamage !== undefined || def.baseBlock !== undefined) && (
                     <div style={{ marginBottom: "0.5rem" }}>
@@ -90,14 +91,14 @@ export function Modules() {
                     </div>
                   )}
                   <div style={{ display: "flex", gap: "0.4rem" }}>
-                    <button className="btn" onClick={() => setPickerSlot(slot.index)}>Swap</button>
-                    <button className="btn danger" onClick={() => equipModule(ship.id, slot.index, null)}>Remove</button>
+                    <button className="btn" onClick={() => setPickerSlot(slot.index)}>{t("modules.swap")}</button>
+                    <button className="btn danger" onClick={() => equipModule(ship.id, slot.index, null)}>{t("modules.remove")}</button>
                   </div>
                   <LockRow moduleId={mod.id} traits={mod.traits} />
                 </>
               ) : (
                 <button className="btn ghost" style={{ marginTop: "0.6rem", width: "100%" }} onClick={() => setPickerSlot(slot.index)}>
-                  Empty — Socket
+                  {t("modules.emptySocket")}
                 </button>
               )}
             </div>
@@ -140,7 +141,7 @@ function InventoryPanel({ inventory }: { inventory: ModuleInstance[] }) {
   return (
     <div className="panel" style={{ padding: "0.9rem 1rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span className="eyebrow">Inventory — {inventory.length} unequipped</span>
+        <span className="eyebrow">{t("modules.inventory", { count: inventory.length })}</span>
         {duplicateIdsToSell.length > 0 && (
           <button
             className="btn ghost"
@@ -150,13 +151,13 @@ function InventoryPanel({ inventory }: { inventory: ModuleInstance[] }) {
               setLastSale({ count: duplicateIdsToSell.length, refund: duplicateRefund });
             }}
           >
-            Auto-Sell {duplicateIdsToSell.length} Duplicates — +{duplicateRefund} <ResourceIcon type="sourcePoints" size={11} />
+            {t("modules.autoSellDuplicates", { count: duplicateIdsToSell.length, refund: duplicateRefund })} <ResourceIcon type="sourcePoints" size={11} />
           </button>
         )}
       </div>
       {lastSale && (
         <div style={{ fontSize: "0.72rem", color: "var(--green)" }}>
-          Sold {lastSale.count} duplicate{lastSale.count === 1 ? "" : "s"} for {lastSale.refund} Source Points.
+          {t("modules.soldDuplicates", { count: lastSale.count, plural: lastSale.count === 1 ? "" : "s", refund: lastSale.refund })}
         </div>
       )}
       {inventory.length > 0 && (
@@ -179,7 +180,7 @@ function InventoryPanel({ inventory }: { inventory: ModuleInstance[] }) {
                     setLastSale({ count: 1, refund });
                   }}
                 >
-                  Sell +{refund}
+                  {t("modules.sellPlus", { value: refund })}
                 </button>
               </div>
             );
@@ -240,7 +241,7 @@ function LockRow({ moduleId, traits }: { moduleId: string; traits: string[] }) {
             state.value = { ...state.value, modules };
           }}
         >
-          Lock — reroll trait 1 (Insight {cost})
+          {t("modules.lockReroll", { cost })}
         </button>
       )}
     </div>
@@ -264,10 +265,10 @@ function PickerModal({
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.6rem" }}>
           <ModuleTypeIcon type={type} size={18} />
           <div className="title" style={{ fontSize: "0.9rem", textTransform: "capitalize" }}>
-            Select {type} module
+            {t("modules.selectType", { type: t(`moduleType.${type}`) })}
           </div>
         </div>
-        {options.length === 0 && <div style={{ color: "var(--text-dim)", padding: "0.5rem 0" }}>None owned. Visit a Module Fabricator.</div>}
+        {options.length === 0 && <div style={{ color: "var(--text-dim)", padding: "0.5rem 0" }}>{t("modules.noneOwned")}</div>}
         {options.map((m) => {
           const def = moduleDefById(m.defId);
           return (
@@ -277,12 +278,12 @@ function PickerModal({
                 <span>{def.name}</span>
                 <ModuleRarityTag rarity={m.rarity} />
               </div>
-              <button className="btn primary" onClick={() => onPick(m.id)}>Equip</button>
+              <button className="btn primary" onClick={() => onPick(m.id)}>{t("modules.equip")}</button>
             </div>
           );
         })}
         <div style={{ marginTop: "0.75rem" }}>
-          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn ghost" onClick={onClose}>{t("modules.cancel")}</button>
         </div>
       </div>
     </div>

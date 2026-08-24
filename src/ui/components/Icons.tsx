@@ -1,4 +1,5 @@
 import type { ResourceType, ModuleType, CrewRole, FactionId, ShipRarity } from "../../data/types";
+import { language } from "../../i18n/language";
 
 interface IconProps {
   size?: number;
@@ -77,25 +78,47 @@ export const RESOURCE_COLOR: Record<ResourceType, string> = {
   insight: "#b98cff",
 };
 
-export const RESOURCE_LABEL: Record<ResourceType, string> = {
+const RESOURCE_LABEL_EN: Record<ResourceType, string> = {
   salvage: "Salvage",
   sourcePoints: "Source Points",
   alloy: "Alloy",
   originEssence: "Origin Essence",
   insight: "Insight",
 };
+const RESOURCE_LABEL_ZH: Record<ResourceType, string> = {
+  salvage: "废料",
+  sourcePoints: "源点",
+  alloy: "合金",
+  originEssence: "本源精华",
+  insight: "洞悉",
+};
 
 /** Issue #2 (2026-08 playtest): the player couldn't tell what any resource was
  * *for* — five icons and numbers with no legible purpose. Each entry names the
  * actual, current spend point(s) in the code, not an aspirational description —
- * see ResourceBar's tap-to-reveal panel. */
-export const RESOURCE_INFO: Record<ResourceType, string> = {
+ * see ResourceBar's tap-to-reveal panel. Issue #11: functions (not plain records)
+ * so they read the live language signal instead of freezing at import time. */
+const RESOURCE_INFO_EN: Record<ResourceType, string> = {
   salvage: "Raw scrap from combat and mining. Repairs your hull at any station, and trades for Alloy.",
   sourcePoints: "The Shipwright and Fabricator's currency — spend it on new hulls, new modules, and rerolling their offers.",
   alloy: "Refined material. Outfits new crew recruits, or trades back to Salvage if you're short on it.",
   originEssence: "Earned from tougher fights. Higher hull tiers require it alongside Source Points — the better the ship, the more it costs.",
   insight: "Earned from story and exploration. Spend it to lock in a module's trait instead of leaving it to the next roll.",
 };
+const RESOURCE_INFO_ZH: Record<ResourceType, string> = {
+  salvage: "来自战斗与采矿的原始废料。可在任意空间站修复船体，也可兑换合金。",
+  sourcePoints: "造船师与制造工坊使用的货币——用于购买新战舰、新模组，以及刷新他们的报价。",
+  alloy: "精炼材料。用于装备新招募的船员，短缺废料时也可兑换回废料。",
+  originEssence: "来自更艰难的战斗。更高的船体等级除源点外还需要它——战舰越强，花费越高。",
+  insight: "来自剧情与探索。花费它可以直接锁定模组特性，而不必依赖下一次随机结果。",
+};
+
+export function resourceLabel(type: ResourceType): string {
+  return (language.value === "zh" ? RESOURCE_LABEL_ZH : RESOURCE_LABEL_EN)[type];
+}
+export function resourceInfo(type: ResourceType): string {
+  return (language.value === "zh" ? RESOURCE_INFO_ZH : RESOURCE_INFO_EN)[type];
+}
 
 export function ResourceIcon({ type, size = 18 }: { type: ResourceType; size?: number }) {
   const Glyph = RESOURCE_GLYPHS[type];

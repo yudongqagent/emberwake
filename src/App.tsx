@@ -15,16 +15,18 @@ import type { StoryScene } from "./data/types";
 import { setMuted, isMuted } from "./audio/engine";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
+import { t } from "./i18n/strings";
+import { language, setLanguage } from "./i18n/language";
 
 type Screen = "bridge" | "system" | "galaxy" | "fleet" | "modules" | "crew";
 
-const NAV_ITEMS: { id: Screen; label: string }[] = [
-  { id: "bridge", label: "Bridge" },
-  { id: "system", label: "System" },
-  { id: "galaxy", label: "Galaxy" },
-  { id: "fleet", label: "Fleet" },
-  { id: "modules", label: "Modules" },
-  { id: "crew", label: "Crew" },
+const NAV_ITEMS: { id: Screen; labelKey: string }[] = [
+  { id: "bridge", labelKey: "nav.bridge" },
+  { id: "system", labelKey: "nav.system" },
+  { id: "galaxy", labelKey: "nav.galaxy" },
+  { id: "fleet", labelKey: "nav.fleet" },
+  { id: "modules", labelKey: "nav.modules" },
+  { id: "crew", labelKey: "nav.crew" },
 ];
 
 interface PendingCombat {
@@ -70,12 +72,20 @@ export function App() {
       <ResourceBar />
       <button
         className="btn ghost"
+        style={{ flex: "none", padding: "0.55em 0.7em", fontFamily: "var(--font-display)", fontSize: "0.7rem", fontWeight: 700 }}
+        onClick={() => setLanguage(language.value === "zh" ? "en" : "zh")}
+        aria-label="Toggle language"
+      >
+        {t("nav.language")}
+      </button>
+      <button
+        className="btn ghost"
         style={{ flex: "none", padding: "0.55em 0.7em" }}
         onClick={() => {
           setMuted(!muted);
           setMutedState(!muted);
         }}
-        aria-label={muted ? "Unmute" : "Mute"}
+        aria-label={muted ? t("nav.unmute") : t("nav.mute")}
       >
         <SoundIcon muted={muted} size={16} />
       </button>
@@ -85,7 +95,7 @@ export function App() {
   if (combat) {
     const isPoiCombat = "poiId" in combat;
     return (
-      <ErrorBoundary label="Combat">
+      <ErrorBoundary label={t("combat.title")}>
         <Combat
           encounterId={combat.encounterId}
           poiId={isPoiCombat ? combat.poiId : null}
@@ -102,7 +112,7 @@ export function App() {
       {navBar}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <div key={screen} className="screen-enter" style={{ position: "absolute", inset: 0 }}>
-          <ErrorBoundary label={NAV_ITEMS.find((n) => n.id === screen)?.label ?? "Screen"}>
+          <ErrorBoundary label={t(NAV_ITEMS.find((n) => n.id === screen)?.labelKey ?? "nav.system")}>
             {screen === "bridge" && <Bridge onNavigate={(s) => setScreen(s as Screen)} />}
             {screen === "galaxy" && <GalaxyView onNavigate={(s) => setScreen(s as Screen)} />}
             {screen === "system" && (
@@ -118,12 +128,12 @@ export function App() {
           </ErrorBoundary>
         </div>
         {docked && (
-          <ErrorBoundary label="Station">
+          <ErrorBoundary label={t("station.title")}>
             <StationPanel onClose={() => setDocked(false)} />
           </ErrorBoundary>
         )}
         {scene && !docked && (
-          <ErrorBoundary label="Story">
+          <ErrorBoundary label={t("story.title")}>
             <StoryOverlay scene={scene} onComplete={handleSceneComplete} />
           </ErrorBoundary>
         )}
@@ -142,7 +152,7 @@ export function App() {
           zIndex: 2,
         }}
       >
-        {NAV_ITEMS.map(({ id, label }) => {
+        {NAV_ITEMS.map(({ id, labelKey }) => {
           const active = screen === id;
           return (
             <button
@@ -169,7 +179,7 @@ export function App() {
               }}
             >
               <NavIcon name={id} size={19} color={active ? "var(--cyan)" : "currentColor"} />
-              {label}
+              {t(labelKey)}
             </button>
           );
         })}

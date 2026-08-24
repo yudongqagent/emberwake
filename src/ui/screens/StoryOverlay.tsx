@@ -1,8 +1,11 @@
 import { useState } from "preact/hooks";
 import type { StoryScene } from "../../data/types";
 import { playSfx } from "../../audio/engine";
+import { t } from "../../i18n/strings";
+import { localizedScene } from "../../i18n/story";
 
-export function StoryOverlay({ scene, onComplete }: { scene: StoryScene; onComplete: (scene: StoryScene) => void }) {
+export function StoryOverlay({ scene: rawScene, onComplete }: { scene: StoryScene; onComplete: (scene: StoryScene) => void }) {
+  const scene = localizedScene(rawScene);
   const [lineIdx, setLineIdx] = useState(0);
   const [showChoices, setShowChoices] = useState(false);
   const line = scene.lines[lineIdx];
@@ -71,12 +74,12 @@ export function StoryOverlay({ scene, onComplete }: { scene: StoryScene; onCompl
                   />
                 ))}
               </div>
-              <span className="eyebrow" style={{ color: "var(--text-dim)" }}>Tap to continue</span>
+              <span className="eyebrow" style={{ color: "var(--text-dim)" }}>{t("story.tapToContinue")}</span>
             </div>
           </>
         ) : (
           <div onClick={(e) => e.stopPropagation()}>
-            <div className="eyebrow" style={{ color: "var(--text-mid)", marginBottom: "0.85rem" }}>Choose your approach</div>
+            <div className="eyebrow" style={{ color: "var(--text-mid)", marginBottom: "0.85rem" }}>{t("story.chooseApproach")}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {scene.choices!.map((choice, i) => (
                 <button

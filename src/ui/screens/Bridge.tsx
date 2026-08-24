@@ -7,6 +7,7 @@ import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, AptitudeIcon, LevelIcon, LocationIcon, CrewRoleIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
 import { StatReadout, Bar, hullBarKind, AnimatedFraction } from "../components/StatBlock";
 import { BridgeViewscreen } from "../components/BridgeViewscreen";
+import { t } from "../../i18n/strings";
 
 export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void }) {
   const ship = flagship.value;
@@ -31,10 +32,10 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
 
       {objective && (
         <div className="panel accent" style={{ padding: "1.1rem", ["--accent" as any]: "var(--amber)" }}>
-          <div className="eyebrow" style={{ color: "var(--amber)" }}>Next Objective</div>
+          <div className="eyebrow" style={{ color: "var(--amber)" }}>{t("bridge.nextObjective")}</div>
           <div style={{ marginTop: "0.4rem", fontSize: "1.05rem", fontWeight: 600 }}>{objective.label}</div>
           <div style={{ color: "var(--text-mid)", fontSize: "0.85rem", marginTop: "0.2rem" }}>
-            {sameSystem ? "Here — look for the marker in system view." : `Travel to ${objective.systemName}`}
+            {sameSystem ? t("bridge.hereMarker") : t("bridge.travelTo", { system: objective.systemName })}
           </div>
           <button
             className="btn primary"
@@ -49,7 +50,7 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
               }
             }}
           >
-            {sameSystem ? "Go to System View" : `Jump to ${objective.systemName}`}
+            {sameSystem ? t("bridge.goToSystem") : t("bridge.jumpTo", { system: objective.systemName })}
           </button>
         </div>
       )}
@@ -58,7 +59,7 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
         <div className="panel" style={{ padding: "1.1rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div className="eyebrow">Flagship</div>
+              <div className="eyebrow">{t("bridge.flagship")}</div>
               <div style={{ fontSize: "1.15rem", fontWeight: 700, marginTop: "0.15rem" }}>{ship.name}</div>
               <div style={{ color: "var(--text-mid)", fontSize: "0.82rem" }}>
                 {hullDef.name} ({hullDef.nameCn})
@@ -72,21 +73,21 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: "0.75rem", marginTop: "0.9rem" }}>
-            <StatReadout icon={<HullIcon size={18} />} value={<AnimatedFraction current={ship.currentHp} max={effectiveMaxHull(ship)} />} label="Hull" />
-            <StatReadout icon={<PowerIcon size={18} />} value={computePowerCapacity(ship)} label="Power" color="var(--amber)" />
-            <StatReadout icon={<SpeedIcon size={18} />} value={computeSpeed(ship)} label="Speed" color="var(--cyan)" />
-            <StatReadout icon={<EvasionIcon size={18} />} value={`${Math.round(computeBaseEvasion(ship) * 100)}%`} label="Evasion" color="var(--green)" />
-            <StatReadout icon={<CritIcon size={18} />} value={`${Math.round(computeBaseCritChance(ship) * 100)}%`} label="Crit" color="var(--red)" />
-            <StatReadout icon={<LevelIcon size={18} />} value={ship.level} label="Level" color="var(--violet)" />
-            <StatReadout icon={<AptitudeIcon size={18} />} value={ship.scanned ? ship.aptitude! : "??"} label="Aptitude" color="var(--green)" />
+            <StatReadout icon={<HullIcon size={18} />} value={<AnimatedFraction current={ship.currentHp} max={effectiveMaxHull(ship)} />} label={t("bridge.stat.hull")} />
+            <StatReadout icon={<PowerIcon size={18} />} value={computePowerCapacity(ship)} label={t("bridge.stat.power")} color="var(--amber)" />
+            <StatReadout icon={<SpeedIcon size={18} />} value={computeSpeed(ship)} label={t("bridge.stat.speed")} color="var(--cyan)" />
+            <StatReadout icon={<EvasionIcon size={18} />} value={`${Math.round(computeBaseEvasion(ship) * 100)}%`} label={t("bridge.stat.evasion")} color="var(--green)" />
+            <StatReadout icon={<CritIcon size={18} />} value={`${Math.round(computeBaseCritChance(ship) * 100)}%`} label={t("bridge.stat.crit")} color="var(--red)" />
+            <StatReadout icon={<LevelIcon size={18} />} value={ship.level} label={t("bridge.stat.level")} color="var(--violet)" />
+            <StatReadout icon={<AptitudeIcon size={18} />} value={ship.scanned ? ship.aptitude! : "??"} label={t("bridge.stat.aptitude")} color="var(--green)" />
           </div>
         </div>
       )}
 
       <div className="panel" style={{ padding: "1.1rem" }}>
-        <div className="eyebrow">Crew ({crewCount})</div>
+        <div className="eyebrow">{t("bridge.crewCount", { count: crewCount })}</div>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.6rem" }}>
-          {state.value.crew.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>No crew assigned yet — recruit at a station.</div>}
+          {state.value.crew.length === 0 && <div style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>{t("bridge.noCrew")}</div>}
           {state.value.crew.map((c) => {
             const def = crewDefById(c.defId);
             return (
@@ -97,7 +98,7 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: "0.9rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{def.name}</div>
                 </div>
-                <span className="eyebrow" style={{ color: "var(--text-dim)" }}>{def.role}</span>
+                <span className="eyebrow" style={{ color: "var(--text-dim)" }}>{t(`crewRole.${def.role}`)}</span>
               </div>
             );
           })}
@@ -106,16 +107,16 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.6rem" }}>
         <button className="btn primary" onClick={() => onNavigate("galaxy")}>
-          <NavIcon name="galaxy" size={15} /> Galaxy Map
+          <NavIcon name="galaxy" size={15} /> {t("bridge.galaxyMap")}
         </button>
         <button className="btn" onClick={() => onNavigate("fleet")}>
-          <NavIcon name="fleet" size={15} /> Fleet
+          <NavIcon name="fleet" size={15} /> {t("bridge.fleet")}
         </button>
         <button className="btn" onClick={() => onNavigate("modules")}>
-          <NavIcon name="modules" size={15} /> Modules
+          <NavIcon name="modules" size={15} /> {t("bridge.modules")}
         </button>
         <button className="btn" onClick={() => onNavigate("crew")}>
-          <NavIcon name="crew" size={15} /> Crew
+          <NavIcon name="crew" size={15} /> {t("bridge.crew")}
         </button>
       </div>
     </div>
