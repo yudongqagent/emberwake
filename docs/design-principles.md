@@ -127,3 +127,59 @@ the same way that doc's §4 requires an actual audit before claiming a content f
    optional input (never repositioning, never choosing a target, just mashing the
    first available action) would have gone meaningfully worse. If not, the depth
    isn't real yet, just available.
+
+## Premium Gacha-RPG Grounding (UI/UX and core-loop design)
+
+**Origin:** player feedback (2026-08-23) that the interface and gameplay still read
+as rough, backed by targeted research into what makes premium gacha-RPGs (Genshin
+Impact, Honkai: Star Rail, Arknights, Knights Chronicle) feel considered rather than
+assembled. This section is additional grounding for the same standing work — the
+Player-Tested Anti-Patterns above stay in force; these are new, checkable additions
+alongside them, not a replacement.
+
+### UI/UX
+
+1. **Icon-heavy, not text-heavy.** Every resource, rarity, stat, and status should
+   have a distinct icon a player learns to recognize at a glance, with text as
+   backup, not the primary channel — fast recognition beats reading. *How to check:*
+   for any given resource/rarity/stat/status shown in the UI, is it communicated by a
+   text label alone anywhere it could instead be (or be paired with) an icon?
+
+2. **Progressive disclosure.** New systems (crew recruitment, modules, ship
+   upgrades, rift diving, etc.) should reveal themselves one at a time as the player
+   actually reaches them, not all appear on a brand-new save's first screen. This
+   matters for new-player retention and for the interface reading as considered
+   rather than cluttered. *How to check:* on a fresh save with no story flags set,
+   does every system's UI/nav entry show immediately, or only the ones the player has
+   actually unlocked?
+
+3. **Visual polish must never cost usability.** Striking sci-fi visuals matter, but
+   navigation, hit targets, and information hierarchy win every time they conflict
+   with a visual flourish. *How to check:* for any new visual treatment, would a
+   player still find the interactive element and understand its state (enabled,
+   disabled, selected) with the animation/glow/scanline effect turned off?
+
+### Gameplay loop
+
+4. **Core loop and meta loop are separate design problems, and both need dedicated
+   attention.** Core loop = what's fun in the next 5 minutes (combat, moment-to-
+   moment play). Meta loop = what brings the player back in 5 months (progression,
+   resource management, collection). A strong meta loop cannot compensate for a weak
+   core loop, or vice versa — don't let effort on one substitute for the other.
+   *How to check:* name the specific thing making combat itself fun right now,
+   independent of any reward it grants. If the honest answer is "the rewards
+   afterward," the core loop needs its own work, not more meta-progression on top.
+
+5. **Reward cadence: something every 30-90 seconds of active play, a bigger milestone
+   every 10-15 minutes.** This is measurable, not a vibe. *How to check:* self-
+   playtest a real combat session and log the wall-clock gap between feedback/reward
+   events (a hit landing, a status proc, a resource tick, a level-up). Any gap over
+   90 seconds with zero meaningful event is a concrete pacing gap to close.
+
+6. **Progression needs both vertical and horizontal growth.** Vertical = bigger
+   numbers (more damage, more hull). Horizontal = new things to actually do
+   differently (a new ability, a new tactical option, a new mode) — AoE skills, a
+   signature ultimate, and real-time positioning are horizontal progression, and they
+   matter as much as raw stat growth. *How to check:* across a full act of play, list
+   what got numerically bigger vs. what became a genuinely new option the player
+   didn't have before. If the list is vertical-only, horizontal growth is missing.
