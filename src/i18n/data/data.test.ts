@@ -3,10 +3,17 @@ import { MODULE_DEFS } from "../../data/modules";
 import { CREW_DEFS } from "../../data/crew";
 import { NAMED_SHIP_DEFS } from "../../data/namedShips";
 import { ENCOUNTER_DEFS, BOUNTY_ENCOUNTER_DEFS } from "../../data/encounters";
+import { BAUHINIA_REACH } from "../../data/galaxies/bauhiniaReach";
+import { LIONSHEART_EXPANSE } from "../../data/galaxies/lionsheartExpanse";
+import { SWANREACH_COMBINE } from "../../data/galaxies/swanreachCombine";
+import { FRACTURED_VEIL } from "../../data/galaxies/fracturedVeil";
+import { DEEP_ORIGIN } from "../../data/galaxies/deepOrigin";
+import { UMBRAL_LINE } from "../../data/galaxies/umbralLine";
 import { MODULES_ZH } from "./modules";
 import { CREW_ZH } from "./crew";
 import { NAMED_SHIPS_ZH } from "./namedShips";
 import { ENCOUNTER_NAMES_ZH, ENEMY_NAMES_ZH } from "./encounters";
+import { GALAXY_NAMES_ZH, SYSTEM_NAMES_ZH, POI_NAMES_ZH } from "./places";
 
 // Issue #11: the module/crew/named-ship translation overlays are looked up by id at
 // render time (see i18n/data/index.ts) — a typo'd or stale id here just silently
@@ -67,6 +74,19 @@ describe("module/crew/named-ship translation overlays stay in sync with English 
       expect(ENCOUNTER_NAMES_ZH[def.id], `encounter "${def.id}" has no Chinese title`).toBeDefined();
       for (const enemy of def.enemies) {
         expect(ENEMY_NAMES_ZH[enemy.name], `encounter "${def.id}": enemy "${enemy.name}" has no Chinese name`).toBeDefined();
+      }
+    }
+  });
+
+  it("every galaxy, system, and POI has a Chinese name", () => {
+    const galaxies = [BAUHINIA_REACH, LIONSHEART_EXPANSE, SWANREACH_COMBINE, FRACTURED_VEIL, DEEP_ORIGIN, UMBRAL_LINE];
+    for (const galaxy of galaxies) {
+      expect(GALAXY_NAMES_ZH[galaxy.id], `galaxy "${galaxy.id}" has no Chinese name`).toBeDefined();
+      for (const system of galaxy.systems) {
+        expect(SYSTEM_NAMES_ZH[system.id], `system "${system.id}" has no Chinese name`).toBeDefined();
+        for (const poi of system.pois) {
+          expect(POI_NAMES_ZH[poi.id], `POI "${poi.id}" (system "${system.id}") has no Chinese name`).toBeDefined();
+        }
       }
     }
   });

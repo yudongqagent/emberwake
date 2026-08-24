@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useAnimatedInt } from "../hooks/useAnimatedNumber";
+import { t } from "../../i18n/strings";
 
 /** Small icon + value readout used across Bridge/Fleet/Modules/Combat instead of "Label: number" text rows.
  * Numeric values count up/down on change (see docs/visual-standards.md §2) instead of snapping;
@@ -59,10 +60,11 @@ export function hullBarKind(fraction: number): "good" | "warn" | "danger" {
 /** Makes an item's random roll legible: every draw lands somewhere in its rarity's
  * range, and this is where. High rolls get a distinct celebratory treatment so the
  * variance actually reads as exciting rather than invisible. */
-export function RollQualityBadge({ roll, label = "Roll" }: { roll: number; label?: string }) {
+export function RollQualityBadge({ roll, label }: { roll: number; label?: string }) {
   const pct = Math.round(Math.max(0, Math.min(1, roll)) * 100);
   const color = pct >= 80 ? "var(--amber)" : pct >= 50 ? "var(--cyan)" : pct >= 25 ? "var(--text-mid)" : "var(--red)";
-  const callout = pct >= 85 ? "High Roll!" : pct <= 15 ? "Low Roll" : null;
+  const callout = pct >= 85 ? t("common.highRoll") : pct <= 15 ? t("common.lowRoll") : null;
+  const shownLabel = label ?? t("common.roll");
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4em" }}>
       <span
@@ -74,7 +76,7 @@ export function RollQualityBadge({ roll, label = "Roll" }: { roll: number; label
           textShadow: pct >= 85 ? `0 0 6px ${color}` : "none",
         }}
       >
-        {label} {pct}%
+        {shownLabel} {pct}%
       </span>
       {callout && (
         <span

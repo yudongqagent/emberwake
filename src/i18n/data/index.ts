@@ -3,7 +3,8 @@ import { MODULES_ZH } from "./modules";
 import { CREW_ZH } from "./crew";
 import { NAMED_SHIPS_ZH } from "./namedShips";
 import { ENCOUNTER_NAMES_ZH, ENEMY_NAMES_ZH } from "./encounters";
-import type { ModuleDef, ModuleTrait, CrewDef, EncounterDef } from "../../data/types";
+import { GALAXY_NAMES_ZH, SYSTEM_NAMES_ZH, POI_NAMES_ZH } from "./places";
+import type { ModuleDef, ModuleTrait, CrewDef, EncounterDef, GalaxyDef, SystemDef, Poi } from "../../data/types";
 import type { NamedShipDef } from "../../data/namedShips";
 
 /** Issue #11: thin localization wrappers around the module/crew/named-ship data
@@ -53,6 +54,14 @@ export function localizedNamedShipFlavor(def: NamedShipDef): string {
   return NAMED_SHIPS_ZH[def.id]?.flavor ?? def.flavor;
 }
 
+/** Hull classes already carry both languages natively (HullClassDef.name/nameCn —
+ * predates this i18n system), just always displayed English-primary. Swaps the
+ * order so Chinese mode reads primary-language-first instead of "Corvette-class
+ * (护卫舰)" staying English-first even with the language toggle set to Chinese. */
+export function localizedHullClassDisplay(def: { name: string; nameCn: string }): string {
+  return language.value === "zh" ? `${def.nameCn} (${def.name})` : `${def.name} (${def.nameCn})`;
+}
+
 export function localizedEncounterName(def: Pick<EncounterDef, "id" | "name">): string {
   if (language.value !== "zh") return def.name;
   return ENCOUNTER_NAMES_ZH[def.id] ?? def.name;
@@ -66,4 +75,19 @@ export function localizedEncounterName(def: Pick<EncounterDef, "id" | "name">): 
 export function localizedEnemyName(name: string): string {
   if (language.value !== "zh") return name;
   return ENEMY_NAMES_ZH[name] ?? name;
+}
+
+export function localizedGalaxyName(def: Pick<GalaxyDef, "id" | "name">): string {
+  if (language.value !== "zh") return def.name;
+  return GALAXY_NAMES_ZH[def.id] ?? def.name;
+}
+
+export function localizedSystemName(def: Pick<SystemDef, "id" | "name">): string {
+  if (language.value !== "zh") return def.name;
+  return SYSTEM_NAMES_ZH[def.id] ?? def.name;
+}
+
+export function localizedPoiName(def: Pick<Poi, "id" | "name">): string {
+  if (language.value !== "zh") return def.name;
+  return POI_NAMES_ZH[def.id] ?? def.name;
 }

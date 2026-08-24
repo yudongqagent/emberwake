@@ -24,6 +24,7 @@ import {
 } from "../render/shipArt";
 import { reportError } from "../../engine/errorReporting";
 import { t } from "../../i18n/strings";
+import { localizedSystemName, localizedPoiName } from "../../i18n/data";
 
 const REF_W = 1000;
 const REF_H = 600;
@@ -407,7 +408,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div className="title">{system.name}</div>
+        <div className="title">{localizedSystemName(system)}</div>
         <button className="btn" onClick={() => onNavigate("galaxy")}>{t("common.jumpOut")}</button>
       </div>
       {objectiveElsewhere && (
@@ -426,13 +427,13 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
         />
         {nearPoi && nearPoi.kind === "station" && (
           <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", display: "flex", gap: "0.75rem", alignItems: "center" }}>
-            <span>{nearPoi.name}</span>
+            <span>{localizedPoiName(nearPoi)}</span>
             <button className="btn primary" onClick={() => onDock(nearPoi.id)}>{t("common.dock")}</button>
           </div>
         )}
         {nearPoi && nearPoi.kind === "asteroidField" && (
           <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", minWidth: 220 }}>
-            <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>{t("system.mining", { name: nearPoi.name })}</div>
+            <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>{t("system.mining", { name: localizedPoiName(nearPoi) })}</div>
             <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${progressPct * 100}%`, background: "var(--cyan)" }} />
             </div>
@@ -440,7 +441,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
         )}
         {nearPoi && nearPoi.kind === "wreck" && (
           <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", minWidth: 220 }}>
-            <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>{t("system.salvaging", { name: nearPoi.name })}</div>
+            <div style={{ fontSize: "0.85rem", marginBottom: "0.35rem" }}>{t("system.salvaging", { name: localizedPoiName(nearPoi) })}</div>
             <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${progressPct * 100}%`, background: "var(--violet)" }} />
             </div>
@@ -452,7 +453,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
           };
           return (
             <div className="panel accent scanline" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", minWidth: 260, textAlign: "center", ["--accent" as any]: "var(--violet)" }}>
-              <div style={{ fontSize: "0.85rem", marginBottom: "0.15rem", fontWeight: 700 }}>{nearPoi.name}</div>
+              <div style={{ fontSize: "0.85rem", marginBottom: "0.15rem", fontWeight: 700 }}>{localizedPoiName(nearPoi)}</div>
               <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "0.55rem" }}>
                 {t("system.riftPrompt")}
               </div>
@@ -562,6 +563,6 @@ function drawPoi(ctx: CanvasRenderingContext2D, poi: Poi, ex: number, ey: number
   ctx.fillStyle = isObjective ? "#ffe25d" : "rgba(234,246,255,0.75)";
   ctx.font = "12px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(poi.name, ex, ey + poi.radius + 16);
+  ctx.fillText(localizedPoiName(poi), ex, ey + poi.radius + 16);
   ctx.restore();
 }

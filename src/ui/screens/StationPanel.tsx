@@ -15,7 +15,7 @@ import { RollQualityBadge } from "../components/StatBlock";
 import type { ShipInstance, ModuleInstance } from "../../data/types";
 import { pickOne } from "../../engine/rng";
 import { t } from "../../i18n/strings";
-import { localizedModuleName, localizedTrait, localizedCrewName, localizedCrewPassive, localizedNamedShipName, localizedNamedShipActive } from "../../i18n/data";
+import { localizedModuleName, localizedTrait, localizedCrewName, localizedCrewPassive, localizedNamedShipName, localizedNamedShipActive, localizedHullClassDisplay } from "../../i18n/data";
 
 type Tab = "trade" | "shipwright" | "fabricator" | "recruit";
 
@@ -87,7 +87,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
         return (
           <DrawReveal title={drawnShip.namedShipId ? t("station.namedShipAcquired") : t("station.hullAcquired")} accent={drawnShip.namedShipId ? "var(--amber)" : `var(--rarity-${drawnShip.rarity})`} onClose={() => setDrawnShip(null)}>
             <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{drawnShip.name}</div>
-            <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{hullClassById(drawnShip.hullClass).name}</div>
+            <div style={{ color: "var(--text-mid)", margin: "0.4rem 0" }}>{localizedHullClassDisplay(hullClassById(drawnShip.hullClass))}</div>
             {drawnShip.namedShipId && (
               <div style={{ fontSize: "0.78rem", color: "var(--amber)", marginBottom: "0.5rem" }}>
                 {namedShipDefById(drawnShip.namedShipId).active}
@@ -298,7 +298,7 @@ function ShipwrightTab({ onBuy }: { onBuy: (s: ShipInstance) => void }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
               <div>
                 <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{namedDef ? localizedNamedShipName(namedDef) : def.name}</div>
-                <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{def.name} ({def.nameCn})</div>
+                <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>{localizedHullClassDisplay(def)}</div>
               </div>
               <ShipRarityTag rarity={candidate.rarity} showPips={false} />
             </div>

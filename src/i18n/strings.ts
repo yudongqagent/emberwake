@@ -45,6 +45,9 @@ const EN: StringTable = {
   "common.unassign": "Unassign",
   "common.refresh": "Refresh",
   "common.locked": "Locked",
+  "common.roll": "Roll",
+  "common.highRoll": "High Roll!",
+  "common.lowRoll": "Low Roll",
 
   // --- Combat ---
   "combat.overcharge": "Overcharge",
@@ -152,6 +155,7 @@ const EN: StringTable = {
   "galaxy.locked": "Locked",
   "galaxy.jumpTo": "Jump to {system}",
   "galaxy.nextAt": "▸ Next: {label} at {system}",
+  "objective.engage": "Engage {poi}",
   "galaxy.hintMulti": "Tap any discovered system to jump there directly.",
   "galaxy.hintSingle": "More galaxies open as the campaign progresses.",
 
@@ -205,6 +209,7 @@ const EN: StringTable = {
   "bridge.fleet": "Fleet",
   "bridge.modules": "Modules",
   "bridge.crew": "Crew",
+  "bridge.forwardViewport": "Forward Viewport",
   "crewRole.helm": "Helm",
   "crewRole.gunner": "Gunner",
   "crewRole.engineer": "Engineer",
@@ -292,6 +297,9 @@ const ZH: StringTable = {
   "common.unassign": "取消指派",
   "common.refresh": "刷新",
   "common.locked": "未解锁",
+  "common.roll": "词条",
+  "common.highRoll": "高词条！",
+  "common.lowRoll": "低词条",
 
   // --- 战斗 ---
   "combat.overcharge": "超载",
@@ -399,6 +407,7 @@ const ZH: StringTable = {
   "galaxy.locked": "未解锁",
   "galaxy.jumpTo": "跳转至{system}",
   "galaxy.nextAt": "▸ 下一步：{label}，位于{system}",
+  "objective.engage": "迎战{poi}",
   "galaxy.hintMulti": "点击任意已发现的星系即可直接跳转。",
   "galaxy.hintSingle": "随着战役推进将解锁更多星系。",
 
@@ -452,6 +461,7 @@ const ZH: StringTable = {
   "bridge.fleet": "舰队",
   "bridge.modules": "模组",
   "bridge.crew": "船员",
+  "bridge.forwardViewport": "前方视窗",
   "crewRole.helm": "舵手",
   "crewRole.gunner": "炮手",
   "crewRole.engineer": "工程师",

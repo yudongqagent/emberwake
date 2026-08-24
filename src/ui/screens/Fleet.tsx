@@ -7,7 +7,7 @@ import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, SlotsIcon, AptitudeIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
 import { StatReadout, Bar, hullBarKind, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 import { t } from "../../i18n/strings";
-import { localizedNamedShipActive, localizedNamedShipFlavor } from "../../i18n/data";
+import { localizedNamedShipActive, localizedNamedShipFlavor, localizedHullClassDisplay } from "../../i18n/data";
 
 export function Fleet() {
   const activeId = flagship.value?.id;
@@ -43,7 +43,7 @@ export function Fleet() {
                     {ship.name}
                     {isActive && <span className="eyebrow" style={{ color: "var(--cyan)" }}>{t("fleet.flagship")}</span>}
                   </div>
-                  <div style={{ color: "var(--text-mid)", fontSize: "0.8rem" }}>{def.name} ({def.nameCn})</div>
+                  <div style={{ color: "var(--text-mid)", fontSize: "0.8rem" }}>{localizedHullClassDisplay(def)}</div>
                 </div>
               </div>
               <ShipRarityTag rarity={ship.rarity} />

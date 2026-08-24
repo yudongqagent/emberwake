@@ -1,13 +1,22 @@
 import type { ShipRarity, ModuleRarity } from "../../data/types";
 import { RarityPips } from "./Icons";
+import { language } from "../../i18n/language";
 
-const SHIP_RARITY_LABEL: Record<ShipRarity, string> = {
+const SHIP_RARITY_LABEL_EN: Record<ShipRarity, string> = {
   salvage: "Salvage",
   standard: "Standard",
   reinforced: "Reinforced",
   advanced: "Advanced",
   prototype: "Prototype",
   ascendant: "Ascendant",
+};
+const SHIP_RARITY_LABEL_ZH: Record<ShipRarity, string> = {
+  salvage: "废品级",
+  standard: "标准级",
+  reinforced: "强化级",
+  advanced: "高级",
+  prototype: "原型级",
+  ascendant: "超凡级",
 };
 
 export function ShipRarityTag({ rarity, showPips = true }: { rarity: ShipRarity; showPips?: boolean }) {
@@ -35,7 +44,7 @@ export function ShipRarityTag({ rarity, showPips = true }: { rarity: ShipRarity;
           boxShadow: `0 0 8px var(--rarity-${rarity})33`,
         }}
       >
-        {SHIP_RARITY_LABEL[rarity]}
+        {(language.value === "zh" ? SHIP_RARITY_LABEL_ZH : SHIP_RARITY_LABEL_EN)[rarity]}
       </span>
       {showPips && <RarityPips rarity={rarity} />}
     </span>

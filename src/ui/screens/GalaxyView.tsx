@@ -3,6 +3,7 @@ import { unlockedGalaxies, currentGalaxy, state, travelToSystem, getNextObjectiv
 import { playSfx } from "../../audio/engine";
 import { FACTION_HULL_COLOR } from "../render/shipArt";
 import { t } from "../../i18n/strings";
+import { localizedGalaxyName, localizedSystemName } from "../../i18n/data";
 
 function hashSeed(id: string): number {
   let h = 0;
@@ -53,12 +54,12 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
               style={{ flex: "none", whiteSpace: "nowrap", fontSize: "0.7rem", padding: "0.55em 0.9em" }}
               onClick={() => setViewingId(g.id)}
             >
-              {g.name}
+              {localizedGalaxyName(g)}
             </button>
           ))}
         </div>
       )}
-      <div style={{ padding: "0.75rem 1rem" }} className="title">{galaxy.name}</div>
+      <div style={{ padding: "0.75rem 1rem" }} className="title">{localizedGalaxyName(galaxy)}</div>
       {objective && (
         <div style={{ margin: "0 1rem 0.5rem", fontSize: "0.8rem", color: "var(--amber)" }}>
           {t("galaxy.nextAt", { label: objective.label, system: objective.systemName })}
@@ -155,7 +156,7 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
                   </circle>
                 )}
                 <text y={40} textAnchor="middle" fill={isObjective ? "var(--amber)" : "var(--text-hi)"} fontSize={16} fontFamily="var(--font-display)">
-                  {sys.name}
+                  {localizedSystemName(sys)}
                 </text>
               </g>
             );

@@ -8,7 +8,7 @@ import { HullIcon, PowerIcon, AptitudeIcon, LevelIcon, LocationIcon, CrewRoleIco
 import { StatReadout, Bar, hullBarKind, AnimatedFraction } from "../components/StatBlock";
 import { BridgeViewscreen } from "../components/BridgeViewscreen";
 import { t } from "../../i18n/strings";
-import { localizedCrewName } from "../../i18n/data";
+import { localizedCrewName, localizedHullClassDisplay, localizedSystemName, localizedGalaxyName } from "../../i18n/data";
 
 export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void }) {
   const ship = flagship.value;
@@ -20,13 +20,13 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", height: "100%", overflowY: "auto", padding: "1rem" }}>
-      <BridgeViewscreen systemName={currentSystem.value.name} galaxyName={currentGalaxy.value.name} />
+      <BridgeViewscreen systemName={localizedSystemName(currentSystem.value)} galaxyName={localizedGalaxyName(currentGalaxy.value)} />
       <div className="panel scanline" style={{ padding: "1.25rem" }}>
         <div className="title" style={{ fontSize: "1.5rem" }}>Emberwake</div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--text-mid)", marginTop: "0.4rem" }}>
           <LocationIcon size={14} color="var(--cyan)" />
           <span>
-            <strong style={{ color: "var(--text-hi)" }}>{currentSystem.value.name}</strong> — {currentGalaxy.value.name}
+            <strong style={{ color: "var(--text-hi)" }}>{localizedSystemName(currentSystem.value)}</strong> — {localizedGalaxyName(currentGalaxy.value)}
           </span>
         </div>
       </div>
@@ -63,7 +63,7 @@ export function Bridge({ onNavigate }: { onNavigate: (screen: string) => void })
               <div className="eyebrow">{t("bridge.flagship")}</div>
               <div style={{ fontSize: "1.15rem", fontWeight: 700, marginTop: "0.15rem" }}>{ship.name}</div>
               <div style={{ color: "var(--text-mid)", fontSize: "0.82rem" }}>
-                {hullDef.name} ({hullDef.nameCn})
+                {localizedHullClassDisplay(hullDef)}
               </div>
             </div>
             <ShipRarityTag rarity={ship.rarity} />

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "preact/hooks";
+import { t } from "../../i18n/strings";
 
 interface Star {
   x: number;
@@ -115,7 +116,7 @@ export function BridgeViewscreen({ systemName, galaxyName }: { systemName: strin
       </svg>
 
       <div style={{ position: "absolute", top: 10, left: 12, fontFamily: "var(--font-display)", fontSize: "0.62rem", letterSpacing: "0.08em", color: "var(--cyan)", textTransform: "uppercase", textShadow: "0 0 6px rgba(75,232,255,0.6)" }}>
-        Forward Viewport
+        {t("bridge.forwardViewport")}
       </div>
       <div style={{ position: "absolute", top: 10, right: 12, textAlign: "right", fontFamily: "var(--font-display)", fontSize: "0.62rem", letterSpacing: "0.06em", color: "var(--text-mid)", textShadow: "0 0 6px rgba(0,0,0,0.8)" }}>
         <div style={{ color: "var(--text-hi)" }}>{systemName}</div>

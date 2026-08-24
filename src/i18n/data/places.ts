@@ -1,0 +1,97 @@
+/** Issue #11: Chinese translation overlay for galaxy/system/POI names across
+ * src/data/galaxies/*.ts, keyed by id. Same fallback-to-English pattern as every
+ * other overlay in i18n/. Original prose, not sourced. Place names already used in
+ * the story translations (i18n/story/act*.ts) are kept identical here for
+ * consistency — see those files' glossary comments. */
+export const GALAXY_NAMES_ZH: Record<string, string> = {
+  bauhiniaReach: "洋紫荆疆域",
+  lionsheartExpanse: "狮心扩域",
+  swanreachCombine: "天鹅礁联合体",
+  fracturedVeil: "破碎帷幕",
+  deepOrigin: "深源",
+  umbralLine: "暗影线",
+};
+
+export const SYSTEM_NAMES_ZH: Record<string, string> = {
+  amaranthBelt: "苋红星带",
+  bauhiniaPrime: "洋紫荆本星",
+  kestrelsRest: "茶隼歇息地",
+  thornwake: "荆棘航迹",
+  coldreachAnchorage: "寒域锚地",
+  ferrousGate: "铁境关",
+  ashenvale: "灰烬谷",
+  hollowFleetYard: "空巢船坞",
+  meridianExchange: "子午集市",
+  driftmarket: "浮游市集",
+  veilsEdge: "帷幕之缘",
+  chrysalisExpanse: "蛹壳广域",
+  queenspire: "蜂后尖塔",
+  originTideRift: "本源潮汐裂隙",
+  firstFleetGraveyard: "初代舰队坟场",
+  constructAnchorZero: "构装体零号锚点",
+  umbralLine: "暗影线",
+};
+
+export const POI_NAMES_ZH: Record<string, string> = {
+  // Bauhinia Reach
+  amaranthFieldA: "苋红星带矿场",
+  amaranthFieldB: "余烬碎片带",
+  amaranthBounty: "掠夺者拾荒快艇",
+  bauhiniaPrimeExchange: "洋紫荆本星交易所",
+  primeOrbitalBelt: "本星轨道带",
+  primeCargoWreck: "废弃货运舱",
+  primeSmugglerBounty: "阿尔泰因走私快艇",
+  kestrelsRestOutpost: "茶隼歇息地前哨站",
+  kestrelsRestRaidPoi: "求救信号",
+  emberRisingAssaultPoi: "掠夺者突袭舰队",
+  kestrelsDebrisField: "茶隼残骸场",
+  kestrelsRemnantBounty: "掠夺者残部巡逻队",
+  thornwakeWreck: "荆棘航迹残骸",
+  thornwakeDebrisField: "荆棘航迹碎片场",
+  thornwakeCache: "荆棘航迹残骸宝库",
+  coldreachBoss: "掠夺者前进基地",
+  coldreachWreckageField: "寒域残骸场",
+  coldreachRemnantBounty: "掠夺者残部巡逻队",
+  // Lionsheart Expanse
+  ferrousGateCheckpoint: "铁境关检查站",
+  ferrousGateDuelPoi: "盟约挑战快艇",
+  reachOpensFinalePoi: "虫群入侵舰队",
+  ferrousDebrisRing: "铁境残骸环",
+  ferrousSparringBounty: "盟约陪练对手",
+  ashenvaleConcordHall: "灰烬谷盟约议事厅",
+  ashenvaleCometTrail: "灰烬谷彗星尾迹",
+  hollowFleetYardBossPoi: "霍克的船坞守卫",
+  shipyardScrapField: "船坞废料场",
+  hollowSalvagerBounty: "掠夺者船坞打捞队",
+  // Swanreach Combine
+  meridianExchangeHub: "子午集市中枢",
+  meridianConvoyField: "子午贸易商队",
+  meridianSmugglerBounty: "联合体走私截击艇",
+  driftmarketConcourse: "浮游市集广场",
+  firstContactSwarmPoi: "未知生物信号",
+  driftmarketContainer: "漂浮集装箱",
+  // Fractured Veil
+  veilsEdgeOutpost: "帷幕之缘前哨站",
+  veilsEdgeDebrisRing: "帷幕之缘残骸环",
+  veilsEdgeRiftPocket: "本源裂隙口袋",
+  veilsEdgeStragglerBounty: "虫群散兵巡逻队",
+  chrysalisHollowedHive: "空壳蜂巢",
+  chrysalisCometBelt: "蛹壳彗星带",
+  chrysalisRiftPocket: "本源裂隙口袋",
+  chrysalisScavengerBounty: "裂隙拾荒无人机",
+  queenspireHollowBelt: "蜂后尖塔空壳带",
+  queenspireBroodmothersHoard: "蜂后母体的宝藏",
+  originTideDeepCache: "深层裂隙宝库",
+  // Deep Origin
+  firstFleetWreckedHull: "初代舰队残骸船体",
+  firstFleetDebrisField: "坟场碎片场",
+  firstFleetCache: "初代舰队宝库",
+  anchorZeroDebrisRing: "零号锚点残骸环",
+  anchorZeroOutriderBounty: "构装体游骑兵巡逻队",
+  anchorZeroArkVault: "方舟宝库",
+  // Umbral Line
+  umbralDebrisDrift: "暗影线漂浮残骸",
+  umbralEchoBounty: "虚无回响巡逻队",
+  hollowCoreFinalBattle: "「虚无」的聚集之地",
+  hollowsWake: "「虚无」的尾迹",
+};

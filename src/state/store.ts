@@ -16,6 +16,9 @@ import { ACT3_SCENES } from "../data/story/act3";
 import { ACT4_SCENES } from "../data/story/act4";
 import { ACT5_SCENES } from "../data/story/act5";
 import { encounterById } from "../data/encounters";
+import { localizedSystemName, localizedPoiName } from "../i18n/data";
+import { localizedScene } from "../i18n/story";
+import { t } from "../i18n/strings";
 import { CREW_DEFS } from "../data/crew";
 import { applyXp, computeMaxHull } from "../engine/ships";
 import { drawModule } from "../engine/modules";
@@ -309,14 +312,14 @@ export function getNextObjective(): Objective | null {
     if (hasFlag(scene.hiddenAfterFlag)) continue;
     const { system } = findSystem(scene.systemId);
     if (scene.requiredFlag === null || hasFlag(scene.requiredFlag)) {
-      return { label: `${scene.chapterTitle}`, systemId: scene.systemId, systemName: system.name };
+      return { label: localizedScene(scene).chapterTitle, systemId: scene.systemId, systemName: localizedSystemName(system) };
     }
     const gate = findPoiByVictoryFlag(scene.requiredFlag);
     if (gate) {
       return {
-        label: `Engage ${gate.poiName}`,
+        label: t("objective.engage", { poi: localizedPoiName({ id: gate.poiId, name: gate.poiName }) }),
         systemId: gate.system.id,
-        systemName: gate.system.name,
+        systemName: localizedSystemName(gate.system),
         poiId: gate.poiId,
       };
     }
