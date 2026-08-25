@@ -43,6 +43,16 @@ const COMBAT_TICK_MS = 150;
  * weapon-type modules (see fireModuleImpl's cooldown-set); utility actives keep
  * their authored cooldown untouched since they're still manually triggered. */
 const AUTO_FIRE_MIN_INTERVAL = 1.6;
+/** UI audit #4 — Brace. Deliberately shorter than the gap between enemy attacks:
+ * holding it open permanently isn't possible, so it has to be spent on a read of
+ * the intent arcs rather than mashed. */
+const BRACE_WINDOW_SEC = 1.3;
+const BRACE_COOLDOWN_SEC = 4.5;
+const BRACE_REDUCTION = 0.5;
+/** How full an enemy's attack clock must be to count as "about to fire" — shared
+ * by the intent arc's hot state and the Brace prompt so the cue the player reads
+ * and the window they're being asked to react to are the same thing. */
+const IMMINENT_INTENT = 0.78;
 const COMBAT_TICK_SEC = COMBAT_TICK_MS / 1000;
 /** Baseline seconds between one enemy's attacks, jittered per-enemy so a multi-enemy
  * fight doesn't just relocate the old synchronized volley to a shorter clock — each
@@ -310,6 +320,16 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
   >(null);
   const damageTakenRef = useRef(0);
   const combatStartRef = useRef(Date.now());
+  // Brace (UI audit #4). braceUntil is a wall-clock deadline read inside the
+  // frozen enemyAttack closure, so it lives in a ref; the cooldown is state
+  // because the button has to render it.
+  const braceUntilRef = useRef(0);
+  const [braceCooldown, setBraceCooldown] = useState(0);
+  const [bracing, setBracing] = useState(false);
+  /** True while any living enemy is about to fire — drives the Brace prompt.
+   * Sampled on the combat heartbeat rather than per frame: it only gates a
+   * button's appearance, and a 150ms granularity is imperceptible there. */
+  const [imminent, setImminent] = useState(false);
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [levelUpHullGain, setLevelUpHullGain] = useState(0);
   const [levelUpPowerGain, setLevelUpPowerGain] = useState(0);
@@ -863,6 +883,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
     if (result.hit && aegisWardSecRef.current > 0) {
       result = { ...result, damageDealt: Math.round(result.damageDealt * 0.5) };
     }
+    // UI audit #4: Brace. With the guns firing themselves, whole stretches of a
+    // fight had nothing for the player to decide — they were watching, not
+    // commanding. Brace is the reaction that fills that space: it pays off only
+    // if it's up when a hit actually lands, so the intent arcs from #6 become
+    // something to act on rather than just something to read.
+    const braced = result.hit && braceUntilRef.current > Date.now();
+    if (braced) {
+      result = { ...result, damageDealt: Math.max(1, Math.round(result.damageDealt * (1 - BRACE_REDUCTION))) };
+    }
     // Ablate: consecutive hits land progressively softer.
     if (result.hit && ablateReduction > 0) {
       result = { ...result, damageDealt: Math.max(1, Math.round(result.damageDealt * (1 - ablateReduction))) };
@@ -929,6 +958,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", charged ? 20 : 10, charged ? 130 : 90);
         addPopup("player", `-${result.damageDealt}`, "#ff5c5c", charged, hitWeight(result.damageDealt, maxHull), false);
         damageTakenRef.current += result.damageDealt;
+        // Brace only reads as a good decision if landing it is visible — without
+        // this the reward for a correct read is an absence, which feels like
+        // nothing at all.
+        if (braced) {
+          addPopup("player", t("combat.braced"), "#8ff3ff");
+          spawnRing(arenaRef.current.player.x, arenaRef.current.player.y, "#8ff3ff", 70, 420);
+        }
         playSfx("hit");
         setPlayerShakeToken((t) => t + 1);
         triggerHitStop(charged ? 100 : 45);
@@ -1067,6 +1103,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
       return next;
     });
     setNamedAbilityCooldown((c) => Math.max(0, c - dt));
+    setBraceCooldown((c) => Math.max(0, c - dt));
+    setBracing(braceUntilRef.current > Date.now());
+    // Brace prompt (UI audit #4): open while any living enemy's own attack clock
+    // is nearly full — the same threshold the intent arc goes hot at.
+    {
+      const full = ENEMY_ATTACK_INTERVAL + ENEMY_ATTACK_JITTER;
+      setImminent(
+        enemiesRef.current.some((e, i) => {
+          if (e.hull <= 0 || e.phased || e.stunned) return false;
+          const timer = enemyTimersRef.current[i];
+          if (!timer) return false;
+          if (timer.charging) return true;
+          return 1 - timer.attackRemaining / full >= IMMINENT_INTENT;
+        }),
+      );
+    }
     setFortifySec((t) => Math.max(0, t - dt));
     setBloodscentSec((t) => Math.max(0, t - dt));
     setShieldSec((t) => Math.max(0, t - dt));
@@ -2349,6 +2401,35 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
                 </button>
               );
             })}
+            {/* Brace (UI audit #4) — the reaction that gives the long auto-firing
+                stretches something to actually decide. Always present so its
+                place is learned, but it only lights up while something is about
+                to hit, and spending it early wastes the cooldown. */}
+            <button
+              className={`btn ${bracing ? "primary" : imminent && braceCooldown <= 0 ? "danger" : "ghost"}`}
+              style={{
+                flex: 1, fontSize: "0.68rem", padding: "0.45em 0.2em",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3em",
+                position: "relative", overflow: "hidden",
+                animation: imminent && braceCooldown <= 0 && !bracing ? "abilityReady 700ms ease-out infinite" : undefined,
+              }}
+              disabled={status !== "active" || braceCooldown > 0}
+              onClick={() => {
+                braceUntilRef.current = Date.now() + BRACE_WINDOW_SEC * 1000;
+                setBracing(true);
+                setBraceCooldown(BRACE_COOLDOWN_SEC);
+                playSfx("click");
+              }}
+              title={t("combat.braceTitle")}
+            >
+              {braceCooldown > 0 && (
+                <span style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: `${(braceCooldown / BRACE_COOLDOWN_SEC) * 100}%`, background: "var(--bg-inset)", opacity: 0.8, transition: "width 140ms linear" }} />
+              )}
+              <span style={{ position: "relative", display: "flex", alignItems: "center", gap: "0.3em" }}>
+                {t("combat.brace")}
+                {braceCooldown > 0 && <span style={{ color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{braceCooldown.toFixed(1)}s</span>}
+              </span>
+            </button>
             {encounter.capturable && enemies[0] && enemies[0].hull > 0 && (
               <button
                 className={`btn ${boardingOrder ? "primary" : "ghost"}`}
@@ -3076,7 +3157,7 @@ function drawEnemyShip(
   // the viewscreen instead of only from damage after the fact. Suppressed while
   // charging/phased/stunned, each of which already has its own louder tell.
   if (intent > 0 && !enemy.charging && !enemy.phased && !enemy.stunned && enemy.hull > 0) {
-    const imminent = intent > 0.78;
+    const imminent = intent > IMMINENT_INTENT;
     const pulse = imminent ? 0.65 + 0.35 * Math.sin(now / 70) : 1;
     ctx.strokeStyle = imminent
       ? `rgba(255,138,92,${0.55 + pulse * 0.45})`
