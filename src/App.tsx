@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { availableScene, completeScene, currentSystem } from "./state/store";
+import { availableScene, completeScene, currentSystem, state, replaceState } from "./state/store";
 import { ResourceBar } from "./ui/components/ResourceBar";
 import { SoundIcon } from "./ui/components/Icons";
 import { Bridge } from "./ui/screens/Bridge";
@@ -21,6 +21,7 @@ import { grant, grantRiftDrop } from "./state/store";
 import { setMuted, isMuted } from "./audio/engine";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
+import { SaveRecovery } from "./ui/components/SaveRecovery";
 import { t } from "./i18n/strings";
 import { language, setLanguage } from "./i18n/language";
 import { ShipConsole, type ConsolePanelId } from "./ui/components/ShipConsole";
@@ -227,6 +228,9 @@ export function App() {
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Offers a previous campaign back if this save looks like it replaced one.
+          Silent when there's nothing better to return to. */}
+      <SaveRecovery current={state.value} onRestore={replaceState} />
       {navBar}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {/* The world view. It stays mounted under every console panel — opening

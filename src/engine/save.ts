@@ -1,9 +1,14 @@
 import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance } from "../data/types";
+import { MODULE_DEFS } from "../data/modules";
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
 export const SCHEMA_VERSION = 7;
 const SAVE_KEY = "emberwake.save";
+/** Rolling copy of the previous save, written before every overwrite. */
+const BACKUP_KEY = "emberwake.save.backup";
+/** A save that could not be parsed at all. Kept, never dropped. */
+const QUARANTINE_KEY = "emberwake.save.corrupt";
 
 export interface PoiRuntimeState {
   remaining?: number;
@@ -174,6 +179,12 @@ export function migrateForTest(raw: any): GameState {
 
 function migrate(raw: any): GameState {
   let state = raw;
+  // A save with a missing/garbage schemaVersion used to fall straight through
+  // this loop untouched and then blow up downstream on fields no migration had
+  // added. Treat it as the oldest schema and let the chain rebuild it.
+  if (typeof state.schemaVersion !== "number" || !Number.isFinite(state.schemaVersion)) {
+    state = { ...state, schemaVersion: 1 };
+  }
   while (state.schemaVersion < SCHEMA_VERSION) {
     const step = migrations[state.schemaVersion];
     if (!step) break;
@@ -182,23 +193,194 @@ function migrate(raw: any): GameState {
   return state as GameState;
 }
 
+/** Player report (2026-08-25): "我的任务也没了 ... 修复之前存档".
+ *
+ * loadGame used to be `try { parse; migrate } catch { return null }`, and the
+ * caller is `loadGame() ?? createInitialState()`. So ANY defect anywhere in a
+ * save — a truncated write, a field a migration didn't expect, an empty ships
+ * array hitting migration 3's destructure — silently threw the player's entire
+ * campaign away and started them on a brand new game. No warning, no backup, no
+ * way back. That is the worst possible failure mode for a game that only stores
+ * progress in one browser key, and it matches the report exactly.
+ *
+ * Loading is now repair-first: fill in what's missing, drop only what is truly
+ * unusable, and keep everything else. A save is discarded only if it cannot be
+ * parsed as JSON at all — and even then the raw text is quarantined rather than
+ * dropped, so it can still be recovered by hand.
+ *
+ * Repairs are deliberately conservative. The goal is to return the player to
+ * their campaign, not to guarantee a pristine state: losing one unrecognised
+ * module is recoverable, losing forty hours of story flags is not. */
+function repairState(raw: any): GameState {
+  const base = createInitialState();
+  if (!raw || typeof raw !== "object") return base;
+
+  const resources = { ...base.resources };
+  if (raw.resources && typeof raw.resources === "object") {
+    for (const key of Object.keys(base.resources) as ResourceType[]) {
+      const v = raw.resources[key];
+      if (typeof v === "number" && Number.isFinite(v)) resources[key] = v;
+    }
+  }
+
+  // Flags are the campaign. They're plain booleans, they're never removed during
+  // play, and they're what "我的任务" is made of — so they get salvaged key by key
+  // rather than discarded wholesale if the object is odd.
+  const flags: Record<string, boolean> = {};
+  if (raw.flags && typeof raw.flags === "object") {
+    for (const [k, v] of Object.entries(raw.flags)) if (v === true) flags[k] = true;
+  }
+
+  const knownModuleIds = new Set(MODULE_DEFS.map((m) => m.id));
+  const modules: ModuleInstance[] = Array.isArray(raw.modules)
+    ? raw.modules.filter(
+        (m: any) => m && typeof m.id === "string" && typeof m.defId === "string" && knownModuleIds.has(m.defId),
+      ).map((m: any) => ({
+        id: m.id,
+        defId: m.defId,
+        rarity: m.rarity ?? "mk1",
+        level: typeof m.level === "number" && m.level > 0 ? m.level : 1,
+        traits: Array.isArray(m.traits) ? m.traits.filter((t: any) => typeof t === "string") : [],
+        lockedTraitSlot: typeof m.lockedTraitSlot === "number" ? m.lockedTraitSlot : null,
+        quality: typeof m.quality === "number" ? m.quality : 0.5,
+      }))
+    : [];
+  const moduleIds = new Set(modules.map((m) => m.id));
+
+  function repairShip(rawShip: any, fallback: ShipInstance): ShipInstance {
+    if (!rawShip || typeof rawShip !== "object") return fallback;
+    return {
+      id: typeof rawShip.id === "string" ? rawShip.id : fallback.id,
+      hullClass: rawShip.hullClass ?? fallback.hullClass,
+      rarity: rawShip.rarity ?? fallback.rarity,
+      aptitude: rawShip.aptitude ?? null,
+      scanned: !!rawShip.scanned,
+      name: typeof rawShip.name === "string" ? rawShip.name : fallback.name,
+      level: typeof rawShip.level === "number" && rawShip.level > 0 ? rawShip.level : 1,
+      xp: typeof rawShip.xp === "number" ? rawShip.xp : 0,
+      // An equipped slot pointing at a module that no longer exists becomes an
+      // empty socket rather than a crash the next time the loadout renders.
+      equipped: Array.isArray(rawShip.equipped)
+        ? rawShip.equipped.map((id: any) => (typeof id === "string" && moduleIds.has(id) ? id : null))
+        : [],
+      currentHp: typeof rawShip.currentHp === "number" && rawShip.currentHp > 0 ? rawShip.currentHp : 1,
+      rolls: rawShip.rolls && typeof rawShip.rolls === "object" ? { ...NEUTRAL_ROLLS, ...rawShip.rolls } : { ...NEUTRAL_ROLLS },
+      ascendedFrom: Array.isArray(rawShip.ascendedFrom) ? rawShip.ascendedFrom : [],
+    };
+  }
+
+  const ships: ShipInstance[] = Array.isArray(raw.ships) && raw.ships.length > 0
+    ? raw.ships.map((sh: any) => repairShip(sh, base.ships[0]))
+    : base.ships;
+
+  const flagshipId = ships.some((sh) => sh.id === raw.flagshipId) ? raw.flagshipId : ships[0].id;
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    resources,
+    flags,
+    ships,
+    modules,
+    crew: Array.isArray(raw.crew)
+      ? raw.crew.filter((c: any) => c && typeof c.defId === "string")
+      : [],
+    flagshipId,
+    currentSystemId: typeof raw.currentSystemId === "string" ? raw.currentSystemId : base.currentSystemId,
+    poiState: raw.poiState && typeof raw.poiState === "object" ? raw.poiState : {},
+    capturedShips: Array.isArray(raw.capturedShips) ? raw.capturedShips : [],
+    alliedShips: Array.isArray(raw.alliedShips) ? raw.alliedShips : [],
+  };
+}
+
+/** How the last load went, for the UI to report honestly instead of pretending
+ * a brand new game was the player's intent. */
+export type LoadOutcome = "fresh" | "loaded" | "repaired" | "quarantined";
+let lastLoadOutcome: LoadOutcome = "fresh";
+export function getLastLoadOutcome(): LoadOutcome {
+  return lastLoadOutcome;
+}
+
 export function loadGame(): GameState | null {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return migrate(parsed);
+    raw = localStorage.getItem(SAVE_KEY);
   } catch {
+    lastLoadOutcome = "fresh";
     return null;
+  }
+  if (!raw) {
+    lastLoadOutcome = "fresh";
+    return null;
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Unparseable — the only case where we genuinely cannot continue. Keep the
+    // bytes so nothing is destroyed, and say so rather than silently restarting.
+    try { localStorage.setItem(QUARANTINE_KEY, raw); } catch { /* quota */ }
+    lastLoadOutcome = "quarantined";
+    return null;
+  }
+
+  try {
+    const migrated = migrate(parsed);
+    // Even a clean migration gets validated: the point is that the player never
+    // reaches a crash loop with a save they can't get past.
+    const repaired = repairState(migrated);
+    lastLoadOutcome = "loaded";
+    return repaired;
+  } catch {
+    try {
+      const repaired = repairState(parsed);
+      lastLoadOutcome = "repaired";
+      return repaired;
+    } catch {
+      try { localStorage.setItem(QUARANTINE_KEY, raw); } catch { /* quota */ }
+      lastLoadOutcome = "quarantined";
+      return null;
+    }
   }
 }
 
 export function saveGame(state: GameState): void {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    // Roll the previous save into a backup before overwriting. This is what makes
+    // "修复之前存档" answerable at all: without it there is exactly one copy of a
+    // campaign and any bad write is final.
+    const prev = localStorage.getItem(SAVE_KEY);
+    const next = JSON.stringify(state);
+    if (prev && prev !== next) localStorage.setItem(BACKUP_KEY, prev);
+    localStorage.setItem(SAVE_KEY, next);
   } catch {
     // localStorage unavailable (private browsing quota, etc.) — game continues unsaved.
   }
+}
+
+/** A previous save worth offering back to the player: the rolling backup, or a
+ * quarantined one if that's all there is. Returns null when neither exists or
+ * neither has any progress in it. */
+export function recoverableSave(): { state: GameState; source: "backup" | "quarantine" } | null {
+  for (const [key, source] of [[BACKUP_KEY, "backup"], [QUARANTINE_KEY, "quarantine"]] as const) {
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(key); } catch { continue; }
+    if (!raw) continue;
+    try {
+      const state = repairState(migrate(JSON.parse(raw)));
+      // Only offer something that actually represents progress — an empty
+      // backup of a brand new game is noise.
+      const progress = Object.keys(state.flags).length > 0 || state.ships[0].level > 1;
+      if (progress) return { state, source };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+export function restoreSave(state: GameState): void {
+  saveGame(state);
 }
 
 export function clearSave(): void {

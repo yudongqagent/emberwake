@@ -44,6 +44,15 @@ export function persist() {
   saveGame(state.value);
 }
 
+/** Swaps the whole campaign in — used only by save recovery (see
+ * ui/components/SaveRecovery.tsx), which hands back a campaign that a bad load
+ * had replaced. Deliberately not a general-purpose setter: everything else
+ * mutates state through the narrow helpers in this file. */
+export function replaceState(next: GameState) {
+  state.value = next;
+  persist();
+}
+
 export const flagship = computed(() => state.value.ships.find((s) => s.id === state.value.flagshipId) ?? null);
 
 function findSystem(systemId: string): { system: SystemDef; galaxy: GalaxyDef } {
