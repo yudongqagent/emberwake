@@ -334,9 +334,34 @@ h1, h2, h3 {
   box-shadow: 0 0 8px rgba(185, 140, 255, 0.5);
 }
 
+/* --- Combat feedback --- */
+/* The winning blow: a hard white bloom that falls away fast, so victory registers
+   in the body before the reward panel arrives. */
+@keyframes victoryFlash {
+  0%   { background: rgba(255,255,255,0.55); }
+  25%  { background: rgba(255,226,93,0.22); }
+  100% { background: rgba(255,255,255,0); }
+}
+
+/* Reward chips cascade in rather than appearing as a block. */
+@keyframes rewardIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.85); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Heavy-hit damage popup: overshoots and settles instead of drifting, so a big
+   number reads as big from its motion before you've read the digits. */
+@keyframes popHit {
+  0%   { opacity: 0; transform: translateY(6px) scale(0.6); }
+  35%  { opacity: 1; transform: translateY(-14px) scale(1.25); }
+  60%  { transform: translateY(-20px) scale(1.0); }
+  100% { opacity: 0; transform: translateY(-46px) scale(0.95); }
+}
+
 /* --- Screen transition --- */
 /* Console panels slide up over the live world view rather than cutting to a new
    page — see ui/components/ConsoleOverlay.tsx. */
+
 @keyframes consoleIn {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }

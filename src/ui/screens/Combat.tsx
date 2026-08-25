@@ -164,6 +164,11 @@ interface Popup {
   text: string;
   color: string;
   big?: boolean;
+  /** 0..1 — how heavy this hit was relative to the target's max hull. Drives the
+   * popup's size, weight and motion so a chip-damage tick and a build-defining
+   * crit don't read identically (UI audit item #3). */
+  weight?: number;
+  crit?: boolean;
 }
 
 interface ArenaPoint {
@@ -286,6 +291,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   const [popups, setPopups] = useState<Popup[]>([]);
   const [playerShakeToken, setPlayerShakeToken] = useState(0);
   const [rewardsEarned, setRewardsEarned] = useState<Partial<Record<ResourceType, number>> | null>(null);
+  /** Full-screen flash on the winning blow — see finishCombat. */
+  const [victoryFlash, setVictoryFlash] = useState(false);
   const [bonusDrop, setBonusDrop] = useState<ModuleInstance | null>(null);
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [levelUpHullGain, setLevelUpHullGain] = useState(0);
@@ -303,6 +310,24 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   // over real time like the range tug does, so committing to a boarding action is
   // a real tactical choice (you're not dealing damage while it fills), not a free
   // alternate win condition layered on top of just winning normally.
+  /** UI audit #1: bounties and rift runs are the repeatable content, and every
+   * fight ran at one fixed speed with auto-firing weapons — long stretches of
+   * watching rather than deciding. Speed scales the sim (both the combat heartbeat
+   * and the animation loop) without touching any balance number, so a 2x fight
+   * resolves identically, just faster. Persisted because a player who wants 2x
+   * wants it for every fight, not one. */
+  const [combatSpeed, setCombatSpeed] = useState<number>(() => {
+    const stored = Number(localStorage.getItem("emberwake.combatSpeed"));
+    return stored === 2 || stored === 3 ? stored : 1;
+  });
+  const combatSpeedRef = useRef(combatSpeed);
+  combatSpeedRef.current = combatSpeed;
+  function changeSpeed(next: number) {
+    setCombatSpeed(next);
+    try { localStorage.setItem("emberwake.combatSpeed", String(next)); } catch { /* private mode */ }
+    playSfx("click");
+  }
+
   const [boardingOrder, setBoardingOrder] = useState(false);
   const [boardProgress, setBoardProgress] = useState(0);
   const [comboCount, setComboCount] = useState(0);
@@ -668,10 +693,35 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setLog((l) => [...l.slice(-5), line]);
   }
 
-  function addPopup(target: "player" | number, text: string, color: string, big: boolean = false) {
+  function addPopup(
+    target: "player" | number,
+    text: string,
+    color: string,
+    big: boolean = false,
+    weight: number = 0,
+    crit: boolean = false,
+  ) {
     const id = randomId("popup");
-    setPopups((p) => [...p, { id, target, text, color, big }]);
-    setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), 900);
+    setPopups((p) => [...p, { id, target, text, color, big, weight, crit }]);
+    setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), 1000);
+  }
+
+  /** Damage as a fraction of what it hit, which is what actually makes a number
+   * feel big — 400 into a 500-hull scout should land harder than 400 into a
+   * 4,000-hull boss, and raw damage alone can't express that. */
+  function hitWeight(damage: number, targetMax: number): number {
+    if (targetMax <= 0) return 0;
+    return Math.max(0, Math.min(1, damage / (targetMax * 0.35)));
+  }
+
+  /** Same weighting for a hit landing on an enemy, looked up by index. Secondary
+   * damage (chain arcs, splash, barrage sub-shots, overkill spill, burn ticks,
+   * Nova) all route through here — without it a 400-damage arc rendered at the
+   * same size as a 1-damage chip tick, which is the exact readability problem the
+   * weighted popups exist to solve. Reads enemiesRef so it's safe inside the
+   * frozen combatTick/enemyAttack closures as well as at render scope. */
+  function enemyHitWeight(index: number, damage: number): number {
+    return hitWeight(damage, enemiesRef.current[index]?.maxHull ?? 0);
   }
 
   // Player passive-regen clock (Field Repair / regen-trait stacks) — independent of
@@ -739,7 +789,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, hull: Math.max(0, e.hull - firstBloodDmg) } : e)));
         fireProjectile(arenaRef.current.player, pos, "#ff6b3d", () => {
           spawnBurst(pos.x, pos.y, "255,107,61", 14, 110);
-          addPopup(idx, `-${firstBloodDmg}`, "#ff6b3d");
+          addPopup(idx, `-${firstBloodDmg}`, "#ff6b3d", false, enemyHitWeight(idx, firstBloodDmg));
         });
         pushLog(t("combat.log.firstBlood", { enemy: enemy.name, dmg: firstBloodDmg }));
         playSfx("laser");
@@ -827,7 +877,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           if (pos) {
             fireProjectile(arenaRef.current.player, pos, "#ffe25d", () => {
               spawnBurst(pos.x, pos.y, "255,226,93", 14, 110);
-              addPopup(idx, `-${riposteDmg}`, "#ffe25d");
+              addPopup(idx, `-${riposteDmg}`, "#ffe25d", false, enemyHitWeight(idx, riposteDmg));
             });
           }
           pushLog(t("combat.log.riposte", { enemy: enemy.name, dmg: riposteDmg }));
@@ -847,7 +897,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         pushLog(t("combat.log.absorbFull", { enemy: enemy.name }));
       } else if (result.hit) {
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", charged ? 20 : 10, charged ? 130 : 90);
-        addPopup("player", `-${result.damageDealt}`, "#ff5c5c", charged);
+        addPopup("player", `-${result.damageDealt}`, "#ff5c5c", charged, hitWeight(result.damageDealt, maxHull), false);
         playSfx("hit");
         setPlayerShakeToken((t) => t + 1);
         triggerHitStop(charged ? 100 : 45);
@@ -856,7 +906,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         pushLog(t(hitKey, { enemy: enemy.name, dmg: result.damageDealt }) + (deadHiveAllies > 0 ? t("combat.log.hiveSuffix") : ""));
         if (reflectDmg > 0) {
           spawnBurst(enemyPos.x, enemyPos.y, "255,143,102", 8, 90);
-          addPopup(idx, `-${reflectDmg}`, "#ff8f66");
+          addPopup(idx, `-${reflectDmg}`, "#ff8f66", false, enemyHitWeight(idx, reflectDmg));
           pushLog(t("combat.log.reflect", { dmg: reflectDmg, enemy: enemy.name }));
         }
 
@@ -949,7 +999,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       total += dealt;
       fireProjectile(pos, arenaRef.current.player, "#ffd66b", () => {
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,214,107", 14, 110);
-        addPopup("player", `-${dealt}`, "#ffd66b");
+        addPopup("player", `-${dealt}`, "#ffd66b", false, hitWeight(dealt, maxHull));
       }, 1.4);
     });
     pushLog(t("combat.log.choralStrike", { dmg: total }));
@@ -971,7 +1021,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
    * own timer just expired, never all of them at once. */
   function combatTick() {
     if (statusRef.current !== "active") return;
-    const dt = COMBAT_TICK_SEC;
+    const dt = COMBAT_TICK_SEC * combatSpeedRef.current;
 
     setCooldowns((prev) => {
       const next: Record<string, number> = {};
@@ -1070,7 +1120,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       const from = { x: ALLY_ANCHOR_X, y: REF_H / 2 + (i - (alliedFleet.length - 1) / 2) * 70 };
       fireProjectile(from, pos, "#8cffc7", () => {
         spawnBurst(pos.x, pos.y, "140,255,199", 8, 90);
-        addPopup(tIdx, `-${dmg}`, "#8cffc7");
+        addPopup(tIdx, `-${dmg}`, "#8cffc7", false, enemyHitWeight(tIdx, dmg));
       }, 0.9);
       setEnemies((prev) => prev.map((e, idx) => (idx === tIdx ? { ...e, hull: Math.max(0, e.hull - dmg) } : e)));
       pushLog(t("combat.log.allyVolley", { ally: ally.name, target: target.name, dmg }));
@@ -1198,6 +1248,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     setEnemies(finalEnemies);
     if (result === "victory" || result === "captured") {
       playSfx(result === "captured" ? "draw" : "victory");
+      // UI audit #2: winning is the most-repeated emotional beat in the game and it
+      // used to just... show a panel. Slam the brakes on the final blow, flash the
+      // screen, and shake — the kill you actually earned should register before the
+      // rewards do.
+      triggerHitStop(420);
+      shakeRef.current = 26;
+      setVictoryFlash(true);
+      setTimeout(() => setVictoryFlash(false), 620);
       // Convert the combat-local (hullBonus-scaled) playerHull back to the ship's
       // own terms before persisting — see resolveCombatVictory's endingHullPoints.
       const realEndingHull = playerHull / (1 + hullBonusFraction);
@@ -1339,7 +1397,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       fireProjectile(playerPos, impactPos, beamColor, () => {
         if (result.hit) {
           spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : hexToRgbString(weaponColor), result.crit ? 22 : 12, result.crit ? 150 : 110);
-          addPopup(targetIdx, `${result.crit ? t("combat.critPrefix") : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : weaponColor, result.crit);
+          addPopup(targetIdx, `${result.crit ? t("combat.critPrefix") : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : weaponColor, result.crit, hitWeight(result.damageDealt, target.maxHull), result.crit);
           triggerHitStop(result.crit ? 90 : 35);
           hitPulseRef.current.enemy[targetIdx] = performance.now();
           if (result.crit) setPlayerShakeToken((t) => t + 1);
@@ -1364,7 +1422,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           const counterDmg = Math.round(target.damage * 0.5);
           setTimeout(() => {
             setPlayerHull((h) => Math.max(0, h - counterDmg));
-            addPopup("player", `-${counterDmg}`, "#5dd6ff");
+            addPopup("player", `-${counterDmg}`, "#5dd6ff", false, hitWeight(counterDmg, maxHull));
             spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "93,214,255", 10, 90);
             playSfx("hit");
           }, 180);
@@ -1413,7 +1471,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         const otherIdx = nextEnemies.findIndex((e, i) => i !== targetIdx && e.hull > 0);
         if (spill > 0 && otherIdx >= 0) {
           nextEnemies[otherIdx] = { ...nextEnemies[otherIdx], hull: Math.max(0, nextEnemies[otherIdx].hull - spill) };
-          addPopup(otherIdx, `-${spill}`, "#ff9f4d");
+          addPopup(otherIdx, `-${spill}`, "#ff9f4d", false, enemyHitWeight(otherIdx, spill));
           pushLog(t("combat.log.overkill", { target: nextEnemies[otherIdx].name, dmg: spill }));
         }
       }
@@ -1435,7 +1493,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             fireProjectile(impactPos, arcPos, weaponColor, () => {
               if (arcResult.hit) {
                 spawnBurst(arcPos.x, arcPos.y, hexToRgbString(weaponColor), 8, 90);
-                addPopup(arcIdx, `-${arcResult.damageDealt}`, weaponColor);
+                addPopup(arcIdx, `-${arcResult.damageDealt}`, weaponColor, false, enemyHitWeight(arcIdx, arcResult.damageDealt));
               }
             }, weaponWeight);
           }, 90);
@@ -1461,7 +1519,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             fireProjectile(impactPos, splashPos, weaponColor, () => {
               if (splashResult.hit) {
                 spawnBurst(splashPos.x, splashPos.y, hexToRgbString(weaponColor), 8, 90);
-                addPopup(splashIdx, `-${splashResult.damageDealt}`, weaponColor);
+                addPopup(splashIdx, `-${splashResult.damageDealt}`, weaponColor, false, enemyHitWeight(splashIdx, splashResult.damageDealt));
               }
             }, weaponWeight);
           }, 90);
@@ -1484,7 +1542,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             fireProjectile(playerPos, impactPos, weaponColor, () => {
               if (bResult.hit) {
                 spawnBurst(impactPos.x, impactPos.y, hexToRgbString(weaponColor), 6, 80);
-                addPopup(targetIdx, `-${bResult.damageDealt}`, weaponColor);
+                addPopup(targetIdx, `-${bResult.damageDealt}`, weaponColor, false, enemyHitWeight(targetIdx, bResult.damageDealt));
               }
             }, weaponWeight * 0.6);
           }, 70 * shot);
@@ -1508,7 +1566,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             fireProjectile(playerPos, sPos, weaponColor, () => {
               if (sResult.hit) {
                 spawnBurst(sPos.x, sPos.y, hexToRgbString(weaponColor), 7, 85);
-                addPopup(pick.i, `-${sResult.damageDealt}`, weaponColor);
+                addPopup(pick.i, `-${sResult.damageDealt}`, weaponColor, false, enemyHitWeight(pick.i, sResult.damageDealt));
               }
             }, weaponWeight * 0.7);
           }, 60 * shot);
@@ -1527,7 +1585,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           fireProjectile(playerPos, impactPos, weaponColor, () => {
             if (volleyResult.hit) {
               spawnBurst(impactPos.x, impactPos.y, hexToRgbString(weaponColor), 10, 90);
-              addPopup(targetIdx, `-${volleyResult.damageDealt}`, weaponColor);
+              addPopup(targetIdx, `-${volleyResult.damageDealt}`, weaponColor, false, enemyHitWeight(targetIdx, volleyResult.damageDealt));
             }
           }, weaponWeight);
         }, 120);
@@ -1709,7 +1767,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
         spawnRing(pos.x, pos.y, "#ffd66b", 34, 450);
         spawnBurst(pos.x, pos.y, "180,220,255", 10, 100);
-        addPopup(i, `-${dmg}`, "#8ff3ff");
+        addPopup(i, `-${dmg}`, "#8ff3ff", false, enemyHitWeight(i, dmg));
         return { ...e, hull: Math.max(0, e.hull - dmg) };
       });
       setChoralResonance(0);
@@ -1820,7 +1878,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           setTimeout(() => {
             fireProjectile(playerPos, enemyPos, def.color ?? "#8ff3ff", () => {
               spawnBurst(enemyPos.x, enemyPos.y, hexToRgbString(def.color ?? "#8ff3ff"), 10, 100);
-              addPopup(targetIdx, `-${dmg}`, def.color ?? "#8ff3ff");
+              addPopup(targetIdx, `-${dmg}`, def.color ?? "#8ff3ff", false, enemyHitWeight(targetIdx, dmg));
             }, (def.powerDraw ?? 2) / 2);
           }, i * 70);
         });
@@ -1891,7 +1949,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       if (enemy.hull <= 0) return enemy;
       const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
       spawnBurst(pos.x, pos.y, "255,159,77", 26, 160);
-      addPopup(i, `-${novaDamage}`, "#ff9f4d", true);
+      addPopup(i, `-${novaDamage}`, "#ff9f4d", true, enemyHitWeight(i, novaDamage));
       explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
       return { ...enemy, hull: Math.max(0, enemy.hull - novaDamage) };
     });
@@ -1949,7 +2007,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
     function step(now: number) {
       const frozen = now < hitStopUntilRef.current;
-      const dt = frozen ? 0 : Math.min(0.25, Math.max(0, (now - last) / 1000));
+      const dt = frozen ? 0 : Math.min(0.25, Math.max(0, (now - last) / 1000)) * combatSpeedRef.current;
       last = now;
       const combatOver = statusRef.current !== "active";
 
@@ -2085,6 +2143,29 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           <span className="eyebrow" style={{ flex: "none", color: "var(--text-dim)" }}>
             {t("combat.power")} {capacity}
           </span>
+          {/* Speed control — sits in the vitals bar because it's a viewing
+              preference, not a tactical order, and shouldn't compete with the
+              command console for attention. */}
+          <div style={{ display: "flex", gap: 2, flex: "none" }} role="group" aria-label={t("combat.speedLabel")}>
+            {[1, 2, 3].map((mult) => (
+              <button
+                key={mult}
+                onClick={() => changeSpeed(mult)}
+                title={t("combat.speedTitle")}
+                aria-pressed={combatSpeed === mult}
+                style={{
+                  minWidth: 26, padding: "0.15em 0.3em", borderRadius: 4, cursor: "pointer",
+                  fontFamily: "var(--font-display)", fontSize: "0.6rem", fontWeight: 800,
+                  border: `1px solid ${combatSpeed === mult ? "var(--cyan)" : "var(--line)"}`,
+                  background: combatSpeed === mult ? "rgba(93,214,255,0.16)" : "transparent",
+                  color: combatSpeed === mult ? "var(--cyan)" : "var(--text-dim)",
+                  transition: "color 120ms ease, border-color 120ms ease",
+                }}
+              >
+                {mult}×
+              </button>
+            ))}
+          </div>
         </div>
 
         {activeStatuses.length > 0 && (
@@ -2103,6 +2184,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         {popups.map((p) => (
           <PopupOverlay key={p.id} popup={p} arenaRef={arenaRef} vpRef={vpRef} />
         ))}
+
+        {victoryFlash && (
+          <div
+            style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 6, animation: "victoryFlash 620ms ease-out forwards" }}
+            aria-hidden="true"
+          />
+        )}
 
         {/* Target dossier — docked over the viewscreen so "what am I shooting and
             how close is it to dying" never requires hunting for a tiny sprite bar. */}
@@ -2319,7 +2407,17 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
 
       {(status === "victory" || status === "captured") && (
         <div className="panel pop-in" style={{ margin: "0 1rem 1rem", padding: "1rem", textAlign: "center" }}>
-          <div className="title" style={{ marginBottom: "0.5rem" }}>{status === "captured" ? t("combat.captured") : t("combat.victory")}</div>
+          <div
+            className="title"
+            style={{
+              marginBottom: "0.5rem", fontSize: "1.9rem", letterSpacing: "0.06em",
+              color: status === "captured" ? "var(--green)" : "var(--amber)",
+              textShadow: `0 0 18px ${status === "captured" ? "var(--green)" : "var(--amber)"}`,
+              animation: "popIn 380ms cubic-bezier(0.2,1.4,0.3,1) both",
+            }}
+          >
+            {status === "captured" ? t("combat.captured") : t("combat.victory")}
+          </div>
           {status === "captured" && (
             <div className="panel accent scanline pop-in" style={{ padding: "0.9rem 1rem", marginBottom: "0.75rem", ["--accent" as any]: "var(--green)" }}>
               <div className="eyebrow" style={{ color: "var(--green)" }}>{t("combat.capturedShipLabel")}</div>
@@ -2349,8 +2447,17 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           )}
           {rewardsEarned && (
             <div style={{ display: "flex", justifyContent: "center", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.75rem", fontSize: "0.8rem", color: "var(--text-mid)" }}>
-              {Object.entries(rewardsEarned).map(([k, v]) => (
-                <span key={k} className="resource-chip">
+              {Object.entries(rewardsEarned).map(([k, v], i) => (
+                <span
+                  key={k}
+                  className="resource-chip"
+                  style={{
+                    // Staggered so the haul reads as a payout arriving rather than
+                    // a static list that was always there.
+                    animation: "rewardIn 300ms cubic-bezier(0.2,1.4,0.3,1) both",
+                    animationDelay: `${120 + i * 90}ms`,
+                  }}
+                >
                   <ResourceIcon type={k as ResourceType} size={13} />+{v} {resourceLabel(k as ResourceType)}
                 </span>
               ))}
@@ -2552,16 +2659,28 @@ function PopupOverlay({
   const { scale, offsetX, offsetY } = vp ? vp.transform() : { scale: 1, offsetX: 0, offsetY: 0 };
   const screenX = offsetX + world.x * scale;
   const screenY = offsetY + world.y * scale;
+  // UI audit #3: a chip-damage tick and a build-defining crit used to render at
+  // almost the same size, so the core "am I getting stronger" feedback was
+  // invisible mid-fight. Size, weight, glow and motion now all scale with how hard
+  // the hit actually landed relative to what it hit.
+  const w = Math.max(0, Math.min(1, popup.weight ?? 0));
+  const heavy = w > 0.55 || popup.crit;
+  const sizeRem = popup.big ? 1.9 + w * 1.1 : 0.95 + w * 1.25;
+  const glow = popup.crit ? 20 : 6 + w * 16;
   return (
     <div style={{ position: "absolute", left: screenX, top: screenY, transform: "translate(-50%, -50%)", zIndex: 5, pointerEvents: "none" }}>
       <div
         style={{
           color: popup.color,
           fontFamily: "var(--font-display)",
-          fontSize: popup.big ? "1.6rem" : "1rem",
-          fontWeight: 700,
-          textShadow: popup.big ? `0 0 14px ${popup.color}, 0 0 4px rgba(0,0,0,0.9)` : "0 0 6px rgba(0,0,0,0.8)",
-          animation: "floatUp 0.9s ease-out forwards",
+          fontSize: `${sizeRem}rem`,
+          fontWeight: heavy ? 900 : 700,
+          letterSpacing: heavy ? "0.02em" : "0",
+          WebkitTextStroke: popup.crit ? "1px rgba(0,0,0,0.55)" : undefined,
+          textShadow: `0 0 ${glow}px ${popup.color}, 0 0 4px rgba(0,0,0,0.9)`,
+          // Heavier hits get a punchier curve: they overshoot and settle rather
+          // than drifting, so weight is legible from motion alone.
+          animation: heavy ? "popHit 1s cubic-bezier(0.2,1.4,0.3,1) forwards" : "floatUp 0.9s ease-out forwards",
         }}
       >
         {popup.text}
