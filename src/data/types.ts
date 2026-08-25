@@ -92,6 +92,12 @@ export interface ModuleDef {
   signature: string;
   /** Effect ids (see data/moduleEffects.ts) this module can roll as variance. */
   traitPool: string[];
+  /** Weapon-system audit #9 (docs/weapon-system-audit.md): range bands modified
+   * damage globally and identically for every weapon, so a "sniper" and a
+   * "shotgun" behaved the same at every distance. A weapon's own preferred band
+   * now shifts its damage, which is what makes the helm's stance order a weapon
+   * decision as well as a defensive one. "flat" means no preference. */
+  rangeProfile?: "close" | "mid" | "long" | "flat";
   /** Issue #4 (2026-08 playtest): every weapon fired the same blue beam — the juice
    * infrastructure existed but didn't vary with what actually fired. A weapon's
    * signature color for its projectile beam and impact burst; falls back to the

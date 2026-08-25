@@ -110,17 +110,27 @@ export function computeMaxHull(ship: Pick<ShipInstance, "hullClass" | "rarity" |
   return Math.round(def.baseHull * RARITY_MULTIPLIER[ship.rarity] * growth * roll);
 }
 
-/** Issue #1 (2026-08 playtest): leveling only ever grew max hull (+8%/level below) —
- * power capacity, speed, evasion, and crit never moved regardless of level, so most
- * of a ship's identity didn't change at all when it leveled up. Power now grows at
- * the same +8%/level rate as hull, so leveling visibly unlocks room for stronger
- * modules too, not just a bigger health bar. `level` defaults to 1 (no bonus) so
- * existing partial-ship call sites that don't track level yet still work. */
+/** Power capacity comes from the HULL, plus a gentle level term.
+ *
+ * Weapon-system audit #3 follow-through. Capacity used to multiply basePower by
+ * the ship's rarity, an 8%/level growth AND its power roll — the same battleship
+ * ranged from 36 to 407 capacity while module draw stayed flat. Power therefore
+ * stopped constraining anything a few levels in, which is the deeper reason the
+ * overdraw warning never fired for anyone: not just that nothing read it, but
+ * that nothing could ever trip it.
+ *
+ * Capacity is now a property of the hull class you're flying. That makes
+ * ASCENSION the thing that unlocks heavier fits, which is exactly what the
+ * game's ascension premise wants it to be — a bigger ship carries more gun —
+ * rather than power quietly inflating with grind. The 4%/level term keeps some
+ * of the original intent (Issue #1, 2026-08: leveling should visibly change more
+ * than the health bar) without letting capacity outrun the fit by 10x.
+ *
+ * `level` defaults to 1 (no bonus) so partial-ship call sites still work. */
 export function computePowerCapacity(ship: Pick<ShipInstance, "hullClass" | "rarity"> & Partial<Pick<ShipInstance, "rolls" | "level">>): number {
   const def = hullClassById(ship.hullClass);
-  const growth = 1 + ((ship.level ?? 1) - 1) * 0.08;
-  const roll = qualityMultiplier((ship.rolls ?? NEUTRAL_ROLLS).power);
-  return Math.round(def.basePower * RARITY_MULTIPLIER[ship.rarity] * growth * roll);
+  const growth = 1 + ((ship.level ?? 1) - 1) * 0.04;
+  return Math.round(def.basePower * growth);
 }
 
 /** World-units/sec the flagship moves at, both on the system map and in the combat

@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { state, flagship, equipModule, spend, canAfford, sellModule, upgradeModule, isDesignEquipped } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
+import { powerStrainMultiplier } from "../../engine/combat";
 import { computePowerCapacity } from "../../engine/ships";
 import { moduleDefById, fabricatorCost, MODULE_RARITY_ORDER } from "../../data/modules";
 import { moduleEffectById } from "../../data/moduleEffects";
@@ -70,8 +71,16 @@ export function Modules() {
           </span>
         </div>
         <div style={{ marginTop: "0.5rem" }}>
-          <Bar fraction={capacity ? usedPower / capacity : 0} kind={overdrawn ? "danger" : "warn"} />
+          <Bar fraction={capacity ? Math.min(1, usedPower / capacity) : 0} kind={overdrawn ? "danger" : "warn"} />
         </div>
+        {/* Weapon-system audit #3: this bar used to turn red and mean nothing —
+            equipModule had no check and combat never read it. Overdraw now
+            stretches weapon cooldowns, so the warning states its actual cost. */}
+        {overdrawn && (
+          <div style={{ marginTop: "0.45rem", fontSize: "0.72rem", color: "var(--red)", lineHeight: 1.4 }}>
+            {t("modules.overdrawn", { pct: Math.round((powerStrainMultiplier(usedPower, capacity) - 1) * 100) })}
+          </div>
+        )}
       </div>
 
       {/* The loadout, shown as a ship rather than a form — hardpoints arranged

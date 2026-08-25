@@ -134,3 +134,45 @@ export function anchorBonusBlock(
   if (!anchored) return 0;
   return Math.round(self.block * ANCHOR_BLOCK_FRACTION) + ANCHOR_BLOCK_FLAT;
 }
+
+/** Weapon-system audit #9: how well a weapon likes the current range band.
+ *
+ * RANGE_MODIFIERS shifts damage per band identically for every weapon, so a
+ * sniper and a shotgun behaved the same at every distance — exactly one weapon in
+ * fifty had any range identity at all, via the `sniper` effect. A weapon's own
+ * preferred band now matters, which turns the helm's stance order into a weapons
+ * decision as well as a defensive one, and gives a mixed loadout a real reason to
+ * exist: no single stance suits everything you're carrying.
+ *
+ * Deliberately gentle (+25% / -25%). Range is contested and slow to change, so a
+ * harsher curve would punish the player for a band they can't always control.
+ */
+export function rangeProfileMultiplier(profile: string | undefined, band: RangeBand): number {
+  if (!profile || profile === "flat") return 1;
+  if (profile === band) return 1.25;
+  const order = ["close", "mid", "long"];
+  const distance = Math.abs(order.indexOf(profile) - order.indexOf(band));
+  return distance >= 2 ? 0.75 : 1;
+}
+
+/** Weapon-system audit #3: power draw used to constrain nothing at all. The
+ * Modules screen computed an `overdrawn` flag and painted the bar red, but
+ * equipModule had no check and combat never read it — the game displayed a limit,
+ * warned you for crossing it, and did nothing.
+ *
+ * Overdrawing now browns the ship out: weapon cooldowns stretch in proportion to
+ * how far past capacity the fit is. A soft penalty rather than a hard block, for
+ * two reasons — an existing save with an over-capacity loadout keeps working, and
+ * "I can run this heavy gun if I accept slower cycling" is a more interesting
+ * decision than a disabled button.
+ *
+ * Returns a cooldown multiplier >= 1. Capped so a wildly overdrawn fit is bad,
+ * not bricked.
+ */
+export const POWER_STRAIN_CAP = 2.5;
+
+export function powerStrainMultiplier(used: number, capacity: number): number {
+  if (capacity <= 0 || used <= capacity) return 1;
+  const over = (used - capacity) / capacity;
+  return Math.min(POWER_STRAIN_CAP, 1 + over * 1.5);
+}

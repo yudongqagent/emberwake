@@ -4,7 +4,7 @@ import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
+import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip } from "../../state/store";
 import { crewDefById } from "../../data/crew";
 import { hullClassAbility } from "../../data/namedShips";
@@ -44,7 +44,13 @@ const COMBAT_TICK_MS = 150;
  * legible cadence instead of buzzing like a machine gun. Only applied to
  * weapon-type modules (see fireModuleImpl's cooldown-set); utility actives keep
  * their authored cooldown untouched since they're still manually triggered. */
-const AUTO_FIRE_MIN_INTERVAL = 1.6;
+/** Weapon-system audit #5: this used to be 1.6s, which silently overrode the
+ * cooldown of every weapon faster than that — all ten mk1 weapons declared
+ * `cooldown: 0` and fired every 1.6s regardless. Now that cadence is a real
+ * design axis (a Reaver mk3 cycles in 0.84s, a Mayeth mk3 in 5.76s), this is a
+ * safety net against a zero-cooldown weapon refiring every render, not a design
+ * decision that quietly erases a whole family's identity. */
+const AUTO_FIRE_MIN_INTERVAL = 0.6;
 /** UI audit #4 — Brace. Deliberately shorter than the gap between enemy attacks:
  * holding it open permanently isn't possible, so it has to be spent on a read of
  * the intent arcs rather than mashed. */
@@ -525,6 +531,17 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
   );
 
   const capacity = computePowerCapacity(ship);
+  // Weapon-system audit #3: overdrawing now costs cadence. Capacitor modules cut
+  // the draw, which is what makes that effect worth a socket.
+  const powerDrawUsed = Math.round(
+    equippedModuleList.reduce((sum, m) => sum + moduleDefById(m.defId).powerDraw, 0)
+      * Math.max(0.6, 1 - 0.12 * equippedModuleList.filter((m) => modHasEffect(m, "capacitor")).length),
+  );
+  const powerStrain = powerStrainMultiplier(powerDrawUsed, capacity);
+  // Read inside the frozen fireModule closure — mirror it, per the ref pattern
+  // documented on combatTick.
+  const powerStrainRef = useRef(powerStrain);
+  powerStrainRef.current = powerStrain;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const arenaRef = useRef<{ player: ArenaPoint; enemyPos: ArenaPoint[] }>({
@@ -1601,7 +1618,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
       const chorusShotActive = chorusOvertureShots > 0;
       const chorusRoll = chorusShotActive ? 1 : undefined;
       const chorusDmgMult = chorusShotActive ? 1.3 : 1;
-      const rawResult = resolveAttack(Math.round(dmg * chorusDmgMult), effectiveBlock, targetEvasion, outgoingMult, chorusRoll, critChance);
+      // Weapon-system audit #9: the weapon's own preferred band, on top of the
+      // global per-band modifier every weapon already shared.
+      const profileMult = rangeProfileMultiplier(def.rangeProfile, rangeBandRef.current);
+      const rawResult = resolveAttack(Math.round(dmg * chorusDmgMult * profileMult), effectiveBlock, targetEvasion, outgoingMult, chorusRoll, critChance);
       if (chorusShotActive) setChorusOvertureShots((c) => Math.max(0, c - 1));
       // Bauhinia/Swanreach doctrine: Point Defense. Utilitarian military-industrial
       // hulls run point-defense grids that specifically blunt precision hits — a crit
@@ -1862,7 +1882,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
     // Item #2: weapon-type modules only ever fire via auto-fire now — floor their
     // cadence at AUTO_FIRE_MIN_INTERVAL so a 0-cooldown weapon (e.g. Pulse Cannon)
     // doesn't refire every render. Utility actives keep their raw authored cooldown.
-    const nextCooldownSec = def.type === "weapon" ? Math.max(AUTO_FIRE_MIN_INTERVAL, rawCooldownSec) : rawCooldownSec;
+    const nextCooldownSec = def.type === "weapon"
+      ? Math.max(AUTO_FIRE_MIN_INTERVAL, rawCooldownSec * powerStrainRef.current)
+      : rawCooldownSec;
     setCooldowns((prev) => ({ ...prev, [moduleId]: nextCooldownSec }));
     if (overloadShotCount > 0) overloadCountersRef.current[mod.id] = overloadShotCount >= 3 ? 0 : overloadShotCount;
     if (wasOvercharged) setOvercharged(false);
@@ -1996,7 +2018,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
       // outdamaging it, on top of a real hit for using it before the chord fills.
       // Adds a Choir-gold ring per target and a hit-stop beat on top of the
       // existing burst so it reads as heavier than a plain weapon shot.
-      const dmg = Math.round(capacity * 0.3);
+      const dmg = Math.round(capacity * 0.27);
       nextEnemies = enemies.map((e, i) => {
         if (e.hull <= 0) return e;
         const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
@@ -2181,7 +2203,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
    * Splash trait is. */
   function useEmberNovaImpl() {
     if (status !== "active" || emberNovaCharge < EMBER_NOVA_MAX) return;
-    const novaDamage = Math.round(capacity * 1.5);
+    // Weapon-system audit #3 made power a real budget, which meant raising hull
+    // capacity so a full same-tier fit could actually fit (it never could — the
+    // mismatch was just invisible while power did nothing). Capacity also scales
+    // Ember Nova, so this coefficient comes down to keep the ultimate where it
+    // was: 1.5 x 32 on a battleship == 1.33 x 36.
+    //
+    // It can't hold for every hull, because capacity rose unevenly — a corvette
+    // gained 83% and a battleship 12.5%. Early hulls therefore get a modestly
+    // stronger Nova and the largest hulls a slightly weaker one. That's a real
+    // balance change, stated rather than hidden; it flattens the ultimate's
+    // scaling, which was steeper than intended anyway. See weapons.test.ts.
+    const novaDamage = Math.round(capacity * 1.33);
     const nextEnemies = enemies.map((enemy, i) => {
       if (enemy.hull <= 0) return enemy;
       const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
