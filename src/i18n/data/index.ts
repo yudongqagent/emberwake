@@ -69,7 +69,23 @@ export function localizedHullClassDisplay(def: { name: string; nameCn: string })
   return language.value === "zh" ? `${def.nameCn} (${def.name})` : `${def.name} (${def.nameCn})`;
 }
 
+/** Rift waves are generated at runtime (data/rift.ts) with a random id, so they
+ * can never appear in the static ZH table the way authored encounters do — which
+ * left the one repeatable endgame mode showing an English title inside an
+ * otherwise fully Chinese UI. Recognised by their id prefix and titled from the
+ * depth encoded in it.
+ *
+ * Built from the `language` signal directly rather than through `t()`: this
+ * module is imported by the string table's own consumers, and pulling
+ * i18n/strings.ts in here creates an import cycle that leaves `t` undefined at
+ * call time (a runtime-only failure — the types are perfectly happy). */
+const RIFT_WAVE_ID = /^riftWave_(\d+)_/;
+
 export function localizedEncounterName(def: Pick<EncounterDef, "id" | "name">): string {
+  const rift = RIFT_WAVE_ID.exec(def.id);
+  if (rift) {
+    return language.value === "zh" ? `异空间侵袭 — 第 ${rift[1]} 层` : `Rift Incursion — Depth ${rift[1]}`;
+  }
   if (language.value !== "zh") return def.name;
   return ENCOUNTER_NAMES_ZH[def.id] ?? def.name;
 }

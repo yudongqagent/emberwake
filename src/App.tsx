@@ -181,6 +181,10 @@ export function App() {
           encounterId={combat.encounterId}
           poiId={isPoiCombat ? combat.poiId : null}
           victoryFlag={isPoiCombat ? combat.victoryFlag : undefined}
+          // UI audit #7: what this wave is actually risking, so the dive's
+          // mounting stakes are visible during the fight rather than only in
+          // the interlude between waves.
+          rift={riftRun ? { depth: riftRun.depth, haul: riftRun.haul } : null}
           onResolve={(result) => {
             setCombat(null);
             if (!riftRun) return;

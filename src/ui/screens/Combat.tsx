@@ -214,10 +214,19 @@ interface Props {
   poiId: string | null;
   victoryFlag?: string;
   onResolve: (result: "victory" | "defeat" | "captured") => void;
+  /** UI audit #7: the live stakes of an extradimensional battlefield run. Combat
+   * previously had no idea it was inside a rift dive — depth only changed the
+   * enemy numbers, so the one mode built around mounting risk felt exactly like
+   * a bounty fight. Present only during a run; null everywhere else. */
+  rift?: { depth: number; haul: Partial<Record<ResourceType, number>> } | null;
 }
 
-export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
+export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Props) {
   const encounter = encounterById(encounterId);
+  // UI audit #7: dive depth as a 0..1 dread dial for the backdrop. Constant for
+  // this mount — each rift wave mounts Combat fresh — so the frame loop's frozen
+  // closure can capture it directly without a ref mirror.
+  const riftHeat = rift ? Math.min(1, (rift.depth - 1) / 7) : 0;
   const ship = flagship.value!;
   // Section D (fleet battles): allied ships — captured, then gifted on to family
   // or allies — join only where the encounter opts in. The riftEchoes exclusion
@@ -2115,7 +2124,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         const full = ENEMY_ATTACK_INTERVAL + ENEMY_ATTACK_JITTER;
         return Math.max(0, Math.min(1, 1 - timer.attackRemaining / full));
       });
-      draw(ctx, vp, arena, { angle: 0, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, ringsRef.current, hitPulseRef.current, allyCountRef.current, intent);
+      draw(ctx, vp, arena, { angle: 0, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, ringsRef.current, hitPulseRef.current, allyCountRef.current, intent, riftHeat);
     }
 
     // A throw anywhere in step() (physics, draw, anything reachable from a frame
@@ -2232,6 +2241,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             {activeStatuses.map((st, i) => <StatusBadge key={i} glyph={st.glyph} color={st.color} text={st.text} />)}
           </div>
         )}
+        {rift && <RiftStakesBar depth={rift.depth} haul={rift.haul} />}
       </div>
 
       {/* ---- VIEWSCREEN ---- */}
@@ -2577,6 +2587,46 @@ function ConsoleZone({ label, hint, children }: { label: string; hint?: string; 
 /** A pressable ability. Shows its cooldown as a draining fill behind the label
  * rather than only as a number in parentheses, so "how long until I can use this"
  * is readable at a glance mid-fight. */
+/** UI audit #7: the dive's live stakes. The rift is the one mode built entirely
+ * around escalating risk, but during a fight it looked exactly like a bounty —
+ * depth changed the enemy numbers and nothing else. This keeps the depth and the
+ * provisional haul on screen the whole time, and turns hotter as the dive gets
+ * deeper, so "this is what I lose if I go down here" is never out of sight. */
+function RiftStakesBar({ depth, haul }: { depth: number; haul: Partial<Record<ResourceType, number>> }) {
+  const entries = Object.entries(haul).filter(([, v]) => (v ?? 0) > 0) as [ResourceType, number][];
+  // Saturates around depth 8 — past that it's already as loud as it can get.
+  const heat = Math.min(1, (depth - 1) / 7);
+  const rgb = `${Math.round(150 + heat * 105)},${Math.round(120 - heat * 70)},${Math.round(220 - heat * 130)}`;
+  const color = `rgb(${rgb})`;
+  return (
+    <div
+      style={{
+        display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap",
+        marginTop: "0.45rem", padding: "0.3rem 0.55rem",
+        border: `1px solid ${color}`, borderRadius: 4,
+        background: `rgba(${Math.round(60 + heat * 60)},20,${Math.round(70 - heat * 30)},0.35)`,
+        boxShadow: `0 0 ${6 + heat * 14}px rgba(${rgb},0.27)`,
+      }}
+    >
+      <span className="eyebrow" style={{ color, fontWeight: 800 }}>
+        {t("rift.depthLabel", { depth })}
+      </span>
+      {entries.length === 0 ? (
+        <span style={{ fontSize: "0.66rem", color: "var(--text-dim)" }}>{t("rift.nothingAtRisk")}</span>
+      ) : (
+        <>
+          <span style={{ fontSize: "0.66rem", color: "var(--text-dim)" }}>{t("rift.atRiskShort")}</span>
+          {entries.map(([k, v]) => (
+            <span key={k} style={{ fontSize: "0.68rem", color: "var(--text-mid)", display: "inline-flex", alignItems: "center", gap: 3 }}>
+              <ResourceIcon type={k} size={11} />{v}
+            </span>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 /** UI audit #9/#5: the after-action breakdown. The game could never answer "what
  * in my loadout is actually doing the work" — a fight went well or badly and the
  * loadout's contribution stayed invisible, which is the single biggest reason
@@ -2869,18 +2919,22 @@ function draw(
    * which is what made stretches of a fight feel like watching rather than
    * commanding. */
   intent: number[],
+  /** UI audit #7: 0 outside a rift run, climbing toward 1 with dive depth. Bleeds
+   * the void into the backdrop so a deep dive *looks* more dangerous than a
+   * shallow one instead of only having larger numbers in it. */
+  riftHeat: number,
 ) {
   vp.beginFrame(ctx);
   const { scale, offsetX, offsetY } = vp.transform();
 
   const bg = ctx.createRadialGradient(vp.displayW / 2, vp.displayH / 2, 0, vp.displayW / 2, vp.displayH / 2, Math.max(vp.displayW, vp.displayH) * 0.8);
-  bg.addColorStop(0, "#161022");
+  bg.addColorStop(0, riftHeat > 0 ? `rgb(${Math.round(22 + riftHeat * 48)},${Math.round(16 - riftHeat * 8)},${Math.round(34 + riftHeat * 14)})` : "#161022");
   bg.addColorStop(1, "#040308");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, vp.displayW, vp.displayH);
 
   const nebula = ctx.createRadialGradient(vp.displayW * 0.75, vp.displayH * 0.25, 0, vp.displayW * 0.75, vp.displayH * 0.25, vp.displayW * 0.5);
-  nebula.addColorStop(0, `rgba(${FACTION_HULL_COLOR_RGB[faction] ?? "255,159,77"},0.1)`);
+  nebula.addColorStop(0, `rgba(${FACTION_HULL_COLOR_RGB[faction] ?? "255,159,77"},${0.1 + riftHeat * 0.22})`);
   nebula.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = nebula;
   ctx.fillRect(0, 0, vp.displayW, vp.displayH);

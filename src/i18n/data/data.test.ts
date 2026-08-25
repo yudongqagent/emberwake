@@ -16,6 +16,9 @@ import { CREW_ZH } from "./crew";
 import { NAMED_SHIPS_ZH } from "./namedShips";
 import { ENCOUNTER_NAMES_ZH, ENEMY_NAMES_ZH } from "./encounters";
 import { GALAXY_NAMES_ZH, SYSTEM_NAMES_ZH, POI_NAMES_ZH } from "./places";
+import { generateRiftWave } from "../../data/rift";
+import { localizedEncounterName } from "./index";
+import { setLanguage } from "../language";
 
 // Issue #11: the module/crew/named-ship translation overlays are looked up by id at
 // render time (see i18n/data/index.ts) — a typo'd or stale id here just silently
@@ -49,6 +52,24 @@ describe("module/crew/named-ship translation overlays stay in sync with English 
       expect(e.labelCn.length, `effect "${e.id}" has no Chinese label`).toBeGreaterThan(0);
       expect(e.descriptionCn.length, `effect "${e.id}" has no Chinese description`).toBeGreaterThan(0);
     }
+  });
+
+  // Rift waves are built at runtime with a random id, so they can never be in
+  // ENCOUNTER_NAMES_ZH — they shipped with an English title inside an otherwise
+  // fully Chinese UI precisely because the check above can't see them.
+  it("runtime-generated rift waves get a localized title in both languages", () => {
+    for (const depth of [1, 4, 12]) {
+      const wave = generateRiftWave(depth);
+      setLanguage("zh");
+      const zh = localizedEncounterName(wave);
+      setLanguage("en");
+      const en = localizedEncounterName(wave);
+      expect(zh, `depth ${depth}: Chinese rift title fell back to English`).not.toBe(en);
+      expect(zh).toContain(String(depth));
+      expect(en).toContain(String(depth));
+      expect(/[a-zA-Z]/.test(zh), `depth ${depth}: Chinese rift title "${zh}" still contains Latin letters`).toBe(false);
+    }
+    setLanguage("en");
   });
 
   it("every CrewDef has a Chinese translation", () => {
