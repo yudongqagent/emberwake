@@ -14,7 +14,8 @@ import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
 import { ResourceIcon, resourceLabel, CloseOrderIcon, HoldOrderIcon, RetreatOrderIcon, BoardIcon, NavIcon, HullIcon, ModuleTypeIcon, CrewRoleIcon } from "../components/Icons";
 import { AnimatedFraction, Bar, hullBarKind } from "../components/StatBlock";
-import { drawPlayerHull, drawEnemyHull, drawWeaponBeam, drawExplosionRing, drawFieldRing } from "../render/shipArt";
+import { drawPlayerHull, drawEnemyHull, drawExplosionRing, drawFieldRing } from "../render/shipArt";
+import { drawWeaponVfx, weaponVfxForFamily, weaponVfxForFaction, type WeaponVfx } from "../render/weaponVfx";
 import { reportError } from "../../engine/errorReporting";
 import { t } from "../../i18n/strings";
 import { localizedModuleName, localizedCrewActive, localizedNamedShipActive, localizedEncounterName, localizedEnemyName } from "../../i18n/data";
@@ -195,6 +196,13 @@ interface Projectile {
   duration: number;
   color: string;
   weight: number;
+  /** Which family's weapon fired this — picks the renderer in render/weaponVfx.ts.
+   * Player report (2026-08-25): "武器没有特效". Every weapon drew the same tracer in
+   * a different hue, so the screen read as having none. */
+  vfx: WeaponVfx;
+  /** Stable per-shot randomness, so a shot's scatter/crackle looks identical on
+   * every frame of its own flight instead of reshuffling each frame. */
+  seed: number;
 }
 
 interface Particle {
@@ -720,8 +728,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
     color: string,
     onImpact: () => void,
     weight: number = 1,
+    vfx: WeaponVfx = "pulse",
   ) {
-    projectilesRef.current.push({ fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, t: 0, duration: PROJECTILE_DURATION, color, weight });
+    projectilesRef.current.push({
+      fromX: from.x, fromY: from.y, toX: to.x, toY: to.y,
+      t: 0, duration: PROJECTILE_DURATION, color, weight,
+      vfx, seed: Math.random() * 1000,
+    });
     setTimeout(onImpact, PROJECTILE_DURATION * 1000);
   }
 
@@ -1041,7 +1054,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
           return next;
         });
       }
-    });
+    // Enemy fire uses its own faction's archetype, so a Swarm strike and a
+    // Construct strike aren't the same streak in a different colour. Charged
+    // haymakers come in heavier.
+    }, charged ? 2.2 : 1.1, weaponVfxForFaction(encounter.faction));
 
     if (charged) setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, charging: false } : e)));
     if (reflectDmg > 0) setEnemies((prev) => prev.map((e, i) => (i === idx ? { ...e, hull: Math.max(0, e.hull - reflectDmg) } : e)));
@@ -1069,7 +1085,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,214,107", 14, 110);
         addPopup("player", `-${dealt}`, "#ffd66b", false, hitWeight(dealt, maxHull));
         damageTakenRef.current += dealt;
-      }, 1.4);
+      }, 1.4, "wave");
     });
     pushLog(t("combat.log.choralStrike", { dmg: total }));
     playSfx("alarm");
@@ -1495,6 +1511,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
       const weaponColor = def.color ?? "#8ff3ff";
       const beamColor = result.crit ? "#ffe25d" : weaponColor;
       const weaponWeight = def.powerDraw / 2;
+      // The shot's look comes from the module's tech family, so a Reaver gun
+      // sprays and a Bauhinia gun lances without either being authored per module.
+      const weaponVfx = weaponVfxForFamily(def.family);
       fireProjectile(playerPos, impactPos, beamColor, () => {
         if (result.hit) {
           spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : hexToRgbString(weaponColor), result.crit ? 22 : 12, result.crit ? 150 : 110);
@@ -1504,7 +1523,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
           hitPulseRef.current.enemy[targetIdx] = performance.now();
           if (result.crit) setPlayerShakeToken((t) => t + 1);
         }
-      }, weaponWeight);
+      }, weaponWeight, weaponVfx);
       playSfx("laser");
       setComboCount((c) => (result.hit ? c + 1 : 0));
       if (result.hit) setEmberNovaCharge((c) => Math.min(EMBER_NOVA_MAX, c + 12));
@@ -1600,7 +1619,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
                 addPopup(arcIdx, `-${arcResult.damageDealt}`, weaponColor, false, enemyHitWeight(arcIdx, arcResult.damageDealt));
                 recordDamage(localizedModuleName(def), arcResult.damageDealt);
               }
-            }, weaponWeight);
+            }, weaponWeight, weaponVfx);
           }, 90);
           if (arcResult.hit) {
             nextEnemies[arcIdx] = { ...arcTarget, hull: Math.max(0, arcTarget.hull - arcResult.damageDealt) };
@@ -1627,7 +1646,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
                 addPopup(splashIdx, `-${splashResult.damageDealt}`, weaponColor, false, enemyHitWeight(splashIdx, splashResult.damageDealt));
                   recordDamage(localizedModuleName(def), splashResult.damageDealt);
               }
-            }, weaponWeight);
+            }, weaponWeight, weaponVfx);
           }, 90);
           if (splashResult.hit) {
             nextEnemies[splashIdx] = { ...splashTarget, hull: Math.max(0, splashTarget.hull - splashResult.damageDealt) };
@@ -1651,7 +1670,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
                 addPopup(targetIdx, `-${bResult.damageDealt}`, weaponColor, false, enemyHitWeight(targetIdx, bResult.damageDealt));
                   recordDamage(localizedModuleName(def), bResult.damageDealt);
               }
-            }, weaponWeight * 0.6);
+            }, weaponWeight * 0.6, weaponVfx);
           }, 70 * shot);
         }
         pushLog(t("combat.log.barrage", { target: target.name }));
@@ -1676,7 +1695,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
                 addPopup(pick.i, `-${sResult.damageDealt}`, weaponColor, false, enemyHitWeight(pick.i, sResult.damageDealt));
                   recordDamage(localizedModuleName(def), sResult.damageDealt);
               }
-            }, weaponWeight * 0.7);
+            }, weaponWeight * 0.7, weaponVfx);
           }, 60 * shot);
         }
         pushLog(t("combat.log.scatter", { target: target.name }));
@@ -1696,7 +1715,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
               addPopup(targetIdx, `-${volleyResult.damageDealt}`, weaponColor, false, enemyHitWeight(targetIdx, volleyResult.damageDealt));
                 recordDamage(localizedModuleName(def), volleyResult.damageDealt);
             }
-          }, weaponWeight);
+          }, weaponWeight, weaponVfx);
         }, 120);
         if (volleyResult.hit) {
           nextEnemies[targetIdx] = { ...volleyTarget, hull: Math.max(0, volleyTarget.hull - volleyResult.damageDealt) };
@@ -1990,7 +2009,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
               spawnBurst(enemyPos.x, enemyPos.y, hexToRgbString(def.color ?? "#8ff3ff"), 10, 100);
               addPopup(targetIdx, `-${dmg}`, def.color ?? "#8ff3ff", false, enemyHitWeight(targetIdx, dmg));
               recordDamage(t("combat.summary.crewAndHull"), dmg);
-            }, (def.powerDraw ?? 2) / 2);
+            }, (def.powerDraw ?? 2) / 2, weaponVfxForFamily(def.family));
           }, i * 70);
         });
         setEnemies((prev) => prev.map((e, i) => (i === targetIdx ? { ...e, hull: Math.max(0, e.hull - totalDmg) } : e)));
@@ -3171,7 +3190,10 @@ const FACTION_HULL_COLOR_RGB: Record<string, string> = {
 
 function drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: Projectile[]) {
   for (const p of projectiles) {
-    drawWeaponBeam(ctx, p.fromX, p.fromY, p.toX, p.toY, p.t, p.color, p.weight);
+    drawWeaponVfx(ctx, p.vfx, {
+      fromX: p.fromX, fromY: p.fromY, toX: p.toX, toY: p.toY,
+      t: p.t, color: p.color, weight: p.weight, seed: p.seed,
+    });
   }
 }
 
