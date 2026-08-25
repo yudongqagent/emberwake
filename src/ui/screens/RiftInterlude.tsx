@@ -14,11 +14,14 @@ import { t } from "../../i18n/strings";
 export function RiftInterlude({
   depth,
   haul,
+  surge,
   onDiveDeeper,
   onExtract,
 }: {
   depth: number;
   haul: Partial<Record<ResourceType, number>>;
+  /** 源点获取倍率 from the wave just cleared (1 = didn't trigger). */
+  surge: number;
   onDiveDeeper: () => void;
   onExtract: () => void;
 }) {
@@ -42,6 +45,39 @@ export function RiftInterlude({
           {t("rift.depthCleared", { depth })}
         </div>
       </div>
+
+      {/* 源点获取倍率 — one of the two system abilities the novel actually names.
+          It gets the loudest treatment in the mode because it is the reason to be
+          here, and because it's still provisional: a 100x you fail to extract with
+          is the best story the rift can give you. */}
+      {surge > 1 && (
+        <div
+          className="panel accent scanline"
+          style={{
+            padding: "0.7rem 1.4rem", textAlign: "center",
+            ["--accent" as any]: surge >= 100 ? "var(--amber)" : "var(--violet)",
+            animation: "popIn 420ms cubic-bezier(0.2,1.4,0.3,1) both",
+          }}
+        >
+          <div className="eyebrow" style={{ color: surge >= 100 ? "var(--amber)" : "var(--violet)" }}>
+            {t("rift.surgeLabel")}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-display)", fontWeight: 900,
+              fontSize: surge >= 100 ? "2.4rem" : "1.7rem",
+              color: surge >= 100 ? "var(--amber)" : "var(--violet)",
+              textShadow: `0 0 ${surge >= 100 ? 26 : 14}px currentColor`,
+              lineHeight: 1.1,
+            }}
+          >
+            {t("rift.surgeValue", { mult: surge })}
+          </div>
+          <div style={{ fontSize: "0.72rem", color: "var(--text-mid)", marginTop: "0.2rem" }}>
+            {t("rift.surgeNote")}
+          </div>
+        </div>
+      )}
 
       {/* Provisional haul — labelled as at-risk, because it is. */}
       <div className="panel accent scanline" style={{ padding: "1rem 1.15rem", minWidth: "min(340px, 92vw)", ["--accent" as any]: "var(--violet)" }}>

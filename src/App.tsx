@@ -15,7 +15,7 @@ import { Combat } from "./ui/screens/Combat";
 import { RiftInterlude } from "./ui/screens/RiftInterlude";
 import { RiftDropReveal } from "./ui/screens/RiftDropReveal";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
-import { generateRiftWave, riftWaveHaul, addHaul } from "./data/rift";
+import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
 import { registerRuntimeEncounter } from "./data/encounters";
 import { grant, grantRiftDrop } from "./state/store";
 import { setMuted, isMuted } from "./audio/engine";
@@ -66,6 +66,13 @@ interface RiftRun {
   haul: Partial<Record<ResourceType, number>>;
   /** Set between waves, while the player decides to push deeper or pull out. */
   awaitingChoice: boolean;
+  /** The anomaly warping the wave currently being fought, and what it multiplies
+   * that wave's haul by (see data/rift.ts). */
+  anomaly: RiftAnomalyId;
+  haulMultiplier: number;
+  /** 源点获取倍率 from the wave just cleared — 1 when it didn't trigger. Surfaced
+   * in the interlude as the run's headline moment when it does. */
+  lastSurge: number;
 }
 
 export function App() {
@@ -77,14 +84,19 @@ export function App() {
   const [riftRun, setRiftRun] = useState<RiftRun | null>(null);
   const [riftDrop, setRiftDrop] = useState<ModuleInstance | null>(null);
 
-  function launchRiftWave(depth: number) {
-    const wave = registerRuntimeEncounter(generateRiftWave(depth));
-    setCombat({ encounterId: wave.id });
+  /** Generates the wave AND records the anomaly warping it, so the combat screen
+   * can name what the player just walked into. */
+  function launchRiftWave(depth: number, apply: (w: { anomaly: RiftAnomalyId; haulMultiplier: number }) => void) {
+    const wave = generateRiftWaveFull(depth);
+    registerRuntimeEncounter(wave.encounter);
+    apply({ anomaly: wave.anomaly, haulMultiplier: wave.haulMultiplier });
+    setCombat({ encounterId: wave.encounter.id });
   }
 
   function enterRift() {
-    setRiftRun({ depth: 1, haul: {}, awaitingChoice: false });
-    launchRiftWave(1);
+    launchRiftWave(1, (w) =>
+      setRiftRun({ depth: 1, haul: {}, awaitingChoice: false, anomaly: w.anomaly, haulMultiplier: w.haulMultiplier, lastSurge: 1 }),
+    );
   }
 
   /** Banks the run's haul and ends it, including the run's single module reward —
@@ -161,10 +173,12 @@ export function App() {
         <RiftInterlude
           depth={riftRun.depth}
           haul={riftRun.haul}
+          surge={riftRun.lastSurge}
           onDiveDeeper={() => {
             const next = riftRun.depth + 1;
-            setRiftRun({ ...riftRun, depth: next, awaitingChoice: false });
-            launchRiftWave(next);
+            launchRiftWave(next, (w) =>
+              setRiftRun({ ...riftRun, depth: next, awaitingChoice: false, anomaly: w.anomaly, haulMultiplier: w.haulMultiplier }),
+            );
           }}
           onExtract={extractFromRift}
         />
@@ -184,7 +198,7 @@ export function App() {
           // UI audit #7: what this wave is actually risking, so the dive's
           // mounting stakes are visible during the fight rather than only in
           // the interlude between waves.
-          rift={riftRun ? { depth: riftRun.depth, haul: riftRun.haul } : null}
+          rift={riftRun ? { depth: riftRun.depth, haul: riftRun.haul, anomaly: riftRun.anomaly } : null}
           onResolve={(result) => {
             setCombat(null);
             if (!riftRun) return;
@@ -194,9 +208,16 @@ export function App() {
               setRiftRun(null);
               return;
             }
-            setRiftRun((run) =>
-              run ? { ...run, haul: addHaul(run.haul, riftWaveHaul(run.depth)), awaitingChoice: true } : run,
-            );
+            setRiftRun((run) => {
+              if (!run) return run;
+              const surge = rollSourceSurge(run.depth);
+              return {
+                ...run,
+                haul: addHaul(run.haul, riftWaveHaul(run.depth, run.haulMultiplier, surge)),
+                awaitingChoice: true,
+                lastSurge: surge,
+              };
+            });
           }}
         />
         <ErrorToast />

@@ -16,6 +16,7 @@ import { ResourceIcon, resourceLabel, CloseOrderIcon, HoldOrderIcon, RetreatOrde
 import { AnimatedFraction, Bar, hullBarKind } from "../components/StatBlock";
 import { drawPlayerHull, drawEnemyHull, drawExplosionRing, drawFieldRing } from "../render/shipArt";
 import { drawWeaponVfx, weaponVfxForFamily, weaponVfxForFaction, type WeaponVfx } from "../render/weaponVfx";
+import type { RiftAnomalyId } from "../../data/rift";
 import { reportError } from "../../engine/errorReporting";
 import { t } from "../../i18n/strings";
 import { localizedModuleName, localizedCrewActive, localizedNamedShipActive, localizedEncounterName, localizedEnemyName } from "../../i18n/data";
@@ -236,7 +237,7 @@ interface Props {
    * previously had no idea it was inside a rift dive — depth only changed the
    * enemy numbers, so the one mode built around mounting risk felt exactly like
    * a bounty fight. Present only during a run; null everywhere else. */
-  rift?: { depth: number; haul: Partial<Record<ResourceType, number>> } | null;
+  rift?: { depth: number; haul: Partial<Record<ResourceType, number>>; anomaly: RiftAnomalyId } | null;
 }
 
 export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Props) {
@@ -2326,7 +2327,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
             {activeStatuses.map((st, i) => <StatusBadge key={i} glyph={st.glyph} color={st.color} text={st.text} />)}
           </div>
         )}
-        {rift && <RiftStakesBar depth={rift.depth} haul={rift.haul} />}
+        {rift && <RiftStakesBar depth={rift.depth} haul={rift.haul} anomaly={rift.anomaly} />}
       </div>
 
       {/* ---- VIEWSCREEN ---- */}
@@ -2749,7 +2750,7 @@ function ConsoleZone({ label, hint, children }: { label: string; hint?: string; 
  * depth changed the enemy numbers and nothing else. This keeps the depth and the
  * provisional haul on screen the whole time, and turns hotter as the dive gets
  * deeper, so "this is what I lose if I go down here" is never out of sight. */
-function RiftStakesBar({ depth, haul }: { depth: number; haul: Partial<Record<ResourceType, number>> }) {
+function RiftStakesBar({ depth, haul, anomaly }: { depth: number; haul: Partial<Record<ResourceType, number>>; anomaly: RiftAnomalyId }) {
   const entries = Object.entries(haul).filter(([, v]) => (v ?? 0) > 0) as [ResourceType, number][];
   // Saturates around depth 8 — past that it's already as loud as it can get.
   const heat = Math.min(1, (depth - 1) / 7);
@@ -2768,6 +2769,17 @@ function RiftStakesBar({ depth, haul }: { depth: number; haul: Partial<Record<Re
       <span className="eyebrow" style={{ color, fontWeight: 800 }}>
         {t("rift.depthLabel", { depth })}
       </span>
+      {/* Naming the anomaly is the point of rolling one: an unannounced rules
+          change just reads as inconsistent difficulty. */}
+      {anomaly !== "none" && (
+        <span
+          className="eyebrow"
+          style={{ fontWeight: 800, color: "var(--violet)", border: "1px solid var(--violet)", borderRadius: 3, padding: "0 0.35em" }}
+          title={t(`rift.anomaly.${anomaly}.desc`)}
+        >
+          {t(`rift.anomaly.${anomaly}`)}
+        </span>
+      )}
       {entries.length === 0 ? (
         <span style={{ fontSize: "0.66rem", color: "var(--text-dim)" }}>{t("rift.nothingAtRisk")}</span>
       ) : (
