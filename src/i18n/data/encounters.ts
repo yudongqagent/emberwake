@@ -58,7 +58,20 @@ export const ENEMY_NAMES_ZH: Record<string, string> = {
   "Reaver Raider Cutter": "掠夺者突袭快艇",
   "Reaver Skiff": "掠夺者快艇",
   "Remnant Skiff": "残部快艇",
+  // The rift's expanded roster (data/rift.ts). These are generated at runtime, so
+  // the encounter-walking test in i18n/data/data.test.ts structurally cannot see
+  // them — the nine added on 2026-08-25 shipped in English inside a Chinese UI
+  // until a dive surfaced it. rift.test.ts now covers this roster by name.
   "Rift Flicker": "裂隙闪影",
+  "Rift Mote": "裂隙微尘",
+  "Rift Wisp": "裂隙游丝",
+  "Rift Bulwark": "裂隙壁垒",
+  "Rift Knitter": "裂隙织愈者",
+  "Rift Lance": "裂隙锐锋",
+  "Rift Choirmass": "裂隙合唱体",
+  "Rift Harrower": "裂隙掠夺者",
+  "Rift Colossus": "裂隙巨像",
+  "Rift Devourer": "裂隙吞噬者",
   "Rift Scavenger Drone": "裂隙拾荒无人机",
   "Rift Sovereign": "裂隙君主",
   "Rift Warden": "裂隙守卫",

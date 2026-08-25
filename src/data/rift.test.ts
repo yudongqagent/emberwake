@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateRiftWaveFull, riftWaveHaul, rollSourceSurge, RIFT_ANOMALIES } from "./rift";
 import { t } from "../i18n/strings";
+import { ENEMY_NAMES_ZH } from "../i18n/data/encounters";
 
 // Player report (2026-08-25): "异空间每次应该不一样的对手和特殊奖励".
 // The dive used to draw from three archetypes that differed only in their stat
@@ -40,6 +41,22 @@ describe("rift wave generation", () => {
       // A rolled anomaly that renders as a raw key would be worse than none at all.
       expect(t(`rift.anomaly.${a.id}`)).not.toBe(`rift.anomaly.${a.id}`);
       expect(t(`rift.anomaly.${a.id}.desc`)).not.toBe(`rift.anomaly.${a.id}.desc`);
+    }
+  });
+
+  // The i18n test in i18n/data/data.test.ts walks ENCOUNTER_DEFS, which cannot
+  // reach a roster that only exists at runtime — nine of these shipped untranslated
+  // for exactly that reason, and were only caught by looking at a live dive.
+  it("every rift archetype the generator can field has a Chinese name", () => {
+    const seen = new Set<string>();
+    for (let depth = 1; depth <= 14; depth++) {
+      for (let i = 0; i < 120; i++) {
+        for (const e of generateRiftWaveFull(depth).encounter.enemies) seen.add(e.name);
+      }
+    }
+    expect(seen.size, "generator is not fielding the whole roster").toBeGreaterThanOrEqual(12);
+    for (const name of seen) {
+      expect(ENEMY_NAMES_ZH[name], `rift enemy "${name}" has no Chinese name — it renders in English mid-dive`).toBeDefined();
     }
   });
 
