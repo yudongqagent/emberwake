@@ -294,6 +294,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   /** Full-screen flash on the winning blow — see finishCombat. */
   const [victoryFlash, setVictoryFlash] = useState(false);
   const [bonusDrop, setBonusDrop] = useState<ModuleInstance | null>(null);
+  /** UI audit #9: the after-action figures, frozen at the moment the fight ends
+   * (the ledger ref keeps mutating, and hull is combat-local). */
+  const [afterAction, setAfterAction] = useState<
+    { sources: [string, number][]; total: number; taken: number; seconds: number } | null
+  >(null);
+  const damageTakenRef = useRef(0);
+  const combatStartRef = useRef(Date.now());
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [levelUpHullGain, setLevelUpHullGain] = useState(0);
   const [levelUpPowerGain, setLevelUpPowerGain] = useState(0);
@@ -724,6 +731,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
     return hitWeight(damage, enemiesRef.current[index]?.maxHull ?? 0);
   }
 
+  /** UI audit #9/#5: a running per-source damage ledger for the after-action
+   * summary. The game had no way to answer "what in my loadout is actually
+   * doing the work" — you could feel a fight go well without ever learning
+   * which weapon or effect carried it, which is what made build identity
+   * invisible. A ref, not state: it's written on most hits and only read once,
+   * when the fight ends. */
+  const damageLedgerRef = useRef<Record<string, number>>({});
+  function recordDamage(source: string, amount: number) {
+    if (amount <= 0) return;
+    damageLedgerRef.current[source] = (damageLedgerRef.current[source] ?? 0) + amount;
+  }
+
   // Player passive-regen clock (Field Repair / regen-trait stacks) — independent of
   // any specific enemy attack now that enemies no longer act in a synchronized
   // batch; see combatTick.
@@ -790,6 +809,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         fireProjectile(arenaRef.current.player, pos, "#ff6b3d", () => {
           spawnBurst(pos.x, pos.y, "255,107,61", 14, 110);
           addPopup(idx, `-${firstBloodDmg}`, "#ff6b3d", false, enemyHitWeight(idx, firstBloodDmg));
+          recordDamage(t("combat.summary.crewAndHull"), firstBloodDmg);
         });
         pushLog(t("combat.log.firstBlood", { enemy: enemy.name, dmg: firstBloodDmg }));
         playSfx("laser");
@@ -878,6 +898,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             fireProjectile(arenaRef.current.player, pos, "#ffe25d", () => {
               spawnBurst(pos.x, pos.y, "255,226,93", 14, 110);
               addPopup(idx, `-${riposteDmg}`, "#ffe25d", false, enemyHitWeight(idx, riposteDmg));
+              recordDamage(t("combat.summary.crewAndHull"), riposteDmg);
             });
           }
           pushLog(t("combat.log.riposte", { enemy: enemy.name, dmg: riposteDmg }));
@@ -898,6 +919,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       } else if (result.hit) {
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,107,107", charged ? 20 : 10, charged ? 130 : 90);
         addPopup("player", `-${result.damageDealt}`, "#ff5c5c", charged, hitWeight(result.damageDealt, maxHull), false);
+        damageTakenRef.current += result.damageDealt;
         playSfx("hit");
         setPlayerShakeToken((t) => t + 1);
         triggerHitStop(charged ? 100 : 45);
@@ -907,6 +929,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         if (reflectDmg > 0) {
           spawnBurst(enemyPos.x, enemyPos.y, "255,143,102", 8, 90);
           addPopup(idx, `-${reflectDmg}`, "#ff8f66", false, enemyHitWeight(idx, reflectDmg));
+          recordDamage(t("combat.summary.moduleEffects"), reflectDmg);
           pushLog(t("combat.log.reflect", { dmg: reflectDmg, enemy: enemy.name }));
         }
 
@@ -1000,6 +1023,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       fireProjectile(pos, arenaRef.current.player, "#ffd66b", () => {
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "255,214,107", 14, 110);
         addPopup("player", `-${dealt}`, "#ffd66b", false, hitWeight(dealt, maxHull));
+        damageTakenRef.current += dealt;
       }, 1.4);
     });
     pushLog(t("combat.log.choralStrike", { dmg: total }));
@@ -1121,6 +1145,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       fireProjectile(from, pos, "#8cffc7", () => {
         spawnBurst(pos.x, pos.y, "140,255,199", 8, 90);
         addPopup(tIdx, `-${dmg}`, "#8cffc7", false, enemyHitWeight(tIdx, dmg));
+        recordDamage(t("combat.summary.moduleEffects"), dmg);
       }, 0.9);
       setEnemies((prev) => prev.map((e, idx) => (idx === tIdx ? { ...e, hull: Math.max(0, e.hull - dmg) } : e)));
       pushLog(t("combat.log.allyVolley", { ally: ally.name, target: target.name, dmg }));
@@ -1246,6 +1271,21 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
   function finishCombat(result: "victory" | "defeat" | "captured", finalEnemies: EnemyState[]) {
     setStatus(result);
     setEnemies(finalEnemies);
+    // UI audit #9: freeze the after-action figures for every outcome, losses
+    // included — a defeat is exactly when "what wasn't pulling its weight" is
+    // the most useful thing the screen can tell you.
+    {
+      const sources = Object.entries(damageLedgerRef.current)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1]);
+      const total = sources.reduce((sum, [, v]) => sum + v, 0);
+      setAfterAction({
+        sources,
+        total,
+        taken: Math.round(damageTakenRef.current),
+        seconds: (Date.now() - combatStartRef.current) / 1000,
+      });
+    }
     if (result === "victory" || result === "captured") {
       playSfx(result === "captured" ? "draw" : "victory");
       // UI audit #2: winning is the most-repeated emotional beat in the game and it
@@ -1398,6 +1438,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         if (result.hit) {
           spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : hexToRgbString(weaponColor), result.crit ? 22 : 12, result.crit ? 150 : 110);
           addPopup(targetIdx, `${result.crit ? t("combat.critPrefix") : ""}-${result.damageDealt}`, result.crit ? "#ffe25d" : weaponColor, result.crit, hitWeight(result.damageDealt, target.maxHull), result.crit);
+            recordDamage(localizedModuleName(def), result.damageDealt);
           triggerHitStop(result.crit ? 90 : 35);
           hitPulseRef.current.enemy[targetIdx] = performance.now();
           if (result.crit) setPlayerShakeToken((t) => t + 1);
@@ -1423,6 +1464,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           setTimeout(() => {
             setPlayerHull((h) => Math.max(0, h - counterDmg));
             addPopup("player", `-${counterDmg}`, "#5dd6ff", false, hitWeight(counterDmg, maxHull));
+            damageTakenRef.current += counterDmg;
             spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "93,214,255", 10, 90);
             playSfx("hit");
           }, 180);
@@ -1472,6 +1514,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         if (spill > 0 && otherIdx >= 0) {
           nextEnemies[otherIdx] = { ...nextEnemies[otherIdx], hull: Math.max(0, nextEnemies[otherIdx].hull - spill) };
           addPopup(otherIdx, `-${spill}`, "#ff9f4d", false, enemyHitWeight(otherIdx, spill));
+          recordDamage(t("combat.summary.moduleEffects"), spill);
           pushLog(t("combat.log.overkill", { target: nextEnemies[otherIdx].name, dmg: spill }));
         }
       }
@@ -1494,6 +1537,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               if (arcResult.hit) {
                 spawnBurst(arcPos.x, arcPos.y, hexToRgbString(weaponColor), 8, 90);
                 addPopup(arcIdx, `-${arcResult.damageDealt}`, weaponColor, false, enemyHitWeight(arcIdx, arcResult.damageDealt));
+                recordDamage(localizedModuleName(def), arcResult.damageDealt);
               }
             }, weaponWeight);
           }, 90);
@@ -1520,6 +1564,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               if (splashResult.hit) {
                 spawnBurst(splashPos.x, splashPos.y, hexToRgbString(weaponColor), 8, 90);
                 addPopup(splashIdx, `-${splashResult.damageDealt}`, weaponColor, false, enemyHitWeight(splashIdx, splashResult.damageDealt));
+                  recordDamage(localizedModuleName(def), splashResult.damageDealt);
               }
             }, weaponWeight);
           }, 90);
@@ -1543,6 +1588,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               if (bResult.hit) {
                 spawnBurst(impactPos.x, impactPos.y, hexToRgbString(weaponColor), 6, 80);
                 addPopup(targetIdx, `-${bResult.damageDealt}`, weaponColor, false, enemyHitWeight(targetIdx, bResult.damageDealt));
+                  recordDamage(localizedModuleName(def), bResult.damageDealt);
               }
             }, weaponWeight * 0.6);
           }, 70 * shot);
@@ -1567,6 +1613,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               if (sResult.hit) {
                 spawnBurst(sPos.x, sPos.y, hexToRgbString(weaponColor), 7, 85);
                 addPopup(pick.i, `-${sResult.damageDealt}`, weaponColor, false, enemyHitWeight(pick.i, sResult.damageDealt));
+                  recordDamage(localizedModuleName(def), sResult.damageDealt);
               }
             }, weaponWeight * 0.7);
           }, 60 * shot);
@@ -1586,6 +1633,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             if (volleyResult.hit) {
               spawnBurst(impactPos.x, impactPos.y, hexToRgbString(weaponColor), 10, 90);
               addPopup(targetIdx, `-${volleyResult.damageDealt}`, weaponColor, false, enemyHitWeight(targetIdx, volleyResult.damageDealt));
+                recordDamage(localizedModuleName(def), volleyResult.damageDealt);
             }
           }, weaponWeight);
         }, 120);
@@ -1768,6 +1816,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
         spawnRing(pos.x, pos.y, "#ffd66b", 34, 450);
         spawnBurst(pos.x, pos.y, "180,220,255", 10, 100);
         addPopup(i, `-${dmg}`, "#8ff3ff", false, enemyHitWeight(i, dmg));
+        recordDamage(t("combat.summary.crewAndHull"), dmg);
         return { ...e, hull: Math.max(0, e.hull - dmg) };
       });
       setChoralResonance(0);
@@ -1879,6 +1928,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
             fireProjectile(playerPos, enemyPos, def.color ?? "#8ff3ff", () => {
               spawnBurst(enemyPos.x, enemyPos.y, hexToRgbString(def.color ?? "#8ff3ff"), 10, 100);
               addPopup(targetIdx, `-${dmg}`, def.color ?? "#8ff3ff", false, enemyHitWeight(targetIdx, dmg));
+              recordDamage(t("combat.summary.crewAndHull"), dmg);
             }, (def.powerDraw ?? 2) / 2);
           }, i * 70);
         });
@@ -1950,6 +2000,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       const pos = arenaRef.current.enemyPos[i] ?? enemySlot(i, enemies.length);
       spawnBurst(pos.x, pos.y, "255,159,77", 26, 160);
       addPopup(i, `-${novaDamage}`, "#ff9f4d", true, enemyHitWeight(i, novaDamage));
+      recordDamage(t("combat.summary.nova"), novaDamage);
       explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
       return { ...enemy, hull: Math.max(0, enemy.hull - novaDamage) };
     });
@@ -2471,6 +2522,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
               ))}
             </div>
           )}
+          {afterAction && afterAction.total > 0 && <AfterActionPanel data={afterAction} />}
           {bonusDrop && (() => {
             const def = moduleDefById(bonusDrop.defId);
             return (
@@ -2496,6 +2548,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
           <div style={{ fontSize: "0.85rem", color: "var(--text-mid)", marginBottom: "0.5rem" }}>
             {t("combat.defeatBody")}
           </div>
+          {/* A loss is exactly when the breakdown is most useful — it's the
+              feedback that turns "I died" into "my second weapon did nothing". */}
+          {afterAction && afterAction.total > 0 && <AfterActionPanel data={afterAction} />}
           <button className="btn primary" onClick={() => onResolve("defeat")}>{t("common.continue")}</button>
         </div>
       )}
@@ -2522,6 +2577,56 @@ function ConsoleZone({ label, hint, children }: { label: string; hint?: string; 
 /** A pressable ability. Shows its cooldown as a draining fill behind the label
  * rather than only as a number in parentheses, so "how long until I can use this"
  * is readable at a glance mid-fight. */
+/** UI audit #9/#5: the after-action breakdown. The game could never answer "what
+ * in my loadout is actually doing the work" — a fight went well or badly and the
+ * loadout's contribution stayed invisible, which is the single biggest reason
+ * build identity didn't register. Sources are ranked and shown as shares of total
+ * damage, so a build's real carry is obvious at a glance rather than inferred. */
+function AfterActionPanel({
+  data,
+}: {
+  data: { sources: [string, number][]; total: number; taken: number; seconds: number };
+}) {
+  const top = data.sources.slice(0, 5);
+  return (
+    <div
+      className="panel scanline"
+      style={{ padding: "0.75rem 0.9rem", marginBottom: "0.75rem", textAlign: "left", animation: "rewardIn 300ms ease-out both", animationDelay: "420ms" }}
+    >
+      <div className="eyebrow" style={{ color: "var(--text-dim)", marginBottom: "0.5rem" }}>{t("combat.summary.title")}</div>
+      {top.map(([name, value], i) => {
+        const share = data.total > 0 ? value / data.total : 0;
+        return (
+          <div key={name} style={{ marginBottom: i === top.length - 1 ? 0 : "0.4rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", marginBottom: 3 }}>
+              <span style={{ color: "var(--text-mid)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "62%" }}>{name}</span>
+              <span style={{ color: "var(--text-hi)", fontVariantNumeric: "tabular-nums" }}>
+                {value} <span style={{ color: "var(--text-dim)" }}>({Math.round(share * 100)}%)</span>
+              </span>
+            </div>
+            <div style={{ height: 4, background: "var(--bg-inset)", borderRadius: 2, overflow: "hidden" }}>
+              <div
+                style={{
+                  height: "100%",
+                  width: `${share * 100}%`,
+                  background: i === 0 ? "var(--amber)" : "var(--cyan)",
+                  opacity: i === 0 ? 1 : 0.65,
+                  borderRadius: 2,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", marginTop: "0.6rem", paddingTop: "0.5rem", borderTop: "1px solid var(--line)", fontSize: "0.68rem", color: "var(--text-dim)" }}>
+        <span>{t("combat.summary.dealt")} <b style={{ color: "var(--text-mid)" }}>{data.total}</b></span>
+        <span>{t("combat.summary.taken")} <b style={{ color: "var(--text-mid)" }}>{data.taken}</b></span>
+        <span>{t("combat.summary.duration")} <b style={{ color: "var(--text-mid)" }}>{data.seconds.toFixed(1)}s</b></span>
+      </div>
+    </div>
+  );
+}
+
 /** UI audit #10: the cooldown veil used to be a flat, full-width block that looked
  * identical at 0.1s remaining and at 12s — so the only way to know an ability was
  * nearly back was to read its number. It now drains left-to-right against the
