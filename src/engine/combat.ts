@@ -105,3 +105,32 @@ export function advanceRangeBand(
   if (idx === RANGE_ORDER.length - 1) progress = Math.max(progress, 0);
   return { band: current.band, progress };
 }
+
+/** Bonus armour an `anchor` enemy projects onto the ship at `index`.
+ *
+ * Part of the answer to "战斗还是很无聊" (player report 2026-08-25): with auto-fire,
+ * the only decision a fight leaves is which target to focus, and identical stat
+ * blocks made that decision meaningless. An anchor makes the formation itself the
+ * puzzle — everything it protects is markedly tougher until it dies.
+ *
+ * Pure and exported so the rule is testable on its own; Combat.tsx applies it at
+ * the player's hit-resolution site. Two properties matter and are covered by
+ * tests: an anchor never armours itself (so it's always the softest way in), and
+ * a dead anchor protects nothing.
+ */
+export const ANCHOR_BLOCK_FRACTION = 0.75;
+export const ANCHOR_BLOCK_FLAT = 4;
+
+export function anchorBonusBlock(
+  enemies: readonly { hull: number; block: number; role?: string }[],
+  index: number,
+): number {
+  const self = enemies[index];
+  if (!self) return 0;
+  // An anchor doesn't armour itself: it would remove the whole point of killing
+  // it first, since the counterplay is that the anchor is the soft target.
+  if (self.role === "anchor") return 0;
+  const anchored = enemies.some((e, i) => i !== index && e.hull > 0 && e.role === "anchor");
+  if (!anchored) return 0;
+  return Math.round(self.block * ANCHOR_BLOCK_FRACTION) + ANCHOR_BLOCK_FLAT;
+}

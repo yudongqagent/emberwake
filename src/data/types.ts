@@ -202,6 +202,26 @@ export interface GalaxyDef {
   lanes: JumpLane[];
 }
 
+/** What an enemy DOES for the rest of its formation, beyond its own stat line.
+ *
+ * Player report (2026-08-25): "战斗还是很无聊". With the guns firing themselves, the
+ * only decision a fight leaves you is which target to focus — and every enemy was
+ * an interchangeable stat block, so that decision never mattered. An encounter
+ * that opens with two identical Reaver Skiffs is asking a question with no wrong
+ * answer. Roles make the formation itself the puzzle: kill the wrong thing first
+ * and the fight gets harder.
+ *
+ * Each role is a real mechanic resolved in Combat.tsx, not a label:
+ * - `mender`  repairs its most-wounded ally on a timer. Ignore it and your damage
+ *             doesn't stick.
+ * - `anchor`  projects armour onto every OTHER enemy while it lives. Kill it and
+ *             the whole formation goes soft.
+ * - `artillery` telegraphs a long, heavy strike. Kill it during the windup, or
+ *             Brace through it.
+ * Undefined means an ordinary combatant — most enemies, deliberately, so the ones
+ * that matter stand out. */
+export type EnemyRole = "mender" | "anchor" | "artillery";
+
 export interface EnemyShipDef {
   name: string;
   hull: number;
@@ -210,6 +230,7 @@ export interface EnemyShipDef {
   evasion: number;
   /** Hull regenerated at the start of each of this enemy's turns (Swarm doctrine). */
   regen?: number;
+  role?: EnemyRole;
 }
 
 export interface EncounterDef {

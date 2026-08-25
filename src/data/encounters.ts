@@ -95,7 +95,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
       { name: "Swarm Drone", hull: 60, damage: 9, block: 0, evasion: 0.12, regen: 6 },
       { name: "Swarm Drone", hull: 60, damage: 9, block: 0, evasion: 0.12, regen: 6 },
       { name: "Swarm Drone", hull: 60, damage: 9, block: 0, evasion: 0.12, regen: 6 },
-      { name: "Swarm Broodling", hull: 240, damage: 17, block: 8, evasion: 0.1, regen: 10 },
+      { name: "Swarm Broodling", hull: 240, damage: 17, block: 8, evasion: 0.1, regen: 10, role: "mender" },
     ],
     rewards: { salvage: 260, sourcePoints: 150, alloy: 130, originEssence: 130 },
     xp: 210,
@@ -122,7 +122,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "swarm",
     isBoss: true,
     enemies: [
-      { name: "Swarm Broodling", hull: 260, damage: 18, block: 8, evasion: 0.1, regen: 12 },
+      { name: "Swarm Broodling", hull: 260, damage: 18, block: 8, evasion: 0.1, regen: 12, role: "mender" },
       { name: "Swarm Warrior", hull: 95, damage: 13, block: 2, evasion: 0.12, regen: 9 },
       { name: "Swarm Warrior", hull: 95, damage: 13, block: 2, evasion: 0.12, regen: 9 },
     ],
@@ -149,8 +149,8 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "swarm",
     isBoss: true,
     enemies: [
-      { name: "Rift-Warped Hulk", hull: 520, damage: 24, block: 16, evasion: 0.05 },
-      { name: "Swarm Broodling", hull: 280, damage: 19, block: 9, evasion: 0.1, regen: 14 },
+      { name: "Rift-Warped Hulk", hull: 520, damage: 24, block: 16, evasion: 0.05, role: "artillery" },
+      { name: "Swarm Broodling", hull: 280, damage: 19, block: 9, evasion: 0.1, regen: 14, role: "mender" },
       { name: "Swarm Warrior", hull: 110, damage: 15, block: 3, evasion: 0.12, regen: 11 },
       { name: "Swarm Warrior", hull: 110, damage: 15, block: 3, evasion: 0.12, regen: 11 },
     ],
@@ -194,7 +194,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "riftEchoes",
     isBoss: false,
     enemies: [
-      { name: "Rift Warden", hull: 210, damage: 17, block: 8, evasion: 0.12 },
+      { name: "Rift Warden", hull: 210, damage: 17, block: 8, evasion: 0.12, role: "anchor" },
       { name: "Rift Flicker", hull: 95, damage: 13, block: 2, evasion: 0.18 },
       { name: "Rift Flicker", hull: 95, damage: 13, block: 2, evasion: 0.18 },
     ],
@@ -208,7 +208,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     isBoss: true,
     enemies: [
       { name: "Rift Sovereign", hull: 460, damage: 25, block: 14, evasion: 0.1 },
-      { name: "Rift Warden", hull: 230, damage: 18, block: 8, evasion: 0.14 },
+      { name: "Rift Warden", hull: 230, damage: 18, block: 8, evasion: 0.14, role: "anchor" },
       { name: "Rift Flicker", hull: 110, damage: 15, block: 3, evasion: 0.2 },
     ],
     rewards: { salvage: 380, sourcePoints: 300, originEssence: 130 },
@@ -234,7 +234,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "constructs",
     isBoss: true,
     enemies: [
-      { name: "Construct Warden", hull: 480, damage: 22, block: 20, evasion: 0 },
+      { name: "Construct Warden", hull: 480, damage: 22, block: 20, evasion: 0, role: "anchor" },
       { name: "Construct Sentry Drone", hull: 90, damage: 12, block: 10, evasion: 0 },
       { name: "Construct Sentry Drone", hull: 90, damage: 12, block: 10, evasion: 0 },
     ],
@@ -247,7 +247,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "constructs",
     isBoss: true,
     enemies: [
-      { name: "Construct Warden", hull: 560, damage: 25, block: 22, evasion: 0 },
+      { name: "Construct Warden", hull: 560, damage: 25, block: 22, evasion: 0, role: "anchor" },
       { name: "Construct Warden", hull: 560, damage: 25, block: 22, evasion: 0 },
       { name: "Construct Sentry Drone", hull: 110, damage: 14, block: 12, evasion: 0 },
       { name: "Construct Sentry Drone", hull: 110, damage: 14, block: 12, evasion: 0 },
@@ -262,7 +262,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     isBoss: true,
     enemies: [
       { name: "Ark Custodian", hull: 900, damage: 30, block: 28, evasion: 0.05 },
-      { name: "Construct Warden", hull: 480, damage: 23, block: 20, evasion: 0 },
+      { name: "Construct Warden", hull: 480, damage: 23, block: 20, evasion: 0, role: "anchor" },
       { name: "Construct Warden", hull: 480, damage: 23, block: 20, evasion: 0 },
     ],
     rewards: { salvage: 560, sourcePoints: 340, alloy: 400, originEssence: 420 },
@@ -323,7 +323,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "choir",
     isBoss: false,
     enemies: [
-      { name: "Choir Acolyte", hull: 190, damage: 21, block: 9, evasion: 0.16 },
+      { name: "Choir Acolyte", hull: 190, damage: 21, block: 9, evasion: 0.16, role: "mender" },
       { name: "Choir Acolyte", hull: 190, damage: 21, block: 9, evasion: 0.16 },
       { name: "Choir Acolyte", hull: 190, damage: 21, block: 9, evasion: 0.16 },
     ],
@@ -337,8 +337,8 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     isBoss: true,
     enemies: [
       { name: "Choir Herald", hull: 950, damage: 30, block: 18, evasion: 0.12 },
-      { name: "Choir Cantor", hull: 320, damage: 22, block: 12, evasion: 0.14 },
-      { name: "Choir Cantor", hull: 320, damage: 22, block: 12, evasion: 0.14 },
+      { name: "Choir Cantor", hull: 320, damage: 22, block: 12, evasion: 0.14, role: "artillery" },
+      { name: "Choir Cantor", hull: 320, damage: 22, block: 12, evasion: 0.14, role: "artillery" },
     ],
     rewards: { salvage: 680, sourcePoints: 420, alloy: 420, originEssence: 380 },
     xp: 520,
@@ -354,8 +354,8 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     enemies: [
       { name: "The Conductor", hull: 1900, damage: 38, block: 26, evasion: 0.1 },
       { name: "Choir Herald", hull: 1000, damage: 32, block: 20, evasion: 0.12 },
-      { name: "Choir Cantor", hull: 340, damage: 24, block: 13, evasion: 0.15 },
-      { name: "Choir Cantor", hull: 340, damage: 24, block: 13, evasion: 0.15 },
+      { name: "Choir Cantor", hull: 340, damage: 24, block: 13, evasion: 0.15, role: "artillery" },
+      { name: "Choir Cantor", hull: 340, damage: 24, block: 13, evasion: 0.15, role: "artillery" },
     ],
     rewards: { salvage: 1050, sourcePoints: 680, alloy: 680, originEssence: 700 },
     xp: 950,
@@ -472,7 +472,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "choir",
     isBoss: false,
     enemies: [
-      { name: "Choir Acolyte", hull: 130, damage: 16, block: 6, evasion: 0.15 },
+      { name: "Choir Acolyte", hull: 130, damage: 16, block: 6, evasion: 0.15, role: "mender" },
       { name: "Choir Acolyte", hull: 130, damage: 16, block: 6, evasion: 0.15 },
     ],
     rewards: { salvage: 100, sourcePoints: 55, alloy: 30 },

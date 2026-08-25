@@ -4,12 +4,12 @@ import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
+import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip } from "../../state/store";
 import { crewDefById } from "../../data/crew";
 import { hullClassAbility } from "../../data/namedShips";
 import { playSfx } from "../../audio/engine";
-import type { FactionId, ResourceType, ModuleInstance } from "../../data/types";
+import type { FactionId, ResourceType, ModuleInstance, EnemyRole } from "../../data/types";
 import { randomId } from "../../engine/rng";
 import { attachResponsiveCanvas } from "../../engine/viewport";
 import { ResourceIcon, resourceLabel, CloseOrderIcon, HoldOrderIcon, RetreatOrderIcon, BoardIcon, NavIcon, HullIcon, ModuleTypeIcon, CrewRoleIcon } from "../components/Icons";
@@ -55,6 +55,20 @@ const BRACE_REDUCTION = 0.5;
  * by the intent arc's hot state and the Brace prompt so the cue the player reads
  * and the window they're being asked to react to are the same thing. */
 const IMMINENT_INTENT = 0.78;
+
+/** Enemy roles (see EnemyRole in data/types.ts) — the answer to "战斗还是很无聊".
+ * Tuned so ignoring a role is survivable but clearly wrong, rather than an instant
+ * loss: the goal is a target-priority decision with teeth, not a puzzle with one
+ * legal solution. */
+const MENDER_INTERVAL = 3.2;
+/** A mender's repair per tick, as a share of the ally's max hull. Deliberately
+ * enough to visibly undo a weapon volley — the whole point is that damage stops
+ * sticking until it's dead. */
+const MENDER_HEAL_FRACTION = 0.09;
+/** Artillery's windup. Long on purpose: it has to be killable during it, and it
+ * has to leave room to react with Brace. */
+const SIEGE_WINDUP_SEC = 5.5;
+const SIEGE_DAMAGE_MULT = 3.2;
 const COMBAT_TICK_SEC = COMBAT_TICK_MS / 1000;
 /** Baseline seconds between one enemy's attacks, jittered per-enemy so a multi-enemy
  * fight doesn't just relocate the old synchronized volley to a shorter clock — each
@@ -128,6 +142,12 @@ interface EnemyState {
   block: number;
   evasion: number;
   regen?: number;
+  /** See EnemyRole in data/types.ts — what this ship does for its formation.
+   * Undefined for ordinary combatants, which is most of them on purpose. */
+  role?: EnemyRole;
+  /** Artillery only: seconds left on its long telegraphed strike, mirrored from
+   * the timer ref so the viewscreen can draw a filling siege ring. */
+  siegeRemaining?: number;
   /** Telegraphing a charged strike — see CHARGE_WINDUP_SEC. Unleashes a 2x-damage hit
    * when the windup elapses, then clears. */
   charging?: boolean;
@@ -165,6 +185,12 @@ interface EnemyTimer {
   charging: boolean;
   chargeRemaining: number;
   regenAccum: number;
+  /** Mender: seconds until its next repair pulse. */
+  mendRemaining: number;
+  /** Artillery: seconds left on the telegraphed siege strike, or 0 when not
+   * winding one up. Separate from `charging` (the boss haymaker) so a boss that
+   * is also artillery can't end up in both states at once. */
+  siegeRemaining: number;
   /** Rift Echoes only (see EnemyState.phased) — unused (stays false) for every other faction. */
   phased: boolean;
   phaseRemaining: number;
@@ -774,6 +800,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
     return hitWeight(damage, enemiesRef.current[index]?.maxHull ?? 0);
   }
 
+  /** Bonus armour an `anchor` is currently projecting onto the enemy at `index`.
+   * The rule itself is pure and lives in engine/combat.ts so it can be tested
+   * directly; this is just the binding to live combat state. */
+  function anchorBlockFor(index: number): number {
+    return anchorBonusBlock(enemiesRef.current, index);
+  }
+
   /** UI audit #9/#5: a running per-source damage ledger for the after-action
    * summary. The game had no way to answer "what in my loadout is actually
    * doing the work" — you could feel a fight go well without ever learning
@@ -800,6 +833,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
         charging: false,
         chargeRemaining: 0,
         regenAccum: 0,
+        // A mender shouldn't pulse the instant the fight opens — you get one clean
+        // volley in before it starts undoing your work.
+        mendRemaining: MENDER_INTERVAL,
+        siegeRemaining: 0,
         phased: false,
         // Staggered per-enemy so a multi-enemy Rift fight doesn't flicker in unison.
         phaseRemaining: 1.8 + Math.random() * 1.6,
@@ -814,7 +851,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
    * since this runs from a setInterval closure frozen at mount. Ported line-for-line
    * from the original per-enemy turn logic where the mechanic itself didn't change,
    * only its trigger (this enemy's own timer, not "everyone, once per batch"). */
-  function enemyAttack(idx: number, charged: boolean) {
+  function enemyAttack(idx: number, charged: boolean, siegeMult: number = 1) {
     const currentEnemies = enemiesRef.current;
     const enemy = currentEnemies[idx];
     if (!enemy || enemy.hull <= 0) return;
@@ -872,7 +909,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
     // A charge telegraph is a real spatial tell, not just a stat flag: an order to
     // retreat to long range during the windup negates the charged bonus entirely.
     const chargeDodged = charged && band === "long";
-    const dmgMultiplier = (charged && !chargeDodged ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus;
+    // siegeMult carries an artillery ship's telegraphed strike (see EnemyRole).
+    const dmgMultiplier = (charged && !chargeDodged ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus * siegeMult;
     // Interceptor's Blink Vector: a flat evasion buff over time.
     const baseEvasion = shipBaseEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus
       + (hasMomentum ? Math.min(0.15, unhitStreakRef.current * 0.03) : 0)
@@ -1302,6 +1340,70 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
         }
       }
 
+      // --- Mender: repairs its most-wounded ally on a timer ---
+      // The reason to break target. Left alone it simply undoes your damage, so a
+      // formation with a mender in it has a correct kill order rather than an
+      // arbitrary one.
+      if (enemy.role === "mender") {
+        timer.mendRemaining -= dt;
+        if (timer.mendRemaining <= 0) {
+          timer.mendRemaining = MENDER_INTERVAL;
+          setEnemies((prev) => {
+            // Most-wounded living ally, excluding itself: a mender that healed
+            // itself would just read as a big health pool.
+            let bestIdx = -1;
+            let bestFrac = 1;
+            prev.forEach((e, idx) => {
+              if (idx === i || e.hull <= 0) return;
+              const frac = e.hull / e.maxHull;
+              if (frac < bestFrac && frac < 0.999) { bestFrac = frac; bestIdx = idx; }
+            });
+            if (bestIdx < 0) return prev;
+            const target = prev[bestIdx];
+            const heal = Math.max(1, Math.round(target.maxHull * MENDER_HEAL_FRACTION));
+            const healed = Math.min(target.maxHull, target.hull + heal);
+            if (healed <= target.hull) return prev;
+            addPopup(bestIdx, `+${healed - target.hull}`, "#5dffb0");
+            spawnRing(
+              arenaRef.current.enemyPos[bestIdx]?.x ?? 0,
+              arenaRef.current.enemyPos[bestIdx]?.y ?? 0,
+              "#5dffb0", 46, 380,
+            );
+            pushLog(t("combat.log.menderPulse", { enemy: enemy.name, target: target.name, amount: healed - target.hull }));
+            return prev.map((e, idx) => (idx === bestIdx ? { ...e, hull: healed } : e));
+          });
+        }
+      }
+
+      // --- Artillery: a long, loud, killable windup ---
+      // Distinct from the boss haymaker: far longer, far heavier, and it belongs
+      // to any ship with the role rather than to enemy zero of a boss fight. The
+      // windup is the decision — kill it, or Brace and eat it.
+      if (enemy.role === "artillery") {
+        if (timer.siegeRemaining > 0) {
+          timer.siegeRemaining -= dt;
+          if (timer.siegeRemaining <= 0) {
+            timer.siegeRemaining = 0;
+            enemyAttack(i, false, SIEGE_DAMAGE_MULT);
+            timer.attackRemaining = ENEMY_ATTACK_INTERVAL * 1.6;
+            setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, siegeRemaining: 0 } : e)));
+            pushLog(t("combat.log.siegeFired", { enemy: enemy.name }));
+          } else {
+            setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, siegeRemaining: timer.siegeRemaining } : e)));
+          }
+          // A ship winding up a siege strike does nothing else.
+          return;
+        }
+        timer.attackRemaining -= dt;
+        if (timer.attackRemaining <= 0) {
+          timer.siegeRemaining = SIEGE_WINDUP_SEC;
+          setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, siegeRemaining: SIEGE_WINDUP_SEC } : e)));
+          pushLog(t("combat.log.siegeCharging", { enemy: enemy.name }));
+          playSfx("alarm");
+        }
+        return;
+      }
+
       // Issue #10: Rift Echoes doctrine, axis 1 (Phase Flicker). Each enemy cycles
       // solid/phased on its own independent clock — while phased it's out of the
       // fight both ways: unhittable, and it skips its own attack. This is the
@@ -1487,7 +1589,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
       const blockBroken = (target.blockBrokenHits ?? 0) > 0;
       const undercut = (target.blockDebuffSec ?? 0) > 0;
       const blockMult = blockBroken ? 0 : Math.min(modHasEffect(mod, "pierce") ? 0.5 : 1, undercut ? 0.5 : 1);
-      const effectiveBlock = Math.round(target.block * blockMult);
+      // An anchor projects armour onto everything it's protecting. Kill it and the
+      // rest of the formation goes soft — the payoff for reading the line-up
+      // instead of shooting whatever is closest. It never armours itself, so the
+      // anchor is always the softest way into a formation that has one.
+      const effectiveBlock = Math.round((target.block + anchorBlockFor(targetIdx)) * blockMult);
       const critChance = wasGuaranteedCrit ? 1 : computeCritChance(mod, comboCount, shipBaseCrit);
       // Anthem's Chorus Overture: the next N weapon shots can't miss (roll=1 always
       // clears resolveAttack's evasion check) and hit harder — consumed one shot at
@@ -2370,6 +2476,19 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
                 <span>{t("combat.hostilesLeft", { count: enemies.filter((e) => e.hull > 0).length })}</span>
               )}
             </div>
+            {/* The role, spelled out. The canvas badge says WHAT it is; this says
+                why you should care, because "MENDER" means nothing the first time
+                you see it. */}
+            {target.role && (
+              <div
+                style={{
+                  marginTop: "0.35rem", fontSize: "0.62rem", lineHeight: 1.35,
+                  color: target.role === "mender" ? "var(--green)" : target.role === "anchor" ? "var(--cyan)" : "var(--amber)",
+                }}
+              >
+                <b>{t(`combat.role.${target.role}`)}</b> — {t(`combat.role.${target.role}Hint`)}
+              </div>
+            )}
             {(target.charging || target.phased || target.enraged) && (
               <div style={{ marginTop: "0.3rem", fontSize: "0.64rem", color: "var(--amber)", fontWeight: 700 }}>
                 {target.charging && t("combat.targetCharging")}
@@ -3335,6 +3454,47 @@ function drawEnemyShip(
     ctx.textAlign = "center";
     ctx.fillText("DISABLED", pos.x, pos.y + 62);
     ctx.restore();
+  }
+
+  // Role tells. A role that isn't visible on the viewscreen is just an invisible
+  // difficulty modifier — the whole point is that the player can read the
+  // formation and choose a kill order, so the tell has to be on the ship itself,
+  // not buried in a tooltip.
+  if (enemy.role && enemy.hull > 0) {
+    const roleColor = enemy.role === "mender" ? "#5dffb0" : enemy.role === "anchor" ? "#8fb4ff" : "#ff9f4d";
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.font = "bold 10px sans-serif";
+    ctx.fillStyle = roleColor;
+    ctx.shadowColor = roleColor;
+    ctx.shadowBlur = 8;
+    ctx.fillText(
+      enemy.role === "mender" ? "✚ MENDER" : enemy.role === "anchor" ? "◈ ANCHOR" : "◎ SIEGE",
+      pos.x,
+      pos.y - 46,
+    );
+    ctx.restore();
+
+    // Artillery's windup as a ring that fills — the same read as the intent arc,
+    // scaled up because the payload is.
+    if (enemy.role === "artillery" && (enemy.siegeRemaining ?? 0) > 0) {
+      const frac = 1 - Math.max(0, Math.min(1, enemy.siegeRemaining! / SIEGE_WINDUP_SEC));
+      ctx.save();
+      ctx.translate(pos.x, pos.y);
+      const pulse = 0.6 + 0.4 * Math.sin(now / 110);
+      ctx.strokeStyle = `rgba(255,110,60,${0.5 + pulse * 0.5})`;
+      ctx.lineWidth = 5;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(0, 0, 52, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(255,110,60,0.18)`;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 52, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   // HP bar

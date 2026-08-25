@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAttack, advanceRangeBand, isEncounterCleared, isPlayerDefeated, RANGE_MODIFIERS, type RangeState } from "./combat";
+import { resolveAttack, advanceRangeBand, isEncounterCleared, isPlayerDefeated, RANGE_MODIFIERS, type RangeState, anchorBonusBlock } from "./combat";
 import { ENCOUNTER_DEFS } from "../data/encounters";
 
 describe("resolveAttack", () => {
@@ -162,5 +162,42 @@ describe("fleet battles never include the extradimensional battlefield (section 
       expect(enc, `${id} should exist`).toBeDefined();
       expect(enc.faction, `${id} must be riftEchoes for the fleet-battle exclusion to apply`).toBe("riftEchoes");
     }
+  });
+});
+
+describe("anchorBonusBlock", () => {
+  const anchor = { hull: 400, block: 20, role: "anchor" };
+  const drone = { hull: 90, block: 10 };
+  const drone2 = { hull: 90, block: 10 };
+
+  it("hardens every other ship while the anchor lives", () => {
+    const enemies = [anchor, drone, drone2];
+    // 10 * 0.75 + 4
+    expect(anchorBonusBlock(enemies, 1)).toBe(12);
+    expect(anchorBonusBlock(enemies, 2)).toBe(12);
+  });
+
+  it("never hardens the anchor itself — it has to stay the soft way in", () => {
+    expect(anchorBonusBlock([anchor, drone], 0)).toBe(0);
+  });
+
+  it("protects nothing once the anchor is dead", () => {
+    const dead = { ...anchor, hull: 0 };
+    expect(anchorBonusBlock([dead, drone], 1)).toBe(0);
+  });
+
+  it("does nothing when no anchor is present at all", () => {
+    expect(anchorBonusBlock([drone, drone2], 0)).toBe(0);
+    expect(anchorBonusBlock([drone, drone2], 1)).toBe(0);
+  });
+
+  it("scales with the protected ship's own plating, so it stays relevant late", () => {
+    const heavy = { hull: 500, block: 40 };
+    const light = { hull: 50, block: 2 };
+    expect(anchorBonusBlock([anchor, heavy], 1)).toBeGreaterThan(anchorBonusBlock([anchor, light], 1));
+  });
+
+  it("is safe on an out-of-range index", () => {
+    expect(anchorBonusBlock([anchor, drone], 99)).toBe(0);
   });
 });

@@ -1,4 +1,4 @@
-import type { EncounterDef, EnemyShipDef, ResourceType } from "./types";
+import type { EncounterDef, EnemyShipDef, EnemyRole, ResourceType } from "./types";
 
 /** 异空间战场 — the Extradimensional Battlefield.
  *
@@ -45,6 +45,8 @@ interface RiftArchetype {
   block: number;
   evasion: number;
   regen?: number;
+  /** See EnemyRole — what this ship does for the rest of the wave. */
+  role?: EnemyRole;
   /** Relative frequency, before the depth weighting below. */
   weight: number;
   /** Depth this archetype starts appearing at — the roster itself changes as you
@@ -64,16 +66,16 @@ const ARCHETYPES: RiftArchetype[] = [
   // Almost unhittable, trivial to kill if you connect — punishes low accuracy.
   { name: "Rift Wisp", hull: 60, damage: 14, block: 0, evasion: 0.45, weight: 3, minDepth: 2, cost: 1 },
   // Heavy plating, low evasion — the armor-piercing check.
-  { name: "Rift Bulwark", hull: 300, damage: 13, block: 26, evasion: 0.02, weight: 3, minDepth: 2, cost: 1.5 },
+  { name: "Rift Bulwark", hull: 300, damage: 13, block: 26, evasion: 0.02, weight: 3, minDepth: 2, cost: 1.5, role: "anchor" },
   // Heals itself every turn: a damage-per-second floor, not a health pool.
-  { name: "Rift Knitter", hull: 240, damage: 12, block: 6, evasion: 0.1, regen: 9, weight: 2, minDepth: 3, cost: 1.5 },
+  { name: "Rift Knitter", hull: 240, damage: 12, block: 6, evasion: 0.1, regen: 9, weight: 2, minDepth: 3, cost: 1.5, role: "mender" },
   // Glass cannon — kill it first or lose hull you can't get back mid-dive.
   { name: "Rift Lance", hull: 95, damage: 38, block: 1, evasion: 0.14, weight: 2, minDepth: 3, cost: 1.4 },
   // --- deep: the wave-defining threats ---
   { name: "Rift Sovereign", hull: 460, damage: 25, block: 14, evasion: 0.1, weight: 2, minDepth: 4, cost: 2.2 },
-  { name: "Rift Choirmass", hull: 380, damage: 20, block: 10, evasion: 0.08, regen: 14, weight: 2, minDepth: 5, cost: 2 },
+  { name: "Rift Choirmass", hull: 380, damage: 20, block: 10, evasion: 0.08, regen: 14, weight: 2, minDepth: 5, cost: 2, role: "mender" },
   { name: "Rift Harrower", hull: 260, damage: 33, block: 9, evasion: 0.22, weight: 2, minDepth: 6, cost: 2 },
-  { name: "Rift Colossus", hull: 900, damage: 30, block: 30, evasion: 0.0, weight: 1, minDepth: 7, cost: 3.2 },
+  { name: "Rift Colossus", hull: 900, damage: 30, block: 30, evasion: 0.0, weight: 1, minDepth: 7, cost: 3.2, role: "artillery" },
   { name: "Rift Devourer", hull: 620, damage: 44, block: 16, evasion: 0.16, regen: 20, weight: 1, minDepth: 9, cost: 3.4 },
 ];
 
@@ -198,6 +200,7 @@ export function generateRiftWaveFull(depth: number): RiftWave {
       damage: Math.max(1, Math.round(a.damage * scale * anomaly.damage * j())),
       block: Math.max(0, Math.round(a.block * scale * anomaly.block * j())),
       evasion: a.evasion,
+      ...(a.role ? { role: a.role } : {}),
       ...(regen > 0 || anomaly.regen > 1
         ? { regen: Math.max(1, Math.round((regen || 4) * scale * anomaly.regen)) }
         : {}),
