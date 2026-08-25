@@ -2056,7 +2056,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve }: Props) {
       // Engines read as "lit" while an order is actively contesting range, not
       // while literally accelerating — there's no velocity left to check.
       const thrusting = !combatOver && stanceOrderRef.current !== "hold";
-      draw(ctx, vp, arena, { angle: 0, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, ringsRef.current, hitPulseRef.current, allyCountRef.current);
+      // UI audit #6: attack intent, straight off the timer ref. Kept out of React
+      // state deliberately — this changes every frame and only the canvas reads it.
+      const intent = liveEnemies.map((_e, i) => {
+        const timer = enemyTimersRef.current[i];
+        if (!timer || combatOver) return 0;
+        const full = ENEMY_ATTACK_INTERVAL + ENEMY_ATTACK_JITTER;
+        return Math.max(0, Math.min(1, 1 - timer.attackRemaining / full));
+      });
+      draw(ctx, vp, arena, { angle: 0, thrusting }, liveEnemies, targetIdxRef.current, stars, now, encounter.faction, shakeRef.current, projectilesRef.current, particlesRef.current, explosionsRef.current, ringsRef.current, hitPulseRef.current, allyCountRef.current, intent);
     }
 
     // A throw anywhere in step() (physics, draw, anything reachable from a frame
@@ -2514,13 +2522,38 @@ function ConsoleZone({ label, hint, children }: { label: string; hint?: string; 
 /** A pressable ability. Shows its cooldown as a draining fill behind the label
  * rather than only as a number in parentheses, so "how long until I can use this"
  * is readable at a glance mid-fight. */
+/** UI audit #10: the cooldown veil used to be a flat, full-width block that looked
+ * identical at 0.1s remaining and at 12s — so the only way to know an ability was
+ * nearly back was to read its number. It now drains left-to-right against the
+ * ability's own full cooldown, and the button pops once at the moment it comes
+ * back, which is what makes a rotation feel like a rhythm instead of a lookup. */
 function AbilityButton({
-  label, cd, disabled, onClick, icon, title, accent,
+  label, cd, maxCd, disabled, onClick, icon, title, accent,
 }: {
-  label: string; cd: number; disabled: boolean; onClick: () => void;
+  label: string; cd: number; maxCd?: number; disabled: boolean; onClick: () => void;
   icon?: preact.ComponentChildren; title?: string; accent?: string;
 }) {
   const cooling = cd > 0;
+  // Track the longest cooldown this button has actually been given, so the veil
+  // has a denominator even where the caller can't cheaply supply one (crew and
+  // hull-class actives compute theirs through haste modifiers at use time).
+  const peakRef = useRef(0);
+  if (cd > peakRef.current) peakRef.current = cd;
+  const denom = maxCd && maxCd > 0 ? maxCd : peakRef.current;
+  const remaining = denom > 0 ? Math.max(0, Math.min(1, cd / denom)) : 0;
+
+  const [justReady, setJustReady] = useState(false);
+  const wasCooling = useRef(cooling);
+  useEffect(() => {
+    if (wasCooling.current && !cooling) {
+      setJustReady(true);
+      const id = setTimeout(() => setJustReady(false), 420);
+      return () => clearTimeout(id);
+    }
+    wasCooling.current = cooling;
+    return undefined;
+  }, [cooling]);
+
   return (
     <button
       className={`btn ${accent && !cooling ? "primary" : ""}`}
@@ -2531,10 +2564,18 @@ function AbilityButton({
         position: "relative", overflow: "hidden",
         fontSize: "0.68rem", padding: "0.45em 0.7em",
         display: "flex", alignItems: "center", gap: "0.3em",
+        animation: justReady ? "abilityReady 420ms ease-out" : undefined,
       }}
     >
       {cooling && (
-        <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "100%", background: "var(--bg-inset)", opacity: 0.75 }} />
+        <span
+          style={{
+            position: "absolute", right: 0, top: 0, bottom: 0,
+            width: `${remaining * 100}%`,
+            background: "var(--bg-inset)", opacity: 0.8,
+            transition: "width 140ms linear",
+          }}
+        />
       )}
       <span style={{ position: "relative", display: "flex", alignItems: "center", gap: "0.3em" }}>
         {icon}
@@ -2717,6 +2758,12 @@ function draw(
   rings: FieldRing[],
   hitPulse: { enemy: Record<number, number>; player: number },
   allyCount: number,
+  /** UI audit #6: how close each enemy is to attacking, 0..1 (1 = firing now),
+   * parallel-indexed to `enemies`. Read straight from the timer ref every frame —
+   * enemy attacks used to land with no warning at all outside a boss haymaker,
+   * which is what made stretches of a fight feel like watching rather than
+   * commanding. */
+  intent: number[],
 ) {
   vp.beginFrame(ctx);
   const { scale, offsetX, offsetY } = vp.transform();
@@ -2775,7 +2822,7 @@ function draw(
     if (e.hull <= 0) return;
     const pos = arena.enemyPos[i];
     if (!pos) return;
-    drawEnemyShip(ctx, pos, faction, now + i * 500, i === targetIdx, e, pulseScale(now, hitPulse.enemy[i]));
+    drawEnemyShip(ctx, pos, faction, now + i * 500, i === targetIdx, e, pulseScale(now, hitPulse.enemy[i]), intent[i] ?? 0);
   });
 
   // Section D: allied ships in formation behind Whisper — drawn smaller and
@@ -2859,9 +2906,29 @@ function drawEnemyShip(
   targeted: boolean,
   enemy: EnemyState,
   squash: { sx: number; sy: number } = { sx: 1, sy: 1 },
+  intent: number = 0,
 ) {
   ctx.save();
   ctx.translate(pos.x, pos.y);
+
+  // UI audit #6: the attack-intent arc. Sweeps clockwise from 12 o'clock as this
+  // enemy's own attack clock runs down, then goes hot and thickens in the last
+  // moment before it fires — so "incoming, brace or break off" is readable from
+  // the viewscreen instead of only from damage after the fact. Suppressed while
+  // charging/phased/stunned, each of which already has its own louder tell.
+  if (intent > 0 && !enemy.charging && !enemy.phased && !enemy.stunned && enemy.hull > 0) {
+    const imminent = intent > 0.78;
+    const pulse = imminent ? 0.65 + 0.35 * Math.sin(now / 70) : 1;
+    ctx.strokeStyle = imminent
+      ? `rgba(255,138,92,${0.55 + pulse * 0.45})`
+      : `rgba(255,226,93,${0.16 + intent * 0.3})`;
+    ctx.lineWidth = imminent ? 3.5 : 2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(0, 0, 31, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * intent);
+    ctx.stroke();
+    ctx.lineCap = "butt";
+  }
 
   if (targeted) {
     const pulse = 0.6 + 0.4 * Math.sin(now / 200);

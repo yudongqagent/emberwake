@@ -349,6 +349,14 @@ h1, h2, h3 {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* An ability coming off cooldown pops once, so a rotation is felt as rhythm
+   rather than read off a number. */
+@keyframes abilityReady {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.09); }
+  100% { transform: scale(1); }
+}
+
 /* Heavy-hit damage popup: overshoots and settles instead of drifting, so a big
    number reads as big from its motion before you've read the digits. */
 @keyframes popHit {
