@@ -2228,8 +2228,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
        ULTIMATE    — Ember Nova, given its own dedicated rail
      Vitals (hull, range, threat) are promoted to a real status bar at the top,
      since "am I winning" should be the fastest thing on screen to read. */
+  // position:relative anchors the end-of-combat ResultOverlay to the combat screen
+  // itself, so its 88% height cap is a share of the screen rather than of whatever
+  // ancestor happened to be positioned.
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg)" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg)", position: "relative", overflow: "hidden" }}>
       {/* ---- VITALS ---- */}
       <div style={{ padding: "0.55rem 1rem 0.5rem", borderBottom: "1px solid var(--line)", background: "rgba(5,8,16,0.6)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.75rem" }}>
@@ -2247,20 +2250,31 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
             </span>
           </span>
           <span style={{ flex: 1, minWidth: 0 }}><Bar fraction={hullFrac} kind={hullBarKind(hullFrac)} /></span>
-          {comboCount > 0 && (
-            <span
-              className="eyebrow"
-              style={{
-                flex: "none",
-                color: comboCount >= 8 ? "var(--red)" : comboCount >= 4 ? "var(--amber)" : "var(--cyan)",
-                textShadow: `0 0 ${6 + Math.min(comboCount, 10)}px currentColor`,
-                fontWeight: 800,
-              }}
-            >
-              {t("combat.combo", { count: comboCount })}
-            </span>
-          )}
-          <span className="eyebrow" style={{ flex: "none", color: "var(--text-dim)" }}>
+          {/* Player report (2026-08-25): "按钮的倒计时会把它们挪来挪去". Everything
+              right of the hull bar used to be free-flowing, so the combo chip
+              mounting/unmounting and the numbers changing width shoved the speed
+              buttons back and forth by ~60px mid-fight. This cluster is now a
+              fixed-width right rail: the combo chip always occupies its slot (only
+              its contents hide), the readouts are reserved and tabular, and the
+              flexible hull bar absorbs whatever's left. */}
+          <span
+            className="eyebrow"
+            style={{
+              flex: "none", width: 62, textAlign: "right",
+              fontVariantNumeric: "tabular-nums",
+              visibility: comboCount > 0 ? "visible" : "hidden",
+              color: comboCount >= 8 ? "var(--red)" : comboCount >= 4 ? "var(--amber)" : "var(--cyan)",
+              textShadow: `0 0 ${6 + Math.min(comboCount, 10)}px currentColor`,
+              fontWeight: 800,
+              overflow: "hidden", whiteSpace: "nowrap",
+            }}
+          >
+            {t("combat.combo", { count: comboCount })}
+          </span>
+          <span
+            className="eyebrow"
+            style={{ flex: "none", width: 64, textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", overflow: "hidden", whiteSpace: "nowrap" }}
+          >
             {t("combat.power")} {capacity}
           </span>
           {/* Speed control — sits in the vitals bar because it's a viewing
@@ -2427,7 +2441,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
               )}
               <span style={{ position: "relative", display: "flex", alignItems: "center", gap: "0.3em" }}>
                 {t("combat.brace")}
-                {braceCooldown > 0 && <span style={{ color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{braceCooldown.toFixed(1)}s</span>}
+                <span style={{ width: "2.6em", textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", visibility: braceCooldown > 0 ? "visible" : "hidden" }}>
+                  {braceCooldown.toFixed(1)}s
+                </span>
               </span>
             </button>
             {encounter.capturable && enemies[0] && enemies[0].hull > 0 && (
@@ -2556,7 +2572,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
       </div>
 
       {(status === "victory" || status === "captured") && (
-        <div className="panel pop-in" style={{ margin: "0 1rem 1rem", padding: "1rem", textAlign: "center" }}>
+        <ResultOverlay
+          onConfirm={() => onResolve(status === "captured" ? "captured" : "victory")}
+        >
           <div
             className="title"
             style={{
@@ -2630,11 +2648,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
               </div>
             );
           })()}
-          <button className="btn primary" onClick={() => onResolve(status === "captured" ? "captured" : "victory")}>{t("common.continue")}</button>
-        </div>
+        </ResultOverlay>
       )}
       {status === "defeat" && (
-        <div className="panel pop-in" style={{ margin: "0 1rem 1rem", padding: "1rem", textAlign: "center" }}>
+        <ResultOverlay onConfirm={() => onResolve("defeat")}>
           <div className="title" style={{ marginBottom: "0.5rem", color: "var(--red)" }}>{t("combat.defeatTitle")}</div>
           <div style={{ fontSize: "0.85rem", color: "var(--text-mid)", marginBottom: "0.5rem" }}>
             {t("combat.defeatBody")}
@@ -2642,9 +2659,49 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
           {/* A loss is exactly when the breakdown is most useful — it's the
               feedback that turns "I died" into "my second weapon did nothing". */}
           {afterAction && afterAction.total > 0 && <AfterActionPanel data={afterAction} />}
-          <button className="btn primary" onClick={() => onResolve("defeat")}>{t("common.continue")}</button>
-        </div>
+        </ResultOverlay>
       )}
+    </div>
+  );
+}
+
+/** The end-of-combat result, as a centered overlay rather than a panel appended
+ * to the bottom of the combat column.
+ *
+ * Player report (2026-08-25): "结束的继续按钮会在屏幕外" — and it was. The old
+ * panel was a plain flex sibling with no height cap and no scroll, so the more
+ * the fight produced (level-up, rewards, after-action breakdown, bonus drop) the
+ * further Continue was pushed past the bottom of a page that could not scroll.
+ * The best fights were the ones you could get stuck on.
+ *
+ * The fix is structural: cap the card, scroll only its body, and pin Continue to
+ * a footer that is always on screen no matter how much the body holds. */
+function ResultOverlay({ children, onConfirm }: { children: preact.ComponentChildren; onConfirm: () => void }) {
+  return (
+    <div
+      style={{
+        position: "absolute", inset: 0, zIndex: 60,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "1rem", background: "rgba(4,3,8,0.72)", backdropFilter: "blur(3px)",
+      }}
+    >
+      <div
+        className="panel pop-in"
+        style={{
+          width: "100%", maxWidth: 520, maxHeight: "88%",
+          display: "flex", flexDirection: "column",
+          padding: 0, textAlign: "center", overflow: "hidden",
+        }}
+      >
+        <div style={{ overflowY: "auto", overflowX: "hidden", padding: "1rem 1rem 0.5rem", minHeight: 0 }}>
+          {children}
+        </div>
+        <div style={{ flex: "none", padding: "0.7rem 1rem calc(0.7rem + var(--safe-bottom))", borderTop: "1px solid var(--line)", background: "var(--bg-inset)" }}>
+          <button className="btn primary" style={{ width: "100%" }} onClick={onConfirm} autofocus>
+            {t("common.continue")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2816,7 +2873,12 @@ function AbilityButton({
       <span style={{ position: "relative", display: "flex", alignItems: "center", gap: "0.3em" }}>
         {icon}
         {label}
-        {cooling && <span style={{ color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{cd.toFixed(1)}s</span>}
+        {/* Fixed slot, always present: a countdown that appears and disappears
+            changes the button's width, which shuffled every neighbouring button
+            each time anything came off cooldown. */}
+        <span style={{ width: "2.6em", textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", visibility: cooling ? "visible" : "hidden" }}>
+          {cd.toFixed(1)}s
+        </span>
       </span>
     </button>
   );
@@ -2915,7 +2977,9 @@ function WeaponAutoStatus({ name, color, cd }: { name: string; color: string; cd
         }}
       />
       {name}
-      <span style={{ opacity: 0.75, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+      {/* Reserved slot — the dot and the countdown are different widths, so
+          swapping between them resized every weapon chip on every shot. */}
+      <span style={{ width: "2.6em", textAlign: "right", opacity: 0.75, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
         {ready ? t("combat.autoFireReady") : `${cd.toFixed(1)}s`}
       </span>
     </div>
