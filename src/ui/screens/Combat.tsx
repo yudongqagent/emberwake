@@ -4,7 +4,7 @@ import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
+import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip } from "../../state/store";
 import { crewDefById } from "../../data/crew";
 import { hullClassAbility } from "../../data/namedShips";
@@ -379,6 +379,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
    * Sampled on the combat heartbeat rather than per frame: it only gates a
    * button's appearance, and a 150ms granularity is imperceptible there. */
   const [imminent, setImminent] = useState(false);
+  /** Core-loop redesign #2 — the reactor split. Mirrored into a ref because the
+   * frozen combatTick/enemyAttack/fireModule closures all read it. */
+  const [reactor, setReactor] = useState<ReactorAllocation>(DEFAULT_ALLOCATION);
+  const reactorRef = useRef(reactor);
+  reactorRef.current = reactor;
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [levelUpHullGain, setLevelUpHullGain] = useState(0);
   const [levelUpPowerGain, setLevelUpPowerGain] = useState(0);
@@ -939,7 +944,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
     // Interceptor's Blink Vector: a flat evasion buff over time.
     const baseEvasion = shipBaseEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus
       + (hasMomentum ? Math.min(0.15, unhitStreakRef.current * 0.03) : 0)
-      + (evasionBoostSecRef.current > 0 ? 0.25 : 0);
+      + (evasionBoostSecRef.current > 0 ? 0.25 : 0)
+      + enginesEvasionBonus(reactorRef.current.engines);
     // Kaan Ferrous: "+10% evasion when at Long range" — only when he's assigned to the flagship.
     const kaanAssigned = assignedCrew.some((c) => c.defId === "kaanFerrous");
     const evasion = Math.min(0.75, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
@@ -968,6 +974,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
     const braced = result.hit && braceUntilRef.current > Date.now();
     if (braced) {
       result = { ...result, damageDealt: Math.max(1, Math.round(result.damageDealt * (1 - BRACE_REDUCTION))) };
+    }
+    // Reactor: the shields channel is a flat reduction on whatever got through,
+    // applied here so every downstream use of damageDealt stays consistent.
+    const shieldMult = shieldsDamageMultiplier(reactorRef.current.shields);
+    if (result.hit && shieldMult !== 1) {
+      result = { ...result, damageDealt: Math.max(1, Math.round(result.damageDealt * shieldMult)) };
     }
     // Ablate: consecutive hits land progressively softer.
     if (result.hit && ablateReduction > 0) {
@@ -1220,7 +1232,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
       // band transition from ~16s to under 6s and undone the whole point of the
       // real-timescale rework — sqrt keeps speed a genuine, felt advantage
       // (~16s → ~10s) without erasing range as a tactical resource.
-      const playerRate = (1 / BASE_CLOSE_SECONDS) * Math.sqrt(shipSpeed / REFERENCE_SHIP_SPEED);
+      const playerRate = (1 / BASE_CLOSE_SECONDS)
+        * Math.sqrt(shipSpeed / REFERENCE_SHIP_SPEED)
+        * enginesRateMultiplier(reactorRef.current.engines);
       const prevBand = rangeBandRef.current;
       const next = advanceRangeBand(
         { band: rangeBandRef.current, progress: rangeProgressRef.current },
@@ -1891,7 +1905,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
     // cadence at AUTO_FIRE_MIN_INTERVAL so a 0-cooldown weapon (e.g. Pulse Cannon)
     // doesn't refire every render. Utility actives keep their raw authored cooldown.
     const nextCooldownSec = def.type === "weapon"
-      ? Math.max(AUTO_FIRE_MIN_INTERVAL, rawCooldownSec * powerStrainRef.current)
+      ? Math.max(
+          AUTO_FIRE_MIN_INTERVAL,
+          rawCooldownSec * powerStrainRef.current * weaponsCadenceMultiplier(reactorRef.current.weapons),
+        )
       : rawCooldownSec;
     setCooldowns((prev) => ({ ...prev, [moduleId]: nextCooldownSec }));
     if (overloadShotCount > 0) overloadCountersRef.current[mod.id] = overloadShotCount >= 3 ? 0 : overloadShotCount;
@@ -2475,6 +2492,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
           </div>
         )}
         {rift && <RiftStakesBar depth={rift.depth} haul={rift.haul} anomaly={rift.anomaly} />}
+        {/* Core-loop redesign #2 — the reactor split. Sits in the vitals block
+            rather than the console because it's a standing tuning decision, not
+            a one-shot order like the stance buttons. */}
+        <ReactorBar
+          alloc={reactor}
+          disabled={status !== "active"}
+          onShift={(ch) => { setReactor((a) => shiftReactor(a, ch)); playSfx("click"); }}
+        />
       </div>
 
       {/* ---- VIEWSCREEN ---- */}
@@ -2841,6 +2866,61 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
           {afterAction && afterAction.total > 0 && <AfterActionPanel data={afterAction} />}
         </ResultOverlay>
       )}
+    </div>
+  );
+}
+
+/** 功率分配 — the reactor split, as three tap-to-boost channels.
+ *
+ * Core-loop redesign #2. Every pip taken is a pip given up, so the control is a
+ * genuine allocation rather than three sliders that all go up. Two pips is
+ * neutral on every channel, which means a player who never touches it is not
+ * punished for ignoring it — they only forgo the upside. */
+function ReactorBar({
+  alloc, disabled, onShift,
+}: {
+  alloc: ReactorAllocation; disabled: boolean; onShift: (c: ReactorChannel) => void;
+}) {
+  const channels: { id: ReactorChannel; color: string }[] = [
+    { id: "weapons", color: "var(--red)" },
+    { id: "shields", color: "var(--cyan)" },
+    { id: "engines", color: "var(--green)" },
+  ];
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.45rem", flexWrap: "wrap" }}>
+      <span className="eyebrow" style={{ color: "var(--text-dim)", flex: "none" }}>{t("reactor.label")}</span>
+      {channels.map(({ id, color }) => (
+        <button
+          key={id}
+          onClick={() => onShift(id)}
+          disabled={disabled}
+          title={t(`reactor.${id}Title`)}
+          style={{
+            flex: "1 1 90px", display: "flex", alignItems: "center", gap: "0.35rem",
+            padding: "0.2em 0.45em", borderRadius: 4, cursor: disabled ? "default" : "pointer",
+            border: `1px solid ${alloc[id] > 2 ? color : "var(--line)"}`,
+            background: alloc[id] > 2 ? "rgba(255,255,255,0.05)" : "transparent",
+            color: alloc[id] > 2 ? color : "var(--text-dim)",
+            fontSize: "0.62rem", fontFamily: "var(--font-display)", fontWeight: 800,
+            transition: "border-color 140ms ease, color 140ms ease",
+          }}
+        >
+          <span style={{ whiteSpace: "nowrap" }}>{t(`reactor.${id}`)}</span>
+          <span aria-hidden="true" style={{ display: "flex", gap: 2, marginLeft: "auto" }}>
+            {Array.from({ length: REACTOR_PIPS }, (_, i) => (
+              <span
+                key={i}
+                style={{
+                  width: 5, height: 9, borderRadius: 1,
+                  background: i < alloc[id] ? color : "var(--line)",
+                  boxShadow: i < alloc[id] ? `0 0 5px ${color}` : "none",
+                  transition: "background 140ms ease",
+                }}
+              />
+            ))}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

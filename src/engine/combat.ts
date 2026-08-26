@@ -176,3 +176,67 @@ export function powerStrainMultiplier(used: number, capacity: number): number {
   const over = (used - capacity) / capacity;
   return Math.min(POWER_STRAIN_CAP, 1 + over * 1.5);
 }
+
+/** 功率分配 — Reactor Allocation.
+ *
+ * Core-loop redesign #2 (docs/core-loop-redesign.md). From FTL and Star Trek:
+ * Bridge Crew — "at its heart this is a resource management game, and power is
+ * one of those resources to manage."
+ *
+ * The problem it solves: with the guns firing themselves, whole stretches of a
+ * fight had nothing to decide. Enemy roles gave the player a target-priority
+ * question; this gives them a continuous one that is about tuning the ship
+ * rather than about reflexes — which is the bridge-command fantasy the game
+ * already claims.
+ *
+ * Three channels share a fixed number of pips. Boosting one starves another, so
+ * there is no correct setting, only a setting suited to the enemy in front of
+ * you and the loadout you drafted.
+ */
+export type ReactorChannel = "weapons" | "shields" | "engines";
+
+export const REACTOR_PIPS = 6;
+
+export interface ReactorAllocation {
+  weapons: number;
+  shields: number;
+  engines: number;
+}
+
+export const DEFAULT_ALLOCATION: ReactorAllocation = { weapons: 2, shields: 2, engines: 2 };
+
+/** Moves one pip into `channel`, taking it from whichever other channel can
+ * spare it. Returns the original allocation when no pip can be moved, so the
+ * caller can treat this as a no-op rather than special-casing the full state. */
+export function shiftReactor(alloc: ReactorAllocation, channel: ReactorChannel): ReactorAllocation {
+  const total = alloc.weapons + alloc.shields + alloc.engines;
+  if (total < REACTOR_PIPS) return { ...alloc, [channel]: alloc[channel] + 1 };
+  // Take from the channel with the most to give, excluding the target. Ties
+  // resolve in a fixed order so the control is predictable under repeated taps.
+  const others = (["weapons", "shields", "engines"] as ReactorChannel[]).filter((c) => c !== channel);
+  const donor = others.reduce((best, c) => (alloc[c] > alloc[best] ? c : best), others[0]);
+  if (alloc[donor] <= 0) return alloc;
+  return { ...alloc, [channel]: alloc[channel] + 1, [donor]: alloc[donor] - 1 };
+}
+
+/** Weapon cadence multiplier. 2 pips is neutral, so the default allocation
+ * changes nothing and a player who never touches the control is not penalised
+ * for ignoring it — they simply give up the upside. */
+export function weaponsCadenceMultiplier(pips: number): number {
+  return 1 - (pips - 2) * 0.1;
+}
+
+/** Incoming-damage multiplier from the shields channel. */
+export function shieldsDamageMultiplier(pips: number): number {
+  return 1 - (pips - 2) * 0.09;
+}
+
+/** Multiplier on how fast the helm's stance order moves the range band, and on
+ * evasion, from the engines channel. */
+export function enginesRateMultiplier(pips: number): number {
+  return 1 + (pips - 2) * 0.22;
+}
+
+export function enginesEvasionBonus(pips: number): number {
+  return Math.max(0, (pips - 2) * 0.04);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAttack, advanceRangeBand, isEncounterCleared, isPlayerDefeated, RANGE_MODIFIERS, type RangeState, anchorBonusBlock } from "./combat";
+import { resolveAttack, advanceRangeBand, isEncounterCleared, isPlayerDefeated, RANGE_MODIFIERS, type RangeState, anchorBonusBlock, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS } from "./combat";
 import { ENCOUNTER_DEFS } from "../data/encounters";
 
 describe("resolveAttack", () => {
@@ -199,5 +199,58 @@ describe("anchorBonusBlock", () => {
 
   it("is safe on an out-of-range index", () => {
     expect(anchorBonusBlock([anchor, drone], 99)).toBe(0);
+  });
+});
+
+describe("reactor allocation", () => {
+  it("is a genuine allocation — a pip gained is a pip lost", () => {
+    // The whole point: three sliders that all go up would be a power-up, not a
+    // decision.
+    let a = { ...DEFAULT_ALLOCATION };
+    for (let i = 0; i < 20; i++) a = shiftReactor(a, "weapons");
+    expect(a.weapons + a.shields + a.engines).toBe(REACTOR_PIPS);
+  });
+
+  it("takes from whichever channel can best spare it", () => {
+    const a = shiftReactor({ weapons: 1, shields: 4, engines: 1 }, "weapons");
+    expect(a.shields).toBe(3);
+    expect(a.engines).toBe(1);
+    expect(a.weapons).toBe(2);
+  });
+
+  it("is a no-op rather than a crash when nothing can be moved", () => {
+    const maxed = { weapons: REACTOR_PIPS, shields: 0, engines: 0 };
+    expect(shiftReactor(maxed, "weapons")).toEqual(maxed);
+  });
+
+  it("fills spare capacity before taking from anyone", () => {
+    const a = shiftReactor({ weapons: 0, shields: 0, engines: 0 }, "shields");
+    expect(a).toEqual({ weapons: 0, shields: 1, engines: 0 });
+  });
+
+  it("treats the default split as neutral on every channel", () => {
+    // A player who never touches the control must not be penalised for it.
+    expect(weaponsCadenceMultiplier(DEFAULT_ALLOCATION.weapons)).toBe(1);
+    expect(shieldsDamageMultiplier(DEFAULT_ALLOCATION.shields)).toBe(1);
+    expect(enginesRateMultiplier(DEFAULT_ALLOCATION.engines)).toBe(1);
+    expect(enginesEvasionBonus(DEFAULT_ALLOCATION.engines)).toBe(0);
+  });
+
+  it("makes boosting help and starving hurt, on every channel", () => {
+    expect(weaponsCadenceMultiplier(5)).toBeLessThan(1);   // shorter cooldowns
+    expect(weaponsCadenceMultiplier(0)).toBeGreaterThan(1);
+    expect(shieldsDamageMultiplier(5)).toBeLessThan(1);    // less damage taken
+    expect(shieldsDamageMultiplier(0)).toBeGreaterThan(1);
+    expect(enginesRateMultiplier(5)).toBeGreaterThan(1);   // faster range shifts
+    expect(enginesRateMultiplier(0)).toBeLessThan(1);
+  });
+
+  it("never inverts a channel into nonsense at the extremes", () => {
+    for (let p = 0; p <= REACTOR_PIPS; p++) {
+      expect(weaponsCadenceMultiplier(p)).toBeGreaterThan(0);
+      expect(shieldsDamageMultiplier(p)).toBeGreaterThan(0);
+      expect(enginesRateMultiplier(p)).toBeGreaterThan(0);
+      expect(enginesEvasionBonus(p)).toBeGreaterThanOrEqual(0);
+    }
   });
 });
