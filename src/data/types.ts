@@ -117,6 +117,10 @@ export interface ModuleInstance {
   lockedTraitSlot: number | null;
   /** 0..1 roll governing this instance's primary stat within its rarity's range. */
   quality: number;
+  /** Core-loop redesign #4: this weapon has been evolved (see data/evolutions.ts)
+   * — a maxed weapon plus the right partner module becomes categorically
+   * different, with a new name, a new signature and more damage. */
+  evolved?: boolean;
 }
 
 export interface ShipRolls {

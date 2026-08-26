@@ -1,6 +1,7 @@
 import type { ModuleInstance, ModuleRarity } from "../data/types";
 import { MODULE_DEFS, MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, moduleDefById } from "../data/modules";
 import { pickOne, randomId, rollQuality } from "./rng";
+import { evolutionForFamily } from "../data/evolutions";
 
 /** Section B (2026-08-24): a draw is now bounded by where it came from. `maxRarity`
  * caps the market (see MARKET_MAX_RARITY) so mk4/mk5 are unpurchasable at any
@@ -78,7 +79,19 @@ export function computeModuleDamage(mod: ModuleInstance): number {
   const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
   const levelMult = moduleLevelMultiplier(mod.level);
   const rollMult = qualityMultiplier(mod.quality ?? 0.5);
-  return Math.round(base * rarityMult * levelMult * rollMult);
+  // Core-loop redesign #4: an evolved weapon hits harder on top of everything
+  // else. The damage is the payoff; the new signature is the actual change.
+  const evoMult = mod.evolved ? (evolutionForFamily(def.family)?.damageMult ?? 1) : 1;
+  return Math.round(base * rarityMult * levelMult * rollMult * evoMult);
+}
+
+/** The signature a module currently provides — its evolved one if it has
+ * evolved, otherwise the def's own. Every effect lookup goes through here so an
+ * evolution genuinely changes how the weapon plays rather than only its numbers. */
+export function effectiveSignature(mod: ModuleInstance): string {
+  const def = moduleDefById(mod.defId);
+  if (!mod.evolved) return def.signature;
+  return evolutionForFamily(def.family)?.signature ?? def.signature;
 }
 
 /** Trait-driven crit chance for a fired weapon: a base proc rate, the ship's own

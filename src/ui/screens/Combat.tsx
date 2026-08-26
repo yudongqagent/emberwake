@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { encounterById } from "../../data/encounters";
 import { moduleDefById } from "../../data/modules";
-import { computeModuleDamage, computeModuleBlock, computeCritChance } from "../../engine/modules";
+import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSignature } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
@@ -302,13 +302,14 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
    * helpers rather than reading `traits` directly, otherwise every module's
    * defining effect would silently do nothing. */
   function modHasEffect(m: ModuleInstance, id: string): boolean {
-    const d = moduleDefById(m.defId);
-    return d.signature === id || m.traits.includes(id);
+    // effectiveSignature, not def.signature: an evolved weapon carries a
+    // different signature, and every effect check has to see that or the
+    // evolution would be a damage bump wearing a new name.
+    return effectiveSignature(m) === id || m.traits.includes(id);
   }
   const shipEffects = new Set<string>();
   for (const m of equippedModuleList) {
-    const d = moduleDefById(m.defId);
-    shipEffects.add(d.signature);
+    shipEffects.add(effectiveSignature(m));
     for (const tr of m.traits) shipEffects.add(tr);
   }
   // Core-loop redesign #1: Refit Draft boons are effect ids, so they join the
@@ -1668,6 +1669,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
       // The shot's look comes from the module's tech family, so a Reaver gun
       // sprays and a Bauhinia gun lances without either being authored per module.
       const weaponVfx = weaponVfxForFamily(def.family);
+      // An evolved weapon fires under its evolved signature.
+      const modSignature = effectiveSignature(mod);
+      void modSignature;
       fireProjectile(playerPos, impactPos, beamColor, () => {
         if (result.hit) {
           spawnBurst(impactPos.x, impactPos.y, result.crit ? "255,226,93" : hexToRgbString(weaponColor), result.crit ? 22 : 12, result.crit ? 150 : 110);

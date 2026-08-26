@@ -6,6 +6,8 @@ import { ENCOUNTER_NAMES_ZH, ENEMY_NAMES_ZH } from "./encounters";
 import { GALAXY_NAMES_ZH, SYSTEM_NAMES_ZH, POI_NAMES_ZH } from "./places";
 import type { ModuleDef, ModuleTrait, CrewDef, EncounterDef, GalaxyDef, SystemDef, Poi } from "../../data/types";
 import { moduleEffectById } from "../../data/moduleEffects";
+import { moduleDefById } from "../../data/modules";
+import { evolutionForFamily } from "../../data/evolutions";
 import type { HullClassAbilityDef } from "../../data/namedShips";
 
 /** Issue #11: thin localization wrappers around the module/crew/named-ship data
@@ -16,6 +18,25 @@ import type { HullClassAbilityDef } from "../../data/namedShips";
 export function localizedModuleName(def: ModuleDef): string {
   if (language.value !== "zh") return def.name;
   return MODULE_NAMES_ZH[def.id] ?? def.name;
+}
+
+/** An evolved weapon carries its evolution's name instead of the def's (core-loop
+ * redesign #4). Evolution names live in data/evolutions.ts with both languages,
+ * since they're generated identity rather than roster data. */
+export function localizedModuleInstanceName(mod: { defId: string; evolved?: boolean }): string {
+  const def = moduleDefById(mod.defId);
+  if (!mod.evolved) return localizedModuleName(def);
+  const evo = evolutionForFamily(def.family);
+  if (!evo) return localizedModuleName(def);
+  return language.value === "zh" ? evo.nameCn : evo.name;
+}
+
+/** An evolution's own name. Evolutions carry both languages in data/evolutions.ts
+ * because they're generated identity rather than roster entries keyed by id. */
+export function localizedEvolutionName(family: string): string {
+  const evo = evolutionForFamily(family);
+  if (!evo) return "";
+  return language.value === "zh" ? evo.nameCn : evo.name;
 }
 
 /** Effect labels now live in one place — the shared effect registry

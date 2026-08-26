@@ -26,6 +26,7 @@ import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed } from "../engine/modules";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
+import { canEvolve, evolveModule } from "../data/evolutions";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -77,6 +78,27 @@ export function applyDraftChoice(opt: DraftOption): void {
  * than a free reset, and what keeps a good run's momentum meaningful. */
 /** Total Ember Load in force: what the flagship's ascensions impose, plus what
  * the player has opted into. */
+/** Core-loop redesign #4: evolve a maxed weapon that has its partner effect
+ * equipped. Free — the cost was getting the weapon to its cap and giving up a
+ * socket to the partner. */
+export function evolveEquippedModule(moduleId: string): boolean {
+  const ship = flagship.value;
+  if (!ship) return false;
+  const mod = state.value.modules.find((m) => m.id === moduleId);
+  if (!mod) return false;
+  const equipped = ship.equipped
+    .map((id) => state.value.modules.find((m) => m.id === id))
+    .filter((m): m is NonNullable<typeof m> => !!m);
+  if (!canEvolve(mod, equipped)) return false;
+  state.value = {
+    ...state.value,
+    modules: state.value.modules.map((m) => (m.id === moduleId ? evolveModule(m) : m)),
+  };
+  persist();
+  playSfx("victory");
+  return true;
+}
+
 export function emberLoad(): number {
   const ship = flagship.value;
   return totalEmberLoad(ship?.ascendedFrom.length ?? 0, state.value.voluntaryLoad);

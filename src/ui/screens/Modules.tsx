@@ -13,7 +13,9 @@ import { Bar, RollQualityBadge, AnimatedFraction } from "../components/StatBlock
 import { LoadoutDiagram } from "../components/LoadoutDiagram";
 import type { ModuleType, ModuleInstance } from "../../data/types";
 import { t } from "../../i18n/strings";
-import { localizedModuleName, localizedTrait } from "../../i18n/data";
+import { localizedModuleInstanceName, localizedTrait, localizedEvolutionName } from "../../i18n/data";
+import { evolutionForFamily, evolutionBlocker } from "../../data/evolutions";
+import { evolveEquippedModule } from "../../state/store";
 
 const TYPE_ORDER: ModuleType[] = ["weapon", "armor", "engine", "utility"];
 
@@ -113,7 +115,7 @@ export function Modules() {
               {mod && def ? (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.4rem" }}>
-                    <span style={{ fontWeight: 700 }}>{localizedModuleName(def)}</span>
+                    <span style={{ fontWeight: 700 }}>{localizedModuleInstanceName(mod)}</span>
                     <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
                       <span className="eyebrow" style={{ color: "var(--amber)" }}>
                         {t("modules.levelShort", { level: mod.level })}
@@ -225,7 +227,7 @@ function InventoryPanel({ inventory }: { inventory: ModuleInstance[] }) {
               <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.35rem 0", borderBottom: "1px solid var(--line)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
                   <ModuleTypeIcon type={def.type} size={14} />
-                  <span style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleName(def)}</span>
+                  <span style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleInstanceName(m)}</span>
                   <ModuleRarityTag rarity={m.rarity} />
                 </div>
                 <button
@@ -291,6 +293,16 @@ function UpgradeRow({ mod }: { mod: ModuleInstance }) {
   const before = isWeapon ? computeModuleDamage(mod) : isArmor ? computeModuleBlock(mod) : null;
   const after = isWeapon ? computeModuleDamage(next) : isArmor ? computeModuleBlock(next) : null;
 
+  // Core-loop redesign #4: an evolution the player can SEE coming is what makes a
+  // draft pick deliberate, so the requirement is stated even when unmet.
+  const evo = evolutionForFamily(def.family);
+  const ship = flagship.value;
+  const equippedMods = (ship?.equipped ?? [])
+    .map((id) => state.value.modules.find((m) => m.id === id))
+    .filter((m): m is ModuleInstance => !!m);
+  const blocker = evolutionBlocker(mod, equippedMods);
+  const showEvolution = def.type === "weapon" && !!evo && blocker !== "notWeapon";
+
   return (
     <div
       style={{
@@ -299,6 +311,44 @@ function UpgradeRow({ mod }: { mod: ModuleInstance }) {
         background: maxed ? "transparent" : "rgba(255,184,77,0.07)",
       }}
     >
+      {showEvolution && (
+        <div
+          style={{
+            marginBottom: "0.5rem", padding: "0.45rem 0.55rem", borderRadius: 5,
+            border: `1px solid ${blocker === null ? "var(--violet)" : "var(--line)"}`,
+            background: blocker === null ? "rgba(185,140,255,0.1)" : "transparent",
+          }}
+        >
+          <div className="eyebrow" style={{ color: blocker === null ? "var(--violet)" : "var(--text-dim)" }}>
+            {t("evo.label")}
+          </div>
+          {mod.evolved ? (
+            <div style={{ fontSize: "0.74rem", color: "var(--violet)", marginTop: "0.2rem" }}>{t("evo.done")}</div>
+          ) : (
+            <>
+              <div style={{ fontSize: "0.74rem", color: "var(--text-mid)", marginTop: "0.2rem", lineHeight: 1.4 }}>
+                {t("evo.requires", {
+                  name: localizedEvolutionName(def.family),
+                  partner: localizedTrait(def, evo!.partnerEffect).label,
+                })}
+              </div>
+              {blocker === null ? (
+                <button
+                  className="btn primary"
+                  style={{ marginTop: "0.4rem", fontSize: "0.7rem", padding: "0.35em 0.7em" }}
+                  onClick={() => evolveEquippedModule(mod.id)}
+                >
+                  {t("evo.action")}
+                </button>
+              ) : (
+                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>
+                  {blocker === "needsLevel" ? t("evo.needsLevel") : t("evo.needsPartner")}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
         <span className="eyebrow" style={{ color: maxed ? "var(--text-dim)" : "var(--amber)" }}>
           {t("modules.levelOf", { level: mod.level, cap })}
@@ -405,7 +455,7 @@ function PickerModal({
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
                   <ModuleTypeIcon type={type} size={15} />
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleName(def)}</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleInstanceName(m)}</span>
                   <ModuleRarityTag rarity={m.rarity} />
                   <span className="eyebrow" style={{ color: "var(--amber)" }}>{t("modules.levelShort", { level: m.level })}</span>
                 </div>
