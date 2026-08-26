@@ -25,6 +25,7 @@ import { CREW_DEFS, crewDefById } from "../data/crew";
 import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed } from "../engine/modules";
 import type { DraftOption } from "../data/draft";
+import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -74,6 +75,18 @@ export function applyDraftChoice(opt: DraftOption): void {
 
 /** Boons last until the ship docks — that's what makes docking a decision rather
  * than a free reset, and what keeps a good run's momentum meaningful. */
+/** Total Ember Load in force: what the flagship's ascensions impose, plus what
+ * the player has opted into. */
+export function emberLoad(): number {
+  const ship = flagship.value;
+  return totalEmberLoad(ship?.ascendedFrom.length ?? 0, state.value.voluntaryLoad);
+}
+
+export function setVoluntaryLoad(n: number): void {
+  state.value = { ...state.value, voluntaryLoad: Math.max(0, Math.min(10, Math.round(n))) };
+  persist();
+}
+
 export function clearSortieBoons(): void {
   if (state.value.sortieBoons.length === 0) return;
   state.value = { ...state.value, sortieBoons: [] };
@@ -499,6 +512,15 @@ export function resolveCombatVictory(
   const insightStacks = equippedEffectStacks("insightDraw");
   if (insightStacks > 0 && Math.random() < Math.min(0.6, 0.2 * insightStacks)) {
     rewards.insight = (rewards.insight ?? 0) + insightStacks;
+  }
+  // Ember Load's payoff (core-loop redesign #3): fighting under Load pays more,
+  // which is the whole reason to opt into it. Applied last so it scales the real
+  // total rather than the authored base.
+  const loadMult = emberLoadRewardMultiplier(emberLoad());
+  if (loadMult > 1) {
+    for (const k of Object.keys(rewards) as ResourceType[]) {
+      if (rewards[k]) rewards[k] = Math.round(rewards[k]! * loadMult);
+    }
   }
   grant(rewards);
   const dropChance = enc.isBoss ? BOSS_BONUS_DROP_CHANCE : BONUS_DROP_CHANCE;

@@ -3,7 +3,7 @@ import { MODULE_DEFS } from "../data/modules";
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 const SAVE_KEY = "emberwake.save";
 /** Rolling copy of the previous save, written before every overwrite. */
 const BACKUP_KEY = "emberwake.save.backup";
@@ -39,6 +39,10 @@ export interface GameState {
    * effects the ship's own modules provide, so a boon can be any of the 46
    * already-implemented effects rather than needing new combat plumbing. */
   sortieBoons: string[];
+  /** Core-loop redesign #3 — Ember Load the player has opted into on top of what
+   * ascension already imposes. Higher Load means harder encounters and richer
+   * rewards; opting in is what makes it a decision rather than a difficulty knob. */
+  voluntaryLoad: number;
   /** Captured ships that have been gifted on to family/allies. They're gone from
    * the player's own hands for good, but they fight alongside Whisper in fleet
    * battles (团战) — see EncounterDef.fleetBattle. Never in the extradimensional
@@ -79,6 +83,7 @@ export function createInitialState(): GameState {
     capturedShips: [],
     alliedShips: [],
     sortieBoons: [],
+    voluntaryLoad: 0,
   };
 }
 
@@ -176,6 +181,9 @@ const migrations: Record<number, (s: any) => any> = {
   },
   // Refit Draft boons — empty for every existing save, nothing to reconstruct.
   7: (s: any) => ({ ...s, schemaVersion: 8, sortieBoons: s.sortieBoons ?? [] }),
+  // Ember Load — existing saves start at zero voluntary load, so nothing about
+  // their difficulty changes except what their own ascensions already imply.
+  8: (s: any) => ({ ...s, schemaVersion: 9, voluntaryLoad: s.voluntaryLoad ?? 0 }),
 };
 
 /** Exposed for tests — migrations are only otherwise reachable through
@@ -298,6 +306,7 @@ function repairState(raw: any): GameState {
     capturedShips: Array.isArray(raw.capturedShips) ? raw.capturedShips : [],
     alliedShips: Array.isArray(raw.alliedShips) ? raw.alliedShips : [],
     sortieBoons: Array.isArray(raw.sortieBoons) ? raw.sortieBoons.filter((b: any) => typeof b === "string") : [],
+    voluntaryLoad: typeof raw.voluntaryLoad === "number" && raw.voluntaryLoad >= 0 ? raw.voluntaryLoad : 0,
   };
 }
 

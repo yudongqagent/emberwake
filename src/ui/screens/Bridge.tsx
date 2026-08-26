@@ -1,4 +1,5 @@
-import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull } from "../../state/store";
+import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull, setVoluntaryLoad } from "../../state/store";
+import { emberLoadRewardMultiplier } from "../../data/emberLoad";
 import { hullClassById } from "../../data/hullClasses";
 import { computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { ShipRarityTag } from "../components/RarityTag";
@@ -9,6 +10,59 @@ import { StatReadout, Bar, hullBarKind, AnimatedFraction } from "../components/S
 import { BridgeViewscreen } from "../components/BridgeViewscreen";
 import { t } from "../../i18n/strings";
 import { localizedCrewName, localizedHullClassDisplay, localizedSystemName, localizedGalaxyName } from "../../i18n/data";
+
+/** The Load dial. Ascension already imposes Load automatically — this is the
+ * voluntary part on top, and the reward multiplier is stated up front so the bet
+ * is legible before it's taken. */
+function EmberLoadPanel() {
+  const ship = flagship.value;
+  const fromAscension = ship?.ascendedFrom.length ?? 0;
+  const voluntary = state.value.voluntaryLoad;
+  const total = fromAscension + voluntary;
+  const reward = Math.round((emberLoadRewardMultiplier(total) - 1) * 100);
+  return (
+    <div className="panel" style={{ padding: "0.9rem 1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.6rem" }}>
+        <div>
+          <div className="eyebrow" style={{ color: "var(--amber)" }}>{t("load.title")}</div>
+          <div style={{ fontSize: "0.76rem", color: "var(--text-mid)", marginTop: "0.25rem", lineHeight: 1.45 }}>
+            {t("load.blurb")}
+          </div>
+        </div>
+        <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.5rem", color: "var(--amber)", flex: "none" }}>
+          {total}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.6rem", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+          {t("load.fromAscension", { n: fromAscension })}
+        </span>
+        <div style={{ display: "flex", gap: "0.3rem", marginLeft: "auto" }}>
+          <button
+            className="btn ghost"
+            style={{ padding: "0.3em 0.7em", fontSize: "0.8rem" }}
+            disabled={voluntary <= 0}
+            onClick={() => { setVoluntaryLoad(voluntary - 1); playSfx("click"); }}
+            aria-label={t("load.decrease")}
+          >−</button>
+          <span style={{ minWidth: 34, textAlign: "center", fontFamily: "var(--font-display)", fontWeight: 700, alignSelf: "center" }}>
+            +{voluntary}
+          </span>
+          <button
+            className="btn ghost"
+            style={{ padding: "0.3em 0.7em", fontSize: "0.8rem" }}
+            disabled={voluntary >= 10}
+            onClick={() => { setVoluntaryLoad(voluntary + 1); playSfx("click"); }}
+            aria-label={t("load.increase")}
+          >+</button>
+        </div>
+      </div>
+      <div style={{ marginTop: "0.5rem", fontSize: "0.74rem", color: total > 0 ? "var(--green)" : "var(--text-dim)" }}>
+        {t("load.reward", { pct: reward })}
+      </div>
+    </div>
+  );
+}
 
 export function Bridge({ onNavigate, onEnterRift }: { onNavigate: (screen: string) => void; onEnterRift: () => void }) {
   const ship = flagship.value;
@@ -55,6 +109,11 @@ export function Bridge({ onNavigate, onEnterRift }: { onNavigate: (screen: strin
           </button>
         </div>
       )}
+
+      {/* 余烬负荷 — Ember Load (core-loop redesign #3). Sits on the bridge next to
+          the rift because both are standing decisions about how much danger to
+          invite, rather than places to go. */}
+      <EmberLoadPanel />
 
       {/* 异空间战场 — the Extradimensional Battlefield.
           Corrected 2026-08-24: this is the Cinder's POWER, invoked from the

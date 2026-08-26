@@ -5,7 +5,8 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance } from "../.
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip } from "../../state/store";
+import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad } from "../../state/store";
+import { applyEmberLoad } from "../../data/emberLoad";
 import { crewDefById } from "../../data/crew";
 import { hullClassAbility } from "../../data/namedShips";
 import { playSfx } from "../../audio/engine";
@@ -346,8 +347,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
   const shipBaseCrit = computeBaseCritChance(ship);
   const shipSpeed = computeSpeed(ship);
 
+  // Core-loop redesign #3: Ember Load reshapes the authored formation before the
+  // fight starts — tougher ships, and roles handed out as Load climbs. Rift waves
+  // are excluded: they already scale with depth and stacking both would double-dip.
+  const loadedEncounter = rift ? encounter : applyEmberLoad(encounter, emberLoad());
   const [enemies, setEnemies] = useState<EnemyState[]>(
-    encounter.enemies.map((e) => ({ ...e, name: localizedEnemyName(e.name), maxHull: e.hull })),
+    loadedEncounter.enemies.map((e) => ({ ...e, name: localizedEnemyName(e.name), maxHull: e.hull })),
   );
   const maxHull = Math.round(computeMaxHull(ship) * (1 + hullBonusFraction));
   const [playerHull, setPlayerHull] = useState(Math.min(maxHull, Math.round(ship.currentHp * (1 + hullBonusFraction))));
