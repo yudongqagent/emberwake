@@ -3,7 +3,7 @@ import { MODULE_DEFS } from "../data/modules";
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 const SAVE_KEY = "emberwake.save";
 /** Rolling copy of the previous save, written before every overwrite. */
 const BACKUP_KEY = "emberwake.save.backup";
@@ -34,6 +34,11 @@ export interface GameState {
    * to family/allies (state/store.ts's giftCapturedShip) — never piloted by the
    * player, and not the same roster the old ship-gacha hangar used to be. */
   capturedShips: ShipInstance[];
+  /** Core-loop redesign #1 (docs/core-loop-redesign.md): effect ids granted by
+   * Refit Draft boons, active until the ship next docks. They join the set of
+   * effects the ship's own modules provide, so a boon can be any of the 46
+   * already-implemented effects rather than needing new combat plumbing. */
+  sortieBoons: string[];
   /** Captured ships that have been gifted on to family/allies. They're gone from
    * the player's own hands for good, but they fight alongside Whisper in fleet
    * battles (团战) — see EncounterDef.fleetBattle. Never in the extradimensional
@@ -73,6 +78,7 @@ export function createInitialState(): GameState {
     poiState: {},
     capturedShips: [],
     alliedShips: [],
+    sortieBoons: [],
   };
 }
 
@@ -168,6 +174,8 @@ const migrations: Record<number, (s: any) => any> = {
     });
     return { ...s, schemaVersion: 7, modules };
   },
+  // Refit Draft boons — empty for every existing save, nothing to reconstruct.
+  7: (s: any) => ({ ...s, schemaVersion: 8, sortieBoons: s.sortieBoons ?? [] }),
 };
 
 /** Exposed for tests — migrations are only otherwise reachable through
@@ -289,6 +297,7 @@ function repairState(raw: any): GameState {
     poiState: raw.poiState && typeof raw.poiState === "object" ? raw.poiState : {},
     capturedShips: Array.isArray(raw.capturedShips) ? raw.capturedShips : [],
     alliedShips: Array.isArray(raw.alliedShips) ? raw.alliedShips : [],
+    sortieBoons: Array.isArray(raw.sortieBoons) ? raw.sortieBoons.filter((b: any) => typeof b === "string") : [],
   };
 }
 

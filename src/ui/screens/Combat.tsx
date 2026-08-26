@@ -310,9 +310,17 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
     shipEffects.add(d.signature);
     for (const tr of m.traits) shipEffects.add(tr);
   }
+  // Core-loop redesign #1: Refit Draft boons are effect ids, so they join the
+  // ship's own effects here and immediately work with all 46 implemented
+  // effects — no separate boon plumbing to keep in sync.
+  const sortieBoons = state.value.sortieBoons;
+  for (const b of sortieBoons) shipEffects.add(b);
   const hasEffect = (id: string) => shipEffects.has(id);
-  /** How many equipped modules carry an effect — for the ones that stack. */
-  const effectStacks = (id: string) => equippedModuleList.filter((m) => modHasEffect(m, id)).length;
+  /** How many equipped modules carry an effect — for the ones that stack. A boon
+   * counts as one more source, so taking Coolant as a boon stacks with a Coolant
+   * module rather than being swallowed by it. */
+  const effectStacks = (id: string) =>
+    equippedModuleList.filter((m) => modHasEffect(m, id)).length + sortieBoons.filter((b) => b === id).length;
 
   const armorBlock = equippedModuleList
     .filter((m) => moduleDefById(m.defId).baseBlock !== undefined)

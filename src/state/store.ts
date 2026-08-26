@@ -24,6 +24,7 @@ import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
 import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed } from "../engine/modules";
+import type { DraftOption } from "../data/draft";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -48,6 +49,37 @@ export function persist() {
  * ui/components/SaveRecovery.tsx), which hands back a campaign that a bad load
  * had replaced. Deliberately not a general-purpose setter: everything else
  * mutates state through the narrow helpers in this file. */
+/** Core-loop redesign #1: applies whichever Refit Draft option the player chose.
+ * All three kinds land here so the cost/benefit stays in one auditable place. */
+export function applyDraftChoice(opt: DraftOption): void {
+  const next = { ...state.value };
+  if (opt.kind === "module" && opt.module) {
+    next.modules = [...next.modules, opt.module];
+    if (opt.hullCost) {
+      // The greedy option's price. Never lethal — a bruise, not a gamble with
+      // the run, since the fight is already won by the time this is offered.
+      next.ships = next.ships.map((sh) =>
+        sh.id === next.flagshipId ? { ...sh, currentHp: Math.max(1, sh.currentHp - opt.hullCost!) } : sh,
+      );
+    }
+  } else if (opt.kind === "upgrade" && opt.targetModuleId) {
+    next.modules = next.modules.map((m) => (m.id === opt.targetModuleId ? levelUpModule(m) : m));
+  } else if (opt.kind === "boon" && opt.boonId) {
+    next.sortieBoons = [...next.sortieBoons, opt.boonId];
+  }
+  state.value = next;
+  persist();
+  playSfx("draw");
+}
+
+/** Boons last until the ship docks — that's what makes docking a decision rather
+ * than a free reset, and what keeps a good run's momentum meaningful. */
+export function clearSortieBoons(): void {
+  if (state.value.sortieBoons.length === 0) return;
+  state.value = { ...state.value, sortieBoons: [] };
+  persist();
+}
+
 export function replaceState(next: GameState) {
   state.value = next;
   persist();

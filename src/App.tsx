@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { availableScene, completeScene, currentSystem, state, replaceState } from "./state/store";
+import { availableScene, completeScene, currentSystem, state, replaceState, applyDraftChoice, clearSortieBoons, flagship } from "./state/store";
 import { ResourceBar } from "./ui/components/ResourceBar";
 import { SoundIcon } from "./ui/components/Icons";
 import { Bridge } from "./ui/screens/Bridge";
@@ -14,9 +14,11 @@ import { StoryOverlay } from "./ui/screens/StoryOverlay";
 import { Combat } from "./ui/screens/Combat";
 import { RiftInterlude } from "./ui/screens/RiftInterlude";
 import { RiftDropReveal } from "./ui/screens/RiftDropReveal";
+import { RefitDraft } from "./ui/screens/RefitDraft";
+import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
-import { registerRuntimeEncounter } from "./data/encounters";
+import { registerRuntimeEncounter, encounterById } from "./data/encounters";
 import { grant, grantRiftDrop } from "./state/store";
 import { setMuted, isMuted } from "./audio/engine";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
@@ -84,6 +86,8 @@ export function App() {
   const [muted, setMutedState] = useState(isMuted());
   const [riftRun, setRiftRun] = useState<RiftRun | null>(null);
   const [riftDrop, setRiftDrop] = useState<ModuleInstance | null>(null);
+  /** Core-loop redesign #1 — the hand of three waiting to be picked from. */
+  const [draft, setDraft] = useState<DraftOption[] | null>(null);
 
   /** Generates the wave AND records the anomaly warping it, so the combat screen
    * can name what the player just walked into. */
@@ -188,6 +192,22 @@ export function App() {
     );
   }
 
+  if (draft) {
+    return (
+      <ErrorBoundary label={t("draft.title")}>
+        <RefitDraft
+          options={draft}
+          owned={state.value.modules}
+          onPick={(opt) => {
+            applyDraftChoice(opt);
+            setDraft(null);
+          }}
+        />
+        <ErrorToast />
+      </ErrorBoundary>
+    );
+  }
+
   if (combat) {
     const isPoiCombat = "poiId" in combat;
     return (
@@ -201,7 +221,21 @@ export function App() {
           // the interlude between waves.
           rift={riftRun ? { depth: riftRun.depth, haul: riftRun.haul, anomaly: riftRun.anomaly } : null}
           onResolve={(result) => {
+            const faction = encounterById(combat.encounterId).faction;
             setCombat(null);
+            // Core-loop redesign #1: a won fight now ends in a pick rather than a
+            // silent dice roll. Rift waves are excluded — a dive already has its
+            // own push-your-luck decision between waves, and stacking a draft on
+            // top of that would blunt both.
+            if (!riftRun && (result === "victory" || result === "captured")) {
+              const ship = flagship.value;
+              setDraft(generateDraft({
+                faction,
+                shipLevel: ship?.level ?? 1,
+                owned: state.value.modules,
+                activeBoons: state.value.sortieBoons,
+              }));
+            }
             if (!riftRun) return;
             if (result === "defeat") {
               // The whole provisional haul is lost — that risk is what makes
@@ -241,7 +275,13 @@ export function App() {
             {screen === "system" && (
               <SystemView
                 onNavigate={(s) => setScreen(s as Screen)}
-                onDock={() => setDocked(true)}
+                onDock={() => {
+                  // Boons last until you dock — that's what makes docking a real
+                  // decision (repair and restock, or press on with what you drafted)
+                  // rather than a free reset.
+                  clearSortieBoons();
+                  setDocked(true);
+                }}
                 onEngage={(encounterId, poiId, victoryFlag) => setCombat({ encounterId, poiId, victoryFlag })}
               />
             )}
