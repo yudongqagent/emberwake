@@ -1,5 +1,8 @@
 # Core Loop Redesign — 2026-08-25
 
+> **Status: all five shipped.** Implementation notes and the two places reality
+> forced a change from this plan are recorded at the end.
+
 Requested: "参考网上最好的游戏设计，帮我重新设计核心玩法和机制."
 
 Grounded in what the reference games actually do, and in measurements of what
@@ -210,3 +213,34 @@ Ordered by leverage per unit of risk:
 - [Stat-based meta-progression criticism / Hades' Heat balance](https://www.resetera.com/threads/im-starting-to-feel-that-stat-based-meta-progression-is-starting-to-ruin-roguelites-generally-speaking.1509337/page-2)
 - [Star Trek: Bridge Crew — engineering and power allocation](https://startrekbridgecrew.fandom.com/wiki/Engineering)
 - [Path of Exile 2 — itemization, meaningful upgrades over volume](https://www.mmoexp.com/News/path-of-exile-2-league-review-build-diversity-endgame-freedom-economy-problems-and-the-road-to-1-0.html)
+
+
+---
+
+## Implementation notes (added after shipping)
+
+All five landed. Two places where building it changed the plan:
+
+**Sorties apply to POI combat, not story missions.** The plan said "a story
+mission becomes a sortie of 2–4 encounters". Story encounters grant progression
+flags, and putting the quest chain behind a longer, riskier gate than it was
+authored for is exactly how a player gets stranded — the failure
+`questChain.test.ts` exists to catch. Story beats stay single-stage; repeatable
+POI combat carries the sortie structure.
+
+**Ember Load upgrades its support role rather than stacking roles.** The plan
+implied Load would add roles cumulatively. It can't: the one-support-per-formation
+rule exists because two menders healing each other is a stalemate, so a mender
+added on top of an anchor silently never appeared. Load now escalates the single
+support slot (anchor → mender) with artillery arriving separately, since
+artillery is pressure rather than support. A test caught this.
+
+Two things worth watching in play:
+
+- **Boons ride on the effect registry.** A field rig is an effect id, so it works
+  with all 46 implemented effects and stacks with a module carrying the same one.
+  Cheap to extend, but it also means a boon is only as interesting as the effect
+  behind it.
+- **The draft's tier curve is tied to ship level**, not to Ember Load or region
+  danger. If drafts feel behind or ahead of the curve, `draftTierFor` is the one
+  knob.
