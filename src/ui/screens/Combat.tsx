@@ -271,9 +271,12 @@ interface Props {
    * enemy numbers, so the one mode built around mounting risk felt exactly like
    * a bounty fight. Present only during a run; null everywhere else. */
   rift?: { depth: number; haul: Partial<Record<ResourceType, number>>; anomaly: RiftAnomalyId } | null;
+  /** Core-loop redesign #5: additional Ember Load for this wave of a sortie, so
+   * each wave is fought harder than the last. */
+  extraLoad?: number;
 }
 
-export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Props) {
+export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extraLoad = 0 }: Props) {
   const encounter = encounterById(encounterId);
   // UI audit #7: dive depth as a 0..1 dread dial for the backdrop. Constant for
   // this mount — each rift wave mounts Combat fresh — so the frame loop's frozen
@@ -351,7 +354,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift }: Pro
   // Core-loop redesign #3: Ember Load reshapes the authored formation before the
   // fight starts — tougher ships, and roles handed out as Load climbs. Rift waves
   // are excluded: they already scale with depth and stacking both would double-dip.
-  const loadedEncounter = rift ? encounter : applyEmberLoad(encounter, emberLoad());
+  const loadedEncounter = rift ? encounter : applyEmberLoad(encounter, emberLoad() + extraLoad);
   const [enemies, setEnemies] = useState<EnemyState[]>(
     loadedEncounter.enemies.map((e) => ({ ...e, name: localizedEnemyName(e.name), maxHull: e.hull })),
   );

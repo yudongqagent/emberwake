@@ -15,6 +15,7 @@ import { Combat } from "./ui/screens/Combat";
 import { RiftInterlude } from "./ui/screens/RiftInterlude";
 import { RiftDropReveal } from "./ui/screens/RiftDropReveal";
 import { RefitDraft } from "./ui/screens/RefitDraft";
+import { SortieInterlude } from "./ui/screens/SortieInterlude";
 import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
@@ -88,6 +89,14 @@ export function App() {
   const [riftDrop, setRiftDrop] = useState<ModuleInstance | null>(null);
   /** Core-loop redesign #1 — the hand of three waiting to be picked from. */
   const [draft, setDraft] = useState<DraftOption[] | null>(null);
+  /** Core-loop redesign #5 — an in-progress sortie. The rift's push-your-luck
+   * shape is the best thing in the game and it was walled off in a side mode;
+   * this applies it to ordinary POI combat. Story encounters stay single-stage,
+   * because they grant progression flags and a multi-stage story fight would put
+   * the quest chain behind a longer, riskier gate than it was authored for. */
+  const [sortie, setSortie] = useState<
+    { encounterId: string; poiId: string; victoryFlag?: string; wave: number; total: number } | null
+  >(null);
 
   /** Generates the wave AND records the anomaly warping it, so the combat screen
    * can name what the player just walked into. */
@@ -208,6 +217,24 @@ export function App() {
     );
   }
 
+  if (sortie && sortie.wave < sortie.total && !combat && !draft) {
+    return (
+      <ErrorBoundary label={t("sortie.eyebrow")}>
+        <SortieInterlude
+          wave={sortie.wave}
+          total={sortie.total}
+          onPress={() => {
+            const next = sortie.wave + 1;
+            setSortie({ ...sortie, wave: next });
+            setCombat({ encounterId: sortie.encounterId, poiId: sortie.poiId, victoryFlag: sortie.victoryFlag });
+          }}
+          onWithdraw={() => setSortie(null)}
+        />
+        <ErrorToast />
+      </ErrorBoundary>
+    );
+  }
+
   if (combat) {
     const isPoiCombat = "poiId" in combat;
     return (
@@ -215,11 +242,18 @@ export function App() {
         <Combat
           encounterId={combat.encounterId}
           poiId={isPoiCombat ? combat.poiId : null}
-          victoryFlag={isPoiCombat ? combat.victoryFlag : undefined}
+          // Core-loop redesign #5: the objective is only met by finishing the
+          // sortie. Passing the flag on wave 1 would have completed the POI
+          // immediately and made every later wave pointless.
+          victoryFlag={
+            isPoiCombat && (!sortie || sortie.wave >= sortie.total) ? combat.victoryFlag : undefined
+          }
           // UI audit #7: what this wave is actually risking, so the dive's
           // mounting stakes are visible during the fight rather than only in
           // the interlude between waves.
           rift={riftRun ? { depth: riftRun.depth, haul: riftRun.haul, anomaly: riftRun.anomaly } : null}
+          // Each wave of a sortie is fought a point of Load harder than the last.
+          extraLoad={sortie ? sortie.wave - 1 : 0}
           onResolve={(result) => {
             const faction = encounterById(combat.encounterId).faction;
             setCombat(null);
@@ -235,6 +269,16 @@ export function App() {
                 owned: state.value.modules,
                 activeBoons: state.value.sortieBoons,
               }));
+            }
+            if (!riftRun && sortie) {
+              if (result === "defeat") {
+                // A lost sortie ends it. Whatever was drafted along the way is
+                // kept — the loss is the mission and the hull, not the refit.
+                setSortie(null);
+              } else if (sortie.wave >= sortie.total) {
+                setSortie(null);
+              }
+              // A mid-sortie win falls through to the draft, then the interlude.
             }
             if (!riftRun) return;
             if (result === "defeat") {
@@ -282,7 +326,14 @@ export function App() {
                   clearSortieBoons();
                   setDocked(true);
                 }}
-                onEngage={(encounterId, poiId, victoryFlag) => setCombat({ encounterId, poiId, victoryFlag })}
+                onEngage={(encounterId, poiId, victoryFlag) => {
+                  const enc = encounterById(encounterId);
+                  // Bosses run longer. Two waves is enough to make hull a
+                  // resource you're spending rather than a bar that refills.
+                  const total = enc.isBoss ? 3 : 2;
+                  setSortie({ encounterId, poiId, victoryFlag, wave: 1, total });
+                  setCombat({ encounterId, poiId, victoryFlag });
+                }}
               />
             )}
           </ErrorBoundary>
