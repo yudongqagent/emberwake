@@ -3,6 +3,7 @@ import { unlockedGalaxies, currentGalaxy, state, travelToSystem, getNextObjectiv
 import { playSfx } from "../../audio/engine";
 import { FACTION_HULL_COLOR } from "../render/shipArt";
 import { t } from "../../i18n/strings";
+import { regionDangerGap } from "../../state/store";
 import { localizedGalaxyName, localizedSystemName } from "../../i18n/data";
 
 function hashSeed(id: string): number {
@@ -47,16 +48,34 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
       )}
       {galaxies.length > 1 && (
         <div style={{ display: "flex", gap: "0.4rem", padding: "0.75rem 1rem 0", overflowX: "auto", height: "2.6rem", flex: "none" }}>
-          {galaxies.map((g) => (
-            <button
-              key={g.id}
-              className={`btn ${g.id === viewingId ? "primary" : ""}`}
-              style={{ flex: "none", whiteSpace: "nowrap", fontSize: "0.7rem", padding: "0.55em 0.9em" }}
-              onClick={() => setViewingId(g.id)}
-            >
-              {localizedGalaxyName(g)}
-            </button>
-          ))}
+          {galaxies.map((g) => {
+            // Open-world redesign: every region is reachable from the first
+            // minute, so the tab has to say how dangerous it is. Being killed by
+            // a region you were warned about is a fair loss; being killed by one
+            // you weren't is a bug.
+            const gap = regionDangerGap(g.threat);
+            const tone = gap >= 3 ? "var(--red)" : gap >= 1 ? "var(--amber)" : "var(--green)";
+            return (
+              <button
+                key={g.id}
+                className={`btn ${g.id === viewingId ? "primary" : ""}`}
+                style={{
+                  flex: "none", whiteSpace: "nowrap", fontSize: "0.7rem", padding: "0.55em 0.9em",
+                  display: "flex", alignItems: "center", gap: "0.4em",
+                  borderColor: g.id === viewingId ? undefined : tone,
+                }}
+                onClick={() => setViewingId(g.id)}
+                title={t(gap >= 3 ? "region.farAbove" : gap >= 1 ? "region.above" : "region.ready", { n: g.threat })}
+              >
+                {localizedGalaxyName(g)}
+                <span aria-hidden="true" style={{ display: "flex", gap: 1 }}>
+                  {Array.from({ length: g.threat }, (_, i) => (
+                    <span key={i} style={{ width: 3, height: 8, borderRadius: 1, background: tone, opacity: 0.85 }} />
+                  ))}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
       {/* Back to the system view. Needed once the bottom nav bar was removed

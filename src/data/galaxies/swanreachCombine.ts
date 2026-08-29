@@ -3,7 +3,8 @@ import type { GalaxyDef } from "../types";
 export const SWANREACH_COMBINE: GalaxyDef = {
   id: "swanreachCombine",
   name: "Swanreach Combine",
-  unlockFlag: "campaign.act1.complete",
+  unlockFlag: null,
+  threat: 3,
   systems: [
     {
       id: "meridianExchange",

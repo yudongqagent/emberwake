@@ -7,7 +7,8 @@ import type { GalaxyDef } from "../types";
 export const CHORUS_DEEP: GalaxyDef = {
   id: "chorusDeep",
   name: "Chorus Deep",
-  unlockFlag: "act5.secondIgnitionEpilogue.cleared",
+  unlockFlag: null,
+  threat: 7,
   systems: [
     {
       id: "choirsThreshold",

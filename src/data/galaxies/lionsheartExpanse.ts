@@ -3,7 +3,8 @@ import type { GalaxyDef } from "../types";
 export const LIONSHEART_EXPANSE: GalaxyDef = {
   id: "lionsheartExpanse",
   name: "Lionsheart Expanse",
-  unlockFlag: "campaign.act1.complete",
+  unlockFlag: null,
+  threat: 2,
   systems: [
     {
       id: "ferrousGate",

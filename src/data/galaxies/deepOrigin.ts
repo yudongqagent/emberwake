@@ -3,7 +3,8 @@ import type { GalaxyDef } from "../types";
 export const DEEP_ORIGIN: GalaxyDef = {
   id: "deepOrigin",
   name: "Deep Origin",
-  unlockFlag: "act3.originTide.cleared",
+  unlockFlag: null,
+  threat: 5,
   systems: [
     {
       id: "firstFleetGraveyard",

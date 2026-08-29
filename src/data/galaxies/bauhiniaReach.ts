@@ -4,6 +4,7 @@ export const BAUHINIA_REACH: GalaxyDef = {
   id: "bauhiniaReach",
   name: "Bauhinia Reach",
   unlockFlag: null,
+  threat: 1,
   systems: [
     {
       id: "amaranthBelt",

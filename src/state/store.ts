@@ -101,7 +101,32 @@ export function evolveEquippedModule(moduleId: string): boolean {
 
 export function emberLoad(): number {
   const ship = flagship.value;
-  return totalEmberLoad(ship?.ascendedFrom.length ?? 0, state.value.voluntaryLoad);
+  return totalEmberLoad(ship?.ascendedFrom.length ?? 0, state.value.voluntaryLoad) + regionThreatLoad();
+}
+
+/** Open-world redesign: the region's own danger, expressed as Ember Load.
+ *
+ * This is what replaces the unlock chain. Every region is reachable from the
+ * first minute; the far ones are simply lethal until you're ready for them. The
+ * home region contributes nothing, so early play is unchanged.
+ *
+ * Offset by how far the ship has come, so a region stops being frightening once
+ * you've outgrown it rather than scaling with you forever — an open world has to
+ * let you come back and feel the difference. */
+export function regionThreatLoad(): number {
+  const galaxy = currentGalaxy.value;
+  const ship = flagship.value;
+  const threat = (galaxy?.threat ?? 1) - 1;
+  const outgrown = Math.floor((ship?.level ?? 1) / 9) + (ship?.ascendedFrom.length ?? 0);
+  return Math.max(0, threat - outgrown);
+}
+
+/** How far above the player this region is, for the map warning. 0 means "this
+ * is where you belong right now". */
+export function regionDangerGap(galaxyThreat: number): number {
+  const ship = flagship.value;
+  const outgrown = Math.floor((ship?.level ?? 1) / 9) + (ship?.ascendedFrom.length ?? 0);
+  return Math.max(0, (galaxyThreat - 1) - outgrown);
 }
 
 export function setVoluntaryLoad(n: number): void {
@@ -538,6 +563,9 @@ export function resolveCombatVictory(
   // Ember Load's payoff (core-loop redesign #3): fighting under Load pays more,
   // which is the whole reason to opt into it. Applied last so it scales the real
   // total rather than the authored base.
+  // emberLoad() now includes the region's threat, so a fight in a region above
+  // your ship pays proportionally more. That temptation is the point of an open
+  // world — without it, "go anywhere" just means the map is bigger.
   const loadMult = emberLoadRewardMultiplier(emberLoad());
   if (loadMult > 1) {
     for (const k of Object.keys(rewards) as ResourceType[]) {

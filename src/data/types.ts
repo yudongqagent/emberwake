@@ -207,7 +207,17 @@ export interface JumpLane {
 export interface GalaxyDef {
   id: string;
   name: string;
+  /** Open-world redesign (2026-08-29): kept on the type for the two regions that
+   * still gate on a story beat for narrative reasons, but null for every region
+   * that used to gate on campaign progress. Danger is the gate now, not
+   * permission — see `threat`. */
   unlockFlag: string | null;
+  /** How dangerous this region is, 1 (home) to 7 (the deep). Feeds Ember Load, so
+   * a high-threat region fields tougher formations with more roles, and scales
+   * rewards to match. This is what replaces the unlock chain: you may fly
+   * anywhere from the first minute, and the far regions will kill you for it
+   * until you're ready. */
+  threat: number;
   systems: SystemDef[];
   lanes: JumpLane[];
 }

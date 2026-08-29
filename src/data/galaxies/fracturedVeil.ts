@@ -3,7 +3,8 @@ import type { GalaxyDef } from "../types";
 export const FRACTURED_VEIL: GalaxyDef = {
   id: "fracturedVeil",
   name: "Fractured Veil",
-  unlockFlag: "campaign.act2.complete",
+  unlockFlag: null,
+  threat: 4,
   systems: [
     {
       id: "veilsEdge",

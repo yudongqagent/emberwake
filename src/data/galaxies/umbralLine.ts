@@ -3,7 +3,8 @@ import type { GalaxyDef } from "../types";
 export const UMBRAL_LINE: GalaxyDef = {
   id: "umbralLine",
   name: "Umbral Line",
-  unlockFlag: "act4.deepOrigin.cleared",
+  unlockFlag: null,
+  threat: 6,
   systems: [
     {
       id: "umbralLine",
