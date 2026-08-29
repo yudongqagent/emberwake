@@ -1,6 +1,8 @@
+import { getSettings, updateSettings } from "../engine/settings";
+
 let ctx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
-let muted = false;
+let muted = getSettings().muted;
 
 function getCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -9,7 +11,7 @@ function getCtx(): AudioContext | null {
     if (!Ctor) return null;
     ctx = new Ctor();
     masterGain = ctx.createGain();
-    masterGain.gain.value = 0.35;
+    masterGain.gain.value = getSettings().muted ? 0 : getSettings().volume;
     masterGain.connect(ctx.destination);
   }
   if (ctx.state === "suspended") ctx.resume();
@@ -18,6 +20,19 @@ function getCtx(): AudioContext | null {
 
 export function setMuted(value: boolean) {
   muted = value;
+  updateSettings({ muted: value });
+  if (masterGain) masterGain.gain.value = value ? 0 : getSettings().volume;
+}
+
+/** Commercial-gap audit #6: a mute toggle is not a volume control. */
+export function setVolume(value: number) {
+  const v = Math.max(0, Math.min(1, value));
+  updateSettings({ volume: v });
+  if (masterGain && !muted) masterGain.gain.value = v;
+}
+
+export function getVolume(): number {
+  return getSettings().volume;
 }
 
 export function isMuted() {

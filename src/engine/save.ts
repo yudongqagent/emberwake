@@ -401,6 +401,21 @@ export function restoreSave(state: GameState): void {
   saveGame(state);
 }
 
+/** Whether there's a campaign worth offering "Continue" for. Checks for actual
+ * progress rather than mere existence, so a save written by simply opening the
+ * game once doesn't make the title screen lie about having something to return
+ * to. */
+export function hasExistingSave(): boolean {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const s = repairState(migrate(JSON.parse(raw)));
+    return Object.keys(s.flags).length > 0 || s.ships[0].level > 1 || s.modules.length > 2;
+  } catch {
+    return false;
+  }
+}
+
 export function clearSave(): void {
   localStorage.removeItem(SAVE_KEY);
 }

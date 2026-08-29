@@ -16,6 +16,7 @@ import { RiftInterlude } from "./ui/screens/RiftInterlude";
 import { RiftDropReveal } from "./ui/screens/RiftDropReveal";
 import { RefitDraft } from "./ui/screens/RefitDraft";
 import { SortieInterlude } from "./ui/screens/SortieInterlude";
+import { TitleScreen } from "./ui/screens/TitleScreen";
 import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
@@ -25,6 +26,7 @@ import { setMuted, isMuted } from "./audio/engine";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
 import { SaveRecovery } from "./ui/components/SaveRecovery";
+import { hasExistingSave, createInitialState } from "./engine/save";
 import { t } from "./i18n/strings";
 import { language, setLanguage } from "./i18n/language";
 import { ShipConsole, type ConsolePanelId } from "./ui/components/ShipConsole";
@@ -80,6 +82,10 @@ interface RiftRun {
 }
 
 export function App() {
+  /** Commercial-gap audit #1: the game had no title screen — it opened straight
+   * onto a dark map with a dialogue box already up. The title is now the entry
+   * point, and it's skipped only once the player has chosen to start. */
+  const [atTitle, setAtTitle] = useState(true);
   const [screen, setScreen] = useState<Screen>("system");
   const [panel, setPanel] = useState<ConsolePanelId | null>(null);
   const [docked, setDocked] = useState(false);
@@ -168,6 +174,24 @@ export function App() {
       </button>
     </div>
   );
+
+  if (atTitle) {
+    return (
+      <ErrorBoundary label={t("title.name")}>
+        <TitleScreen
+          hasSave={hasExistingSave()}
+          onContinue={() => setAtTitle(false)}
+          onNewGame={() => {
+            // saveGame keeps the previous campaign as a backup, so "New Game"
+            // is recoverable through the same path a bad load uses.
+            replaceState(createInitialState());
+            setAtTitle(false);
+          }}
+        />
+        <ErrorToast />
+      </ErrorBoundary>
+    );
+  }
 
   // The rift's module reward, revealed after extraction. Shown on its own rather
   // than folded into the haul list because it's the mechanically distinctive part:
