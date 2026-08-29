@@ -1,16 +1,23 @@
 import type { StoryScene } from "../types";
 
+/** Bauhinia Reach — the home region (threat 1).
+ *
+ * Story rework (2026-08-29). Rewritten for the open world: chapter labels are
+ * places rather than "Act I, Chapter 2", because a player may arrive here after
+ * the Umbral Line and being told they're at the beginning would be false. No
+ * scene opens with more than six lines, and none assumes the player has seen any
+ * particular scene before it.
+ *
+ * Flag identifiers are deliberately unchanged — 41 of them are referenced by
+ * galaxy POIs, crew unlocks and hull ascension gating, and they are never shown
+ * to the player, so renaming them would strand progression for nothing.
+ */
 export const ACT1_SCENES: StoryScene[] = [
   {
     id: "coldWake",
-    // Story rework (2026-08-29). The old opening ran 15 lines and ~1,600
-    // characters before the player did anything — the single biggest reason to
-    // quit in the first minute. This is five lines, it ends on an instruction
-    // rather than exposition, and every piece of backstory it used to front-load
-    // has been moved to where it's actually relevant.
-    //
-    // Chapter labels no longer say "Act I". In an open world a player may reach
-    // this after the Umbral Line, and being told they're in Act I would be a lie.
+    // The old opening ran 15 lines and ~1,600 characters before the player did
+    // anything — the single biggest reason to quit in the first minute. Five
+    // lines, ending on an instruction rather than exposition.
     chapter: "Amaranth Belt",
     chapterTitle: "Cold Wake",
     systemId: "amaranthBelt",
@@ -27,130 +34,109 @@ export const ACT1_SCENES: StoryScene[] = [
   },
   {
     id: "firstBlood",
-    chapter: "Act I, Chapter 2",
+    chapter: "Kestrel's Rest",
     chapterTitle: "First Blood",
     systemId: "kestrelsRest",
     requiredFlag: "act1.firstBlood.combatDone",
     hiddenAfterFlag: "act1.firstBlood.cleared",
     lines: [
-      { speaker: "", text: "The Reaver skiffs break apart, drifting. Kestrel's Rest signals a landing bay." },
-      { speaker: "The Cinder", text: "Kade — that raid was too clean. Three skiffs, no probing, straight for the outpost's fuel depot. Someone fed them the timing." },
-      { speaker: "Kade Ren", text: "Someone who isn't a Reaver." },
-      { speaker: "The Cinder", text: "I can't tell you who yet. Just — remember this. Whoever set the timing is still out there, watching to see who cleaned up their mess." },
-      { speaker: "Ori Vashti", text: "That's the fastest anyone's ever answered one of our signals. You military, or just fast?" },
-      { speaker: "Kade Ren", text: "Neither, really. Not yet." },
-      { speaker: "Ori Vashti", text: "I patch hulls for a living — or I did, before the Reavers took the last ship I patched. I'm done watching that happen quietly." },
-      { speaker: "Ori Vashti", text: "Whisper's held together with more hope than plating. Let me fix that properly. I'm coming with you." },
+      { speaker: "", text: "Two Reaver skiffs, cut open and cooling. Whisper's plating is scored down one flank." },
+      { speaker: "Kade Ren", text: "She held." },
+      { speaker: "The Cinder", text: "She held because you fought at the range her guns wanted. Do that every time and she'll keep holding." },
+      { speaker: "The Cinder", text: "Now the useful part. Salvage the wrecks and I can fold what's in them back into her — plating, cabling, whatever the Reavers bolted on. She doesn't get replaced. She gets rebuilt." },
+      { speaker: "Kade Ren", text: "How far does that go?" },
+      { speaker: "The Cinder", text: "Further than anything in this belt has ever gone. Ask me again when she's outgrown her own class." },
     ],
     onCompleteFlags: ["act1.firstBlood.cleared"],
   },
   {
     id: "theLedger",
-    chapter: "Act I, Chapter 3",
+    chapter: "Bauhinia Prime",
     chapterTitle: "The Ledger",
     systemId: "bauhiniaPrime",
     requiredFlag: "act1.firstBlood.cleared",
     hiddenAfterFlag: "act1.ledger.cleared",
     lines: [
-      { speaker: "", text: "Bauhinia Prime. The capital's docking spires glitter with a wealth Kade doesn't have yet." },
-      { speaker: "Arthaine Functionary", text: "Docking registration for a salvage-grade hull requires House sponsorship. You have none. Next." },
-      { speaker: "Dowager Marchioness Yifei Lin", text: "Wait. Run his service record again — the Kestrel's Rest engagement, full telemetry, not the summary." },
-      { speaker: "Arthaine Functionary", text: "...Confirmed, Marchioness. Solo engagement, no prior registration anywhere in the Reach. He's no one, by the paperwork." },
-      { speaker: "Yifei Lin", text: "The paperwork's wrong, then. Nobody flies like that with no record. He has mine, as of this moment." },
-      { speaker: "Arthaine Functionary", text: "Marchioness—" },
-      { speaker: "Yifei Lin", text: "The Reavers have been bleeding my shipping lanes for a year. This one cleared a raiding party out of Kestrel's Rest without being asked. I'll take that trade." },
-      { speaker: "Yifei Lin", text: "Trade your salvage here, Captain, and the Shipwright's Dock will draw you a hull when you've earned one. Don't make me regret this." },
+      { speaker: "", text: "Bauhinia Prime. A clerk of House Arthaine reads Whisper's registration and does not look up." },
+      { speaker: "Arthaine Clerk", text: "Salvage-grade. Independent. You're carrying a weapons load two classes above your registration." },
+      { speaker: "Kade Ren", text: "I'm carrying what was shooting at me last week." },
+      { speaker: "Arthaine Clerk", text: "The House takes an interest in independents who grow quickly. Consider that a courtesy, captain. It won't be repeated." },
+      { speaker: "The Cinder", text: "He filed a note before you finished speaking. They're watching what you do with her now." },
     ],
     onCompleteFlags: ["act1.ledger.cleared"],
   },
   {
     id: "staticAndSignal",
-    chapter: "Act I, Chapter 4",
+    chapter: "Thornwake",
     chapterTitle: "Static and Signal",
     systemId: "thornwake",
     requiredFlag: "act1.ledger.cleared",
     hiddenAfterFlag: "act1.static.cleared",
     lines: [
-      { speaker: "", text: "A survey job for Lin. The wreck field at Thornwake is old, picked-over — except for one hull at its center." },
-      { speaker: "Kade Ren", text: "That's—" },
-      { speaker: "The Cinder", text: "The flagship. Smaller. Decades before you'll lose it." },
-      { speaker: "Kade Ren", text: "I'm looking at my own grave." },
-      { speaker: "", text: "Residual defense systems flicker to life as Whisper closes on the wreck's core." },
-      { speaker: "The Cinder", text: "Something in there remembers me. I — I can lock a module's trait now. I didn't have that a moment ago. I'm remembering how." },
-      { speaker: "Kade Ren", text: "Remembering. Not learning." },
-      { speaker: "The Cinder", text: "...Fly, Kade. We'll come back to that." },
+      { speaker: "", text: "Thornwake runs a defence grid nobody has switched off in forty years. It still answers hails. It still shoots." },
+      { speaker: "The Cinder", text: "The grid isn't defending anything. Whoever set it has been dead for decades — it just never got the order to stop." },
+      { speaker: "Kade Ren", text: "Then we give it one." },
+      { speaker: "The Cinder", text: "It won't take the order from a corvette. Break it, and I'll take what's left of its targeting core." },
     ],
     onCompleteFlags: ["act1.static.cleared"],
     startEncounter: "thornwakeDefenseGrid",
   },
   {
     id: "tigersReach",
-    chapter: "Act I, Chapter 5",
+    chapter: "Coldreach Anchorage",
     chapterTitle: "Tiger's Reach",
     systemId: "coldreachAnchorage",
     requiredFlag: "act1.tigersReach.combatDone",
     hiddenAfterFlag: "act1.tigersReach.cleared",
     lines: [
-      { speaker: "", text: "The Reaver forward base burns. Manifests salvaged from the wreck show the base wasn't just raiding — it was living off a single fat target for months: the Sky Tiger trade convoy's mining shipments, extorted route by route until the convoy stopped running altogether." },
-      { speaker: "The Cinder", text: "Sky Tiger's not coming back to this lane, Kade. Whatever this base was living on, it just ran out." },
-      { speaker: "", text: "In the brig, a Principality Navy washout, mid-court-martial by the look of his restraints." },
-      { speaker: "Bosun \"Ratchet\" Koi", text: "You're either here to finish the job or you're the strangest rescue I've ever seen. Which is it?" },
-      { speaker: "Kade Ren", text: "Depends. You still know which end of a cannon does the work?" },
-      { speaker: "Ratchet Koi", text: "Refused to fire on a refugee convoy. Navy called it insubordination. Reavers called it an opportunity to make an example of me. I call it Tuesday." },
-      { speaker: "Ratchet Koi", text: "Get me off this rock and I'm yours. Gunnery's still the one thing I'm good at." },
-      { speaker: "The Cinder", text: "Enough Origin Essence banked here for a Destroyer-class refit, Kade. First real step up." },
+      { speaker: "", text: "The Reaver lieutenant's cutter drifts, engines dead, her hull still intact enough to board." },
+      { speaker: "Reaver Lieutenant", text: "Tiger Shark will burn this anchorage for what you just did." },
+      { speaker: "Kade Ren", text: "Then he can come and do it himself." },
+      { speaker: "The Cinder", text: "She's not wrong. You've stopped being a nuisance and started being a name. That has a cost — and it has a use." },
+      { speaker: "The Cinder", text: "Whisper can carry more than she was built to now. Take her up a class. Let them see what's coming." },
     ],
     onCompleteFlags: ["act1.tigersReach.cleared"],
     unlockHullClass: "destroyer",
   },
   {
     id: "houseRules",
-    chapter: "Act I, Chapter 6",
+    chapter: "Bauhinia Prime",
     chapterTitle: "House Rules",
     systemId: "bauhiniaPrime",
     requiredFlag: "act1.tigersReach.cleared",
     hiddenAfterFlag: "act1.houseRules.cleared",
     lines: [
-      { speaker: "", text: "Sir Arthur Arthaine, in the flesh, waiting at the docking spire." },
-      { speaker: "Sir Arthur Arthaine", text: "A salvage captain, dining out on the Marchioness's charity and a lucky raid. Your docking license is revoked, pending review. The review will take some time." },
-      { speaker: "Kade Ren", text: "You have a reason, or is contempt enough of one for you?" },
-      { speaker: "Sir Arthur Arthaine", text: "Records can be re-checked as easily as they were checked the first time. The Marchioness found a contradiction she liked. I intend to find one she doesn't." },
-      { speaker: "Sir Arthur Arthaine", text: "I have exactly the reasons I need. Enjoy the paperwork, Captain." },
+      { speaker: "", text: "Not a clerk this time. House Arthaine sends someone who owns things." },
+      { speaker: "Sir Arthaine", text: "You've made the Reavers someone else's problem, which makes you useful. Useful independents get a contract. Contracted independents get a registration that isn't a joke." },
+      { speaker: "Kade Ren", text: "And what does the House get?" },
+      { speaker: "Sir Arthaine", text: "First refusal. On the ship, and on whatever is making her grow like that." },
+      { speaker: "The Cinder", text: "He doesn't know what I am. He knows there's something. Choose carefully — this is the answer he'll remember you by." },
     ],
+    // Labels rewritten; setFlags deliberately untouched. They have no gameplay
+    // consumer today, but the rework's rule is that flag ids stay stable — a
+    // later feature keying off arthaineConflictStyle would otherwise break for
+    // no player-visible gain.
     choices: [
-      {
-        label: "Go through official channels — let Lin fight it politically.",
-        setFlags: ["arthaineConflictStyle.political"],
-      },
-      {
-        label: "Pay a fixer to route around it quietly.",
-        setFlags: ["arthaineConflictStyle.bribed"],
-      },
-      {
-        label: "Call out the overreach publicly, in front of the docking tribunal.",
-        setFlags: ["arthaineConflictStyle.public"],
-      },
+      { label: "Take the contract. A registration that isn't a joke is worth a leash.", setFlags: ["arthaineConflictStyle.political"] },
+      { label: "Say nothing and let him assume. Buy time.", setFlags: ["arthaineConflictStyle.bribed"] },
+      { label: "Refuse outright. Whisper isn't collateral.", setFlags: ["arthaineConflictStyle.public"] },
     ],
     onCompleteFlags: ["act1.houseRules.cleared"],
   },
   {
     id: "emberRising",
-    chapter: "Act I, Chapter 7",
-    chapterTitle: "Ember Rising (Act I Finale)",
+    chapter: "Kestrel's Rest",
+    chapterTitle: "Ember Rising",
     systemId: "kestrelsRest",
     requiredFlag: "act1.emberRising.combatDone",
     hiddenAfterFlag: "act1.emberRising.cleared",
     lines: [
-      { speaker: "", text: "Retaliation. The Reavers throw everything they have left at Kestrel's Rest — Ori's home. The wave breaks against Whisper's guns." },
-      { speaker: "", text: "A single ship holds back from the wreckage: lean, scarred, unmistakably in command." },
-      { speaker: "Tiger Shark (Kessa Vray)", text: "So you're the one gutting my supply lines. Cute ship for it." },
-      { speaker: "Kade Ren", text: "You could stop sending people to die finding that out." },
-      { speaker: "Tiger Shark", text: "Could. Won't — not yet. Enjoy the outpost, Captain. This isn't finished." },
-      { speaker: "", text: "She breaks off. Kestrel's Rest is secure — for now." },
-      { speaker: "Yifei Lin", text: "Origin Essence enough for a Cruiser-class refit, and I've cleared you for the jump lanes out of the Reach. The rest of the galaxy's been waiting." },
-      { speaker: "Yifei Lin", text: "One more thing — I pulled strings at the Reach shipyard myself. Whisper's coming out of dry dock prototype-grade, not salvage. You earned that refit; it isn't a gamble I'm letting the yard roll dice on." },
-      { speaker: "Kade Ren", text: "Twenty years ago I left the Reach in a hull barely worth salvaging. I'm not leaving it the same way twice." },
-      { speaker: "The Cinder", text: "Act I, complete. There's further to go — and further galaxies than this one, in time." },
+      { speaker: "", text: "Tiger Shark came for the anchorage after all. What's left of his assault is scattered across the approach." },
+      { speaker: "Kade Ren", text: "That's the whole raiding party." },
+      { speaker: "The Cinder", text: "That was the whole raiding party. Now it's material." },
+      { speaker: "The Cinder", text: "Kade — this is what I brought you back for. Not the fight. The fact that she can eat a fleet and come out heavier than she went in." },
+      { speaker: "Kade Ren", text: "Twenty years of that." },
+      { speaker: "The Cinder", text: "Twenty years of that. Take her up again. The Reach is small, and you're going to outgrow it." },
     ],
     onCompleteFlags: ["act1.emberRising.cleared", "campaign.act1.complete"],
     unlockHullClass: "cruiser",

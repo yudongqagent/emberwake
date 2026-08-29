@@ -52,7 +52,10 @@ describe("story translation overlays stay structurally in sync with the English 
       for (const scene of en) {
         const overlay = zh[scene.id];
         if (!overlay) continue;
-        expect(overlay.lines.length, `${name}/${scene.id}: line count mismatch`).toBe(scene.lines.length);
+        // An overlay that omits `lines` entirely is its own bug — it would render
+        // the English dialogue under a Chinese chapter heading.
+        expect(overlay.lines, `${name}/${scene.id}: overlay has no lines at all`).toBeDefined();
+        expect(overlay.lines!.length, `${name}/${scene.id}: line count mismatch`).toBe(scene.lines.length);
       }
     });
 

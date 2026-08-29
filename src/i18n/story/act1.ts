@@ -1,15 +1,13 @@
 import type { StoryScene } from "../../data/types";
 
-/** Chinese translation of src/data/story/act1.ts. Original prose (see
- * docs/world-bible.md's adaptation note) — translated, not sourced from the novel.
- * Glossary for consistency across acts:
- *   Kade Ren → 凯德·任, The Cinder → "余烬", Whisper (ship) → 「絮语」号
- *   Amaranth Belt → 苋红星带, Kestrel's Rest → 茶隼歇息地, Bauhinia Prime → 洋紫荆本星
- *   Thornwake → 荆棘航迹, Coldreach Anchorage → 寒域锚地
- *   Dowager Marchioness Yifei Lin → 林一菲侯爵夫人, Sir Arthur Arthaine → 阿瑟·阿尔泰因爵士
- *   Ori Vashti → 欧莉·瓦什蒂, Bosun "Ratchet" Koi → 水手长"棘轮"高伊
- *   Tiger Shark / Kessa Vray → 虎鲨 / 凯莎·维雷, Reavers → 掠夺者 */
-export const ACT1_SCENES_ZH: Record<string, Pick<StoryScene, "lines" | "choices" | "chapter" | "chapterTitle">> = {
+/** Bauhinia Reach — Chinese overlay.
+ *
+ * Story rework (2026-08-29). Rewritten alongside the English so the two stay in
+ * step; story.test.ts asserts identical line counts and identical choice
+ * setFlags, which is what caught the drift when only the English side had been
+ * rewritten.
+ */
+export const ACT1_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "choices" | "chapter" | "chapterTitle">>> = {
   coldWake: {
     chapter: "苋红星带",
     chapterTitle: "寒醒",
@@ -22,91 +20,75 @@ export const ACT1_SCENES_ZH: Record<string, Pick<StoryScene, "lines" | "choices"
     ],
   },
   firstBlood: {
-    chapter: "第一幕 第二章",
-    chapterTitle: "初战",
+    chapter: "茶隼歇息地",
+    chapterTitle: "初血",
     lines: [
-      { speaker: "", text: "掠夺者的快艇纷纷解体，漂散开来。茶隼歇息地发来了降落许可的信号。" },
-      { speaker: "余烬", text: "凯德——这次突袭干净得不太对劲。三艘快艇，毫无试探，直扑前哨基地的燃料仓库。有人把时机透露给了他们。" },
-      { speaker: "凯德·任", text: "一个不是掠夺者的人。" },
-      { speaker: "余烬", text: "我现在还说不出是谁。但记住这件事——不管是谁定下了这个时机，他还在暗处，看着是谁收拾了这个烂摊子。" },
-      { speaker: "欧莉·瓦什蒂", text: "还没人这么快回应过我们的求救信号。你是军方的，还是单纯手脚快？" },
-      { speaker: "凯德·任", text: "都不是，至少现在还不是。" },
-      { speaker: "欧莉·瓦什蒂", text: "我靠修补船体为生——至少曾经是，直到掠夺者夺走了我修的最后一艘船。我受够了眼睁睁看着这种事发生。" },
-      { speaker: "欧莉·瓦什蒂", text: "「絮语」号现在全靠希望撑着，装甲都快散了。让我好好修一修吧。我跟你走。" },
+      { speaker: "", text: "两艘掠夺者快艇被剖开，正在冷却。「絮语」号一侧的装甲被划出长长的沟痕。" },
+      { speaker: "凯德·任", text: "她撑住了。" },
+      { speaker: "余烬", text: "她撑住，是因为你在她的火炮想要的距离上作战。每次都这样做，她就会一直撑下去。" },
+      { speaker: "余烬", text: "现在说有用的部分。把残骸打捞上来，我能把里面的东西重新熔进她体内——装甲、线路、掠夺者焊上去的任何玩意。她不会被替换，她会被重铸。" },
+      { speaker: "凯德·任", text: "这能走到多远？" },
+      { speaker: "余烬", text: "比这条星带里任何东西走过的都远。等她超出自己的舰级时，再问我一次。" },
     ],
   },
   theLedger: {
-    chapter: "第一幕 第三章",
-    chapterTitle: "账本",
+    chapter: "洋紫荆本星",
+    chapterTitle: "账册",
     lines: [
-      { speaker: "", text: "洋紫荆本星。首都的对接尖塔闪耀着凯德目前还没有的财富。" },
-      { speaker: "阿尔泰因家仆从", text: "废品级船体的对接注册需要有家族担保。你没有。下一位。" },
-      { speaker: "林一菲侯爵夫人", text: "等等。把他的服役记录再调出来——茶隼歇息地那次交战，要完整遥测数据，不是摘要。" },
-      { speaker: "阿尔泰因家仆从", text: "……确认无误，侯爵夫人。单人交战，在整个疆域内没有任何先前注册记录。按文书记载，他谁都不是。" },
-      { speaker: "林一菲", text: "那就是文书错了。没有记录的人不可能这样开船。从这一刻起，他归我担保。" },
-      { speaker: "阿尔泰因家仆从", text: "侯爵夫人——" },
-      { speaker: "林一菲", text: "掠夺者祸害我的航线已经一年了。这个人不用人求，就替我清空了茶隼歇息地的一支袭击队。这笔交易我认了。" },
-      { speaker: "林一菲", text: "在这里交易你的废料吧，船长，等你挣够了，造船师之坞会为你打造一艘战舰。别让我后悔这个决定。" },
+      { speaker: "", text: "洋紫荆本星。一名阿尔泰因家的书记员读着「絮语」号的注册档案，头也不抬。" },
+      { speaker: "阿尔泰因书记员", text: "废品级。独立船籍。你携带的武器载荷超出注册等级两个级别。" },
+      { speaker: "凯德·任", text: "我带的是上周朝我开火的东西。" },
+      { speaker: "阿尔泰因书记员", text: "本家对成长过快的独立船主一向有兴趣。舰长，这算是一次善意提醒。不会有第二次。" },
+      { speaker: "余烬", text: "你话还没说完，他就已经归档了一条记录。他们开始盯着你拿她做什么了。" },
     ],
   },
   staticAndSignal: {
-    chapter: "第一幕 第四章",
-    chapterTitle: "静电与信号",
+    chapter: "荆棘航迹",
+    chapterTitle: "静默与信号",
     lines: [
-      { speaker: "", text: "受林一菲之托的一次勘测任务。荆棘航迹的残骸带早已被搜刮殆尽——除了中心那艘战舰。" },
-      { speaker: "凯德·任", text: "那是——" },
-      { speaker: "余烬", text: "那艘旗舰。更小一些。是你失去它的数十年之前。" },
-      { speaker: "凯德·任", text: "我在看着自己的坟墓。" },
-      { speaker: "", text: "当「絮语」号逼近残骸核心时，残余的防御系统忽然亮起。" },
-      { speaker: "余烬", text: "那里面的什么东西记得我。我——我现在能锁定模组特性了。一瞬间之前我还做不到。我正在想起该怎么做。" },
-      { speaker: "凯德·任", text: "是想起来，不是学会的。" },
-      { speaker: "余烬", text: "……继续飞，凯德。这件事我们回头再谈。" },
+      { speaker: "", text: "荆棘航迹运转着一套四十年没人关掉的防御网。它仍会应答呼叫。它也仍会开火。" },
+      { speaker: "余烬", text: "那套网什么都没在守护。设置它的人已经死了几十年——只是没人给过它停止的命令。" },
+      { speaker: "凯德·任", text: "那就由我们来给。" },
+      { speaker: "余烬", text: "它不会接受一艘轻护卫舰的命令。打碎它，剩下的瞄准核心我来接手。" },
     ],
   },
   tigersReach: {
-    chapter: "第一幕 第五章",
-    chapterTitle: "虎啸之域",
+    chapter: "寒域锚地",
+    chapterTitle: "虎鲨之手",
     lines: [
-      { speaker: "", text: "掠夺者的前进基地燃烧着。从残骸中抢救出的清单显示，这座基地不只是在打劫——数月以来，它一直靠敲诈天虎商队的采矿货运维生，一条航线接一条航线地勒索，直到商队彻底停运。" },
-      { speaker: "余烬", text: "天虎不会再回到这条航线了，凯德。不管这座基地靠什么维生，现在都断了。" },
-      { speaker: "", text: "拘留室里关着一名疆域海军的落魄军人，看他身上的束缚，像是正在接受军事法庭审判。" },
-      { speaker: "水手长\"棘轮\"高伊", text: "你要么是来做个了断的，要么就是我见过最奇怪的一次营救。到底是哪种？" },
-      { speaker: "凯德·任", text: "要看情况。你还记得炮的哪一头才管用吗？" },
-      { speaker: "\"棘轮\"高伊", text: "拒绝向难民船队开火。海军说这是抗命。掠夺者说这是杀鸡儆猴的好机会。我管这叫平常的一个星期二。" },
-      { speaker: "\"棘轮\"高伊", text: "带我离开这块石头，我就是你的人了。炮术还是我唯一拿得出手的本事。" },
-      { speaker: "余烬", text: "这里囤积的本源精华够改装一艘驱逐舰级战舰了，凯德。这是真正的第一步跃升。" },
+      { speaker: "", text: "掠夺者副官的快艇失去动力漂流着，船体还完整到足以接舷。" },
+      { speaker: "掠夺者副官", text: "就凭你刚才做的，虎鲨会烧了这座锚地。" },
+      { speaker: "凯德·任", text: "那就让他自己来烧。" },
+      { speaker: "余烬", text: "她没说错。你已经从一个麻烦，变成了一个名字。这有代价——也有用处。" },
+      { speaker: "余烬", text: "「絮语」号现在能承载超出她原本设计的东西了。把她提升一个舰级。让他们看看要来的是什么。" },
     ],
   },
   houseRules: {
-    chapter: "第一幕 第六章",
-    chapterTitle: "家族法则",
+    chapter: "洋紫荆本星",
+    chapterTitle: "本家规矩",
     lines: [
-      { speaker: "", text: "阿瑟·阿尔泰因爵士，本人到场，在对接尖塔处等候。" },
-      { speaker: "阿瑟·阿尔泰因爵士", text: "一个靠侯爵夫人的施舍和一次侥幸突袭混饭吃的废品船长。你的对接许可已被吊销，等待复审。这次复审会花些时间。" },
-      { speaker: "凯德·任", text: "你有理由吗，还是纯粹的轻蔑对你来说就够了？" },
-      { speaker: "阿瑟·阿尔泰因爵士", text: "记录既然能被第一次核查，就同样能被再核查一次。侯爵夫人找到了她喜欢的矛盾之处。我打算找出一个她不喜欢的。" },
-      { speaker: "阿瑟·阿尔泰因爵士", text: "我的理由，我一样不缺。好好享受这堆文书吧，船长。" },
+      { speaker: "", text: "这次不是书记员。阿尔泰因家派来的是一个真正拥有东西的人。" },
+      { speaker: "阿尔泰因爵士", text: "你把掠夺者变成了别人的麻烦，这让你有了用处。有用的独立船主能拿到契约。签了契约的独立船主，能拿到一份不算笑话的注册。" },
+      { speaker: "凯德·任", text: "那本家得到什么？" },
+      { speaker: "阿尔泰因爵士", text: "优先权。对这艘船，也对让她这样疯长的东西。" },
+      { speaker: "余烬", text: "他不知道我是什么。但他知道有什么。谨慎选择——他会用这个回答记住你。" },
     ],
     choices: [
-      { label: "走正式渠道——让林一菲在政治上出面周旋。", setFlags: ["arthaineConflictStyle.political"] },
-      { label: "花钱雇个掮客，悄悄绕过这道障碍。", setFlags: ["arthaineConflictStyle.bribed"] },
-      { label: "当着对接法庭的面，公开揭发这次越权行为。", setFlags: ["arthaineConflictStyle.public"] },
+      { label: "接受契约。一份不算笑话的注册，值得戴上这条链子。", setFlags: ["arthaineConflictStyle.political"] },
+      { label: "什么都不说，任他去猜。争取时间。", setFlags: ["arthaineConflictStyle.bribed"] },
+      { label: "当场拒绝。「絮语」号不是抵押品。", setFlags: ["arthaineConflictStyle.public"] },
     ],
   },
   emberRising: {
-    chapter: "第一幕 第七章",
-    chapterTitle: "余烬升腾（第一幕终章）",
+    chapter: "茶隼歇息地",
+    chapterTitle: "余烬升起",
     lines: [
-      { speaker: "", text: "报复来了。掠夺者把手上剩下的一切都砸向了茶隼歇息地——欧莉的家园。这波攻势撞上了「絮语」号的炮火，粉碎瓦解。" },
-      { speaker: "", text: "唯有一艘船留在残骸之外：精瘦，伤痕累累，一望便知是指挥官。" },
-      { speaker: "虎鲨（凯莎·维雷）", text: "原来是你在掏空我的补给线。用这么可爱的船来干这事？" },
-      { speaker: "凯德·任", text: "你可以不用再派人来送死找答案。" },
-      { speaker: "虎鲨", text: "可以。但不会——至少现在不会。好好享受这座前哨吧，船长。这事还没完。" },
-      { speaker: "", text: "她转向撤离。茶隼歇息地暂时安全了。" },
-      { speaker: "林一菲", text: "这里的本源精华足够改装一艘巡洋舰级战舰了，我也已经为你打通了通往疆域之外跳跃航道的许可。银河的其余部分，已经等候多时了。" },
-      { speaker: "林一菲", text: "还有一件事——疆域船坞那边，我亲自去打了招呼。「絮语」号这次出坞会是原型级，不再是废品级。这次改装是你挣来的，我不会让船坞拿骰子去赌它。" },
-      { speaker: "凯德·任", text: "二十年前，我是驾着一艘几乎不值得打捞的船体离开这片疆域的。这一次，我不会以同样的方式再走一遍。" },
-      { speaker: "余烬", text: "第一幕，完成。前路还长——而且，终有一天，还有比这里更辽阔的银河在等着。" },
+      { speaker: "", text: "虎鲨终究还是来了锚地。他那支突击队剩下的残骸，散落在整条进港航道上。" },
+      { speaker: "凯德·任", text: "那是整支突击队。" },
+      { speaker: "余烬", text: "那曾经是整支突击队。现在它是材料。" },
+      { speaker: "余烬", text: "凯德——这才是我把你带回来的原因。不是这场胜仗。而是她能吞下一整支舰队，然后比进去时更重地走出来。" },
+      { speaker: "凯德·任", text: "二十年都这样。" },
+      { speaker: "余烬", text: "二十年都这样。再提升她一次。这片疆域太小了，你迟早会超出它。" },
     ],
   },
 };
