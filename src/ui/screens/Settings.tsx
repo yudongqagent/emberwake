@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { getSettings, updateSettings, type TextSpeed } from "../../engine/settings";
 import { setMuted, setVolume, playSfx } from "../../audio/engine";
+import { refreshMusicVolume } from "../../audio/music";
 import { clearSave } from "../../engine/save";
 import { t } from "../../i18n/strings";
 import { language, setLanguage } from "../../i18n/language";
@@ -45,6 +46,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
               const v = Number((e.target as HTMLInputElement).value) / 100;
               setVolume(v);
               patch({ volume: v });
+              refreshMusicVolume();
             }}
           />
           <span style={{ minWidth: 38, textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--text-mid)" }}>
@@ -56,7 +58,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <Toggle
             on={s.muted}
             label={t("settings.mute")}
-            onChange={(v) => { setMuted(v); patch({ muted: v }); if (!v) playSfx("click"); }}
+            onChange={(v) => { setMuted(v); patch({ muted: v }); refreshMusicVolume(); if (!v) playSfx("click"); }}
           />
         </Row>
 
@@ -163,7 +165,14 @@ function DangerZone() {
         <button
           className="btn danger"
           style={{ flex: 1 }}
-          onClick={() => { clearSave(); location.reload(); }}
+          onClick={() => {
+            // Reloading rather than swapping state in place: a full restart
+            // should put the player back at the title with every screen's local
+            // state cleared, which is exactly what a reload guarantees. The
+            // previous campaign survives in the rolling backup either way.
+            clearSave();
+            location.reload();
+          }}
         >
           {t("settings.resetConfirm")}
         </button>

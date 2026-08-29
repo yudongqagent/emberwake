@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { availableScene, completeScene, currentSystem, state, replaceState, applyDraftChoice, clearSortieBoons, flagship } from "./state/store";
 import { ResourceBar } from "./ui/components/ResourceBar";
 import { SoundIcon } from "./ui/components/Icons";
@@ -17,12 +17,14 @@ import { RiftDropReveal } from "./ui/screens/RiftDropReveal";
 import { RefitDraft } from "./ui/screens/RefitDraft";
 import { SortieInterlude } from "./ui/screens/SortieInterlude";
 import { TitleScreen } from "./ui/screens/TitleScreen";
+import { Settings as SettingsScreen } from "./ui/screens/Settings";
 import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
 import { registerRuntimeEncounter, encounterById } from "./data/encounters";
 import { grant, grantRiftDrop } from "./state/store";
 import { setMuted, isMuted } from "./audio/engine";
+import { setMood } from "./audio/music";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
 import { SaveRecovery } from "./ui/components/SaveRecovery";
@@ -86,6 +88,7 @@ export function App() {
    * onto a dark map with a dialogue box already up. The title is now the entry
    * point, and it's skipped only once the player has chosen to start. */
   const [atTitle, setAtTitle] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [screen, setScreen] = useState<Screen>("system");
   const [panel, setPanel] = useState<ConsolePanelId | null>(null);
   const [docked, setDocked] = useState(false);
@@ -127,6 +130,12 @@ export function App() {
     setRiftDrop(grantRiftDrop(riftRun.depth));
     setRiftRun(null);
   }
+
+  // Commercial-gap audit #2: music now follows the game's state rather than the
+  // game being silent. Derived from what's on screen so there's one call site.
+  useEffect(() => {
+    setMood(atTitle ? "drift" : riftRun ? "rift" : combat ? "combat" : "drift");
+  }, [atTitle, combat, riftRun]);
 
   const scene = availableScene(currentSystem.value.id);
 
@@ -171,6 +180,18 @@ export function App() {
         aria-label={muted ? t("nav.unmute") : t("nav.mute")}
       >
         <SoundIcon muted={muted} size={16} />
+      </button>
+      {/* Settings — and with it "restart from the beginning" — has to be
+          reachable mid-game, not only from the title screen a player passed
+          through once and may never see again. */}
+      <button
+        className="btn ghost"
+        style={{ flex: "none", padding: "0.55em 0.7em", fontSize: "0.75rem" }}
+        onClick={() => setSettingsOpen(true)}
+        aria-label={t("settings.title")}
+        title={t("settings.title")}
+      >
+        ⚙
       </button>
     </div>
   );
@@ -333,6 +354,7 @@ export function App() {
       {/* Offers a previous campaign back if this save looks like it replaced one.
           Silent when there's nothing better to return to. */}
       <SaveRecovery current={state.value} onRestore={replaceState} />
+      {settingsOpen && <SettingsScreen onClose={() => setSettingsOpen(false)} />}
       {navBar}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {/* The world view. It stays mounted under every console panel — opening
