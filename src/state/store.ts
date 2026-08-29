@@ -434,12 +434,22 @@ export function assignCrew(crewId: string, shipId: string | null) {
 
 // --- Story ---
 
+/** Whether a scene's progress gates are met (open-world redesign). A scene with
+ * neither gate set behaves exactly as before, so this is additive. */
+export function sceneProgressMet(sc: StoryScene): boolean {
+  const ship = flagship.value;
+  if (sc.requiresAscensions !== undefined && (ship?.ascendedFrom.length ?? 0) < sc.requiresAscensions) return false;
+  if (sc.requiresLevel !== undefined && (ship?.level ?? 1) < sc.requiresLevel) return false;
+  return true;
+}
+
 export function availableScene(systemId: string): StoryScene | null {
   return (
     STORY_SCENES.find(
       (sc) =>
         sc.systemId === systemId &&
         (sc.requiredFlag === null || hasFlag(sc.requiredFlag)) &&
+        sceneProgressMet(sc) &&
         !hasFlag(sc.hiddenAfterFlag),
     ) ?? null
   );
@@ -484,6 +494,10 @@ function findPoiByVictoryFlag(flag: string): { system: SystemDef; poiId: string;
 export function getNextObjective(): Objective | null {
   for (const scene of STORY_SCENES) {
     if (hasFlag(scene.hiddenAfterFlag)) continue;
+    // Open-world redesign: never point the player at a beat their ship isn't
+    // ready for. Without this the marker would send them somewhere nothing
+    // happens, which is worse than no marker at all.
+    if (!sceneProgressMet(scene)) continue;
     const { system } = findSystem(scene.systemId);
     if (scene.requiredFlag === null || hasFlag(scene.requiredFlag)) {
       return { label: localizedScene(scene).chapterTitle, systemId: scene.systemId, systemName: localizedSystemName(system) };

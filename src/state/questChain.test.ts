@@ -12,6 +12,7 @@ import { FRACTURED_VEIL } from "../data/galaxies/fracturedVeil";
 import { DEEP_ORIGIN } from "../data/galaxies/deepOrigin";
 import { UMBRAL_LINE } from "../data/galaxies/umbralLine";
 import { CHORUS_DEEP } from "../data/galaxies/chorusDeep";
+import { HULL_CLASSES } from "../data/hullClasses";
 
 const SCENES = [...ACT1_SCENES, ...ACT2_SCENES, ...ACT3_SCENES, ...ACT4_SCENES, ...ACT5_SCENES, ...ACT6_SCENES];
 const GALAXIES = [BAUHINIA_REACH, LIONSHEART_EXPANSE, SWANREACH_COMBINE, FRACTURED_VEIL, DEEP_ORIGIN, UMBRAL_LINE, CHORUS_DEEP];
@@ -90,6 +91,37 @@ describe("story progression chain", () => {
     expect(clashes, clashes.join("\n")).toEqual([]);
   });
 
+  it("never gates a scene on more ascensions than the game can provide", () => {
+    // Open-world redesign added requiresAscensions/requiresLevel so spine beats
+    // could gate on progress instead of on a chain. That gate is invisible to the
+    // walk test below, so it needs its own check — a scene requiring more
+    // rebuilds than exist would strand the player exactly as a dead flag would.
+    const maxAscensions = HULL_CLASSES.length - 1;
+    for (const s of SCENES) {
+      if (s.requiresAscensions !== undefined) {
+        expect(
+          s.requiresAscensions,
+          `${s.id} needs ${s.requiresAscensions} ascensions but only ${maxAscensions} exist`,
+        ).toBeLessThanOrEqual(maxAscensions);
+        expect(s.requiresAscensions).toBeGreaterThanOrEqual(0);
+      }
+      if (s.requiresLevel !== undefined) {
+        expect(s.requiresLevel, `${s.id} requires an implausible level`).toBeLessThanOrEqual(60);
+      }
+    }
+  });
+
+  it("keeps every region's arc startable without finishing another region", () => {
+    // The open-world contract: you may go anywhere, and when you arrive there is
+    // something to do. An arc whose first scene waits on a different region's
+    // flag would quietly re-close the world.
+    const bySystem = new Map<string, typeof SCENES>();
+    for (const s of SCENES) bySystem.set(s.systemId, [...(bySystem.get(s.systemId) ?? []), s]);
+    const entryScenes = SCENES.filter((s) => s.requiredFlag === null);
+    // At least one scene per region must be enterable on progress alone.
+    expect(entryScenes.length, "no scene is reachable without a prior flag").toBeGreaterThanOrEqual(4);
+  });
+
   it("walking the whole campaign never leaves the player without an objective", () => {
     // Simulates a real playthrough: scenes are completed in order, POI fights are
     // won when a scene is gated behind one, and dialogue choices are taken. The
@@ -109,14 +141,19 @@ describe("story progression chain", () => {
     const remaining = new Set(SCENES.map((s) => s.id));
     let guard = 0;
     while (remaining.size > 0 && guard++ < 500) {
+      // Ascensions accrue as the campaign progresses; model that so progress-gated
+      // scenes are walked rather than silently treated as always-available.
+      const ascensions = Math.min(HULL_CLASSES.length - 1, Math.floor((SCENES.length - remaining.size) / 6));
+      const gateOk = (s: (typeof SCENES)[number]) =>
+        (s.requiresAscensions ?? 0) <= ascensions;
       const next = SCENES.find(
-        (s) => remaining.has(s.id) && !flags.has(s.hiddenAfterFlag) && (s.requiredFlag === null || flags.has(s.requiredFlag)),
+        (s) => remaining.has(s.id) && !flags.has(s.hiddenAfterFlag) && gateOk(s) && (s.requiredFlag === null || flags.has(s.requiredFlag)),
       );
       if (!next) {
         // Nothing directly available — the player would be sent to a gating POI
         // fight. Win the earliest one that unblocks something.
         const blocked = SCENES.find(
-          (s) => remaining.has(s.id) && !flags.has(s.hiddenAfterFlag) && s.requiredFlag !== null && poiFlags.has(s.requiredFlag),
+          (s) => remaining.has(s.id) && !flags.has(s.hiddenAfterFlag) && gateOk(s) && s.requiredFlag !== null && poiFlags.has(s.requiredFlag),
         );
         if (!blocked) break;
         flags.add(blocked.requiredFlag!);

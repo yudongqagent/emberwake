@@ -6,7 +6,11 @@ export const ACT4_SCENES: StoryScene[] = [
     chapter: "Act IV, Chapter 1",
     chapterTitle: "Ruins of the First Fleet",
     systemId: "firstFleetGraveyard",
-    requiredFlag: "act3.originTide.cleared",
+    requiredFlag: null,
+    // Open-world redesign: was gated on finishing the previous region. Now gates
+    // on how far Whisper has been rebuilt, so this arc opens wherever the player
+    // is when they qualify.
+    requiresAscensions: 2,
     hiddenAfterFlag: "act4.firstFleetRuins.cleared",
     lines: [
       { speaker: "", text: "Deep Origin. Vast, dormant megastructures drift among wrecked fleets old enough that no faction in the Reach has a name for whoever built them." },

@@ -6,7 +6,11 @@ export const ACT5_SCENES: StoryScene[] = [
     chapter: "Act V, Chapter 1",
     chapterTitle: "Calling the Reach",
     systemId: "bauhiniaPrime",
-    requiredFlag: "campaign.act4.complete",
+    requiredFlag: null,
+    // Open-world redesign: was gated on finishing the previous region. Now gates
+    // on how far Whisper has been rebuilt, so this arc opens wherever the player
+    // is when they qualify.
+    requiresAscensions: 3,
     hiddenAfterFlag: "act5.callingTheReach.cleared",
     lines: [
       { speaker: "", text: "Before the Umbral Line, a coalition. Kade spends the next stretch touring every galaxy Whisper has ever opened, calling in every thread built along the way." },

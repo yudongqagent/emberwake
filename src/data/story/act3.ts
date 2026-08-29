@@ -6,7 +6,11 @@ export const ACT3_SCENES: StoryScene[] = [
     chapter: "Act III, Chapter 1",
     chapterTitle: "Into the Veil",
     systemId: "veilsEdge",
-    requiredFlag: "campaign.act2.complete",
+    requiredFlag: null,
+    // Open-world redesign: was gated on finishing the previous region. Now gates
+    // on how far Whisper has been rebuilt, so this arc opens wherever the player
+    // is when they qualify.
+    requiresAscensions: 1,
     hiddenAfterFlag: "act3.intoTheVeil.cleared",
     lines: [
       { speaker: "", text: "Veil's Edge. The jump lane out of the Reach dumps Whisper into something quieter than open space has any right to be." },

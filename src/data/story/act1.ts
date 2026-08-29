@@ -3,27 +3,25 @@ import type { StoryScene } from "../types";
 export const ACT1_SCENES: StoryScene[] = [
   {
     id: "coldWake",
-    chapter: "Act I, Chapter 1",
+    // Story rework (2026-08-29). The old opening ran 15 lines and ~1,600
+    // characters before the player did anything — the single biggest reason to
+    // quit in the first minute. This is five lines, it ends on an instruction
+    // rather than exposition, and every piece of backstory it used to front-load
+    // has been moved to where it's actually relevant.
+    //
+    // Chapter labels no longer say "Act I". In an open world a player may reach
+    // this after the Umbral Line, and being told they're in Act I would be a lie.
+    chapter: "Amaranth Belt",
     chapterTitle: "Cold Wake",
     systemId: "amaranthBelt",
     requiredFlag: null,
     hiddenAfterFlag: "act1.coldWake.cleared",
     lines: [
-      { speaker: "", text: "The flagship dies around you — hull breached, the bridge going dark. This is how it ends." },
-      { speaker: "Kade Ren", text: "..." },
-      { speaker: "", text: "Twenty years earlier. Amaranth Belt. Kade wakes aboard Whisper, his old salvage-grade corvette." },
-      { speaker: "", text: "She was never his by choice. Whisper's first captain sabotaged her own weapons log rather than hand it to House Arthaine's inspectors — and died when the falsified system she'd rigged failed a beat too early. Command fell to whoever was left holding the wreckage. That was Kade, three months out of the academy." },
-      { speaker: "The Cinder", text: "You're disoriented. That's expected. You died — or will, in twenty years. I've placed you before it." },
-      { speaker: "Kade Ren", text: "Who — what are you?" },
-      { speaker: "The Cinder", text: "Call me the Cinder. I can Scan a hull's true potential before you spend a single Salvage on it, and pull far more from a wreck than anyone else ever could. Use both. You'll need every edge this time." },
-      { speaker: "Kade Ren", text: "This time." },
-      { speaker: "The Cinder", text: "Fly. There's a field of wreckage ahead — mine it, get a feel for Whisper. We'll talk more once you're moving." },
-      { speaker: "", text: "A distress chatter cuts across the open channel — an independent claim-crew working the same belt, their extractor rig locked up mid-cut and venting atmosphere." },
-      { speaker: "Miner (open channel)", text: "— rig's seized, we've got maybe six minutes of air in the cutting bay, anyone —" },
-      { speaker: "Kade Ren", text: "Cinder, can Whisper reach them before that clock runs out?" },
-      { speaker: "The Cinder", text: "Barely. Scan the rig on your way in — I can tell you which line to cut to vent the pressure safely instead of blowing the whole bay." },
-      { speaker: "", text: "The crew scrambles clear as Whisper's cutting laser finds the right seam. No medals for it. Just a belt that's one crew smaller from disaster than it was an hour ago." },
-      { speaker: "Miner (open channel)", text: "Owe you one, Whisper. Most independents wouldn't have burned the fuel to try." },
+      { speaker: "", text: "You die in twenty years. Hull breached, bridge dark, the flagship coming apart around you." },
+      { speaker: "The Cinder", text: "That was the ending. I've put you back before it." },
+      { speaker: "Kade Ren", text: "Put me — who are you?" },
+      { speaker: "The Cinder", text: "Later. Right now you're aboard Whisper, she's a salvage-grade corvette, and she is the only thing standing between you and that ending happening again." },
+      { speaker: "The Cinder", text: "So fly. There's wreckage in the belt ahead. Take what's in it." },
     ],
     onCompleteFlags: ["act1.coldWake.cleared"],
   },

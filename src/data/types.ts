@@ -294,6 +294,15 @@ export interface StoryScene {
   choices?: StoryChoiceOption[];
   onCompleteFlags: string[];
   startEncounter?: string;
+  /** Open-world redesign: spine beats gate on PROGRESS rather than on which
+   * region the player happened to visit. A scene with `requiresAscensions` waits
+   * until the ship has been rebuilt that many times, wherever the player is when
+   * it happens. This is what lets the through-line survive an arbitrary route —
+   * a chain of requiredFlags cannot, because the chain is what closes the world. */
+  requiresAscensions?: number;
+  /** Minimum flagship level. Same purpose as requiresAscensions, for beats that
+   * should land on experience rather than on rebuilds. */
+  requiresLevel?: number;
   unlockHullClass?: HullClassId;
   /** Section A of the 2026-08-24 player brief: a scripted, guaranteed rarity
    * upgrade tied to a specific story beat (e.g. the "second ship" shipyard
