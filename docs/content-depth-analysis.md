@@ -124,3 +124,32 @@ longer", which is precisely what the level-55 gate currently does.
 One caveat on all of the above: none of these hours have been *played*. The
 estimates assume the moment-to-moment is fun enough to sustain repetition, and
 that assumption is untested.
+
+---
+
+## 等级那堵墙已拆 —— 2026-08-30
+
+原文记的是:最高舰级要 55 级 = 39,285 经验,而整个战役只有 6,782(5.8 倍)。
+
+两个根因,都不是"数值给少了":
+
+1. **经验是唯一没有吃余烬负荷加成的收益。** 资源全部乘 loadMult,经验拿原始值。
+   于是「去更危险的地方赚得更多」给的是材料,而不是最高舰级唯一缺的那样东西。
+2. **悬赏的数值是按新手村写的,从没对照过它被放在哪。** 威胁 7 的星区里一场
+   40 经验的遭遇,对 40 级玩家既不是挑战也不是收益。
+
+`tools/genBounties.py` 按投放位置重算全部 12 条(位置从 galaxies/*.ts 读出来)。
+
+| | 之前 | 现在 |
+|---|---|---|
+| 跑完战役 | 22 级 | **32 级** |
+| 补到第六档(40 级) | 164 场 | **3~4 场** |
+| 补到最高档(55 级) | 595 场 | **10~14 场** |
+
+`src/engine/progression.test.ts` 钉死"战役之上的每一档都得有一条 40 场以内打得完
+的路",任何人重新造出这堵墙都会失败。
+
+### 仍未解决
+
+- **裂隙在深度 ~20 撞墙**:敌人成长快过玩家,所以最深的内容实际上到不了。
+- **64 条进阶路线没有任何东西奖励重玩**(没有 New Game+)。
