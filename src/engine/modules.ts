@@ -113,6 +113,57 @@ export function computeModuleBlock(mod: ModuleInstance): number {
   return Math.round(base * rarityMult * levelMult * rollMult);
 }
 
+/** 装备提供的闪避点数(1 ≈ 1%)。
+ *
+ * 和格挡走同一条曲线,因为它们是同一份"减伤预算"的两种花法(见 tools/genGear.py):
+ * 狮心的重甲把预算全押在格挡上,掠夺者的轻甲几乎不挡、全押闪避。 */
+export function computeModuleEvasion(mod: ModuleInstance): number {
+  const def = moduleDefById(mod.defId);
+  const base = def.baseEvasion ?? 0;
+  if (base === 0) return 0;
+  const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
+  const levelMult = 1 + (mod.level - 1) * 0.12;
+  return base * rarityMult * levelMult * qualityMultiplier(mod.quality ?? 0.5);
+}
+
+/** 装备对航速的修正(百分比,可负)。
+ *
+ * 只随稀有度和等级放大**正的**那一半:重甲的拖累是它的设计代价,升级不该把
+ * 代价也放大——否则升级一件重甲等于让自己更慢,那就成了惩罚玩家投资。
+ *
+ * 曲线比格挡/闪避缓得多(mk5 只有 1.24 倍,不是 3.04 倍)。第一版直接套了稀有度
+ * 倍率,结果一件 mk5 掠夺者轻甲单独就给出 +52%,一件就顶满了总上限 +60%——
+ * 后面所有关于推力的设计当场作废。推力是门派取向,不是数值预算。 */
+export function computeModuleThrust(mod: ModuleInstance): number {
+  const def = moduleDefById(mod.defId);
+  const base = def.baseThrust ?? 0;
+  if (base <= 0) return base;
+  const tierMult = 1 + 0.06 * MODULE_RARITY_ORDER.indexOf(mod.rarity);
+  const levelMult = 1 + (mod.level - 1) * 0.03;
+  return base * tierMult * levelMult * qualityMultiplier(mod.quality ?? 0.5);
+}
+
+/** 一个模组把它的效果打出多重。
+ *
+ * 2026-08-30,修 docs/module-system-audit-round2.md 的 #13——也是 #11 和 #12 的
+ * 根因。在此之前,所有效果都是"数有几个模组带这个效果",然后乘一个常数:
+ *
+ *     const hullBonusFraction = 0.15 * effectStacks("hullBonus");
+ *
+ * 于是一块 mk1 的偏转板和一块 mk5 满级的偏转板,完全一样。武器和护甲还有个数值
+ * 撑着,看不出来;引擎**根本没有数值**,所以引擎升级花合金、什么都不给——
+ * 把一件 mk5 引擎从 1 级升到 13 级要 19,034 合金,而整个战役的合金收入是 4,535。
+ *
+ * 现在稀有度、等级、品质都进这个系数。曲线刻意比伤害那条缓得多(mk5 满级约
+ * 2.4x,而伤害是 5.5x):效果里有一半是几率和减免,乘 5.5 会直接把上限顶穿。 */
+export function effectPotency(mod: ModuleInstance): number {
+  const tierIdx = MODULE_RARITY_ORDER.indexOf(mod.rarity);
+  const rarityMult = 1 + 0.15 * tierIdx;
+  const levelMult = 1 + 0.035 * (mod.level - 1);
+  const rollMult = 0.92 + 0.16 * (mod.quality ?? 0.5);
+  return rarityMult * levelMult * rollMult;
+}
+
 /** Module leveling, per docs/systems-design.md: "Level: upgraded with Alloy,
  * independent of Rarity" — and the resource split it exists to serve, "Source
  * Points always answers 'get something new,' Alloy always answers 'make something

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { qualityMultiplier, drawModule, riftDropRarityFloor, moduleMaxLevel, moduleUpgradeCost, isModuleMaxed, levelUpModule, computeModuleDamage } from "./modules";
+import { qualityMultiplier, drawModule, riftDropRarityFloor, moduleMaxLevel, moduleUpgradeCost, isModuleMaxed, levelUpModule, computeModuleDamage, effectPotency, computeModuleEvasion, computeModuleThrust } from "./modules";
+import { MODULE_DEFS } from "../data/moduleDefs";
+import type { ModuleInstance } from "../data/types";
 import { MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, MARKET_MAX_RARITY, fabricatorCost, moduleDefById } from "../data/modules";
 import { createInitialState, migrateForTest } from "./save";
 
@@ -136,6 +138,75 @@ describe("legacy module id migration (schema 6 -> 7)", () => {
         expect(moduleDefById(migrated.defId).baseRarity, `${defId}/${rarity} should keep its tier`).toBe(rarity);
         expect(migrated.level, "level must be preserved — it's paid-for progress").toBe(3);
       }
+    }
+  });
+});
+
+// docs/module-system-audit-round2.md #11/#12/#13。这三条是同一个根因:效果强度
+// 完全不看稀有度、等级、品质,所以引擎(唯一一种没有数值的模组)升级等于白花钱,
+// 而 mk5 引擎因为耗电更多,严格劣于 mk1。
+describe("效果强度会随投资增长", () => {
+  const mod = (over: Partial<ModuleInstance> = {}): ModuleInstance => ({
+    id: "m", defId: MODULE_DEFS.find((d) => d.type === "engine")!.id,
+    rarity: "mk1", level: 1, traits: [], lockedTraitSlot: null, quality: 0.5, ...over,
+  });
+
+  it("升级一件模组会让它的效果更强——这正是从前完全不成立的那条", () => {
+    const l1 = effectPotency(mod({ level: 1 }));
+    const l5 = effectPotency(mod({ level: 5 }));
+    expect(l5).toBeGreaterThan(l1);
+  });
+
+  it("高稀有度的效果更强,所以 mk5 引擎不再严格劣于 mk1", () => {
+    expect(effectPotency(mod({ rarity: "mk5" }))).toBeGreaterThan(effectPotency(mod({ rarity: "mk1" })));
+  });
+
+  it("品质也算数", () => {
+    expect(effectPotency(mod({ quality: 1 }))).toBeGreaterThan(effectPotency(mod({ quality: 0 })));
+  });
+
+  it("曲线刻意比伤害缓——满级 mk5 大约 2.4 倍,不是 5.5 倍", () => {
+    // 效果里有一半是几率和减免,乘 5.5 会直接把上限顶穿。
+    const best = effectPotency(mod({ rarity: "mk5", level: 13, quality: 1 }));
+    expect(best).toBeGreaterThan(2.2);
+    expect(best).toBeLessThan(2.7);
+  });
+
+  it("引擎现在有真的数值了", () => {
+    // 审计当时:50 件引擎,0 件有数值。
+    const engines = MODULE_DEFS.filter((d) => d.type === "engine");
+    for (const d of engines) {
+      expect(
+        d.baseEvasion !== undefined || d.baseThrust !== undefined,
+        `引擎 "${d.id}" 仍然没有任何数值,升级它等于白花合金`,
+      ).toBe(true);
+    }
+  });
+
+  it("装备的闪避和推力也随投资增长", () => {
+    const e = MODULE_DEFS.find((d) => d.type === "engine" && (d.baseEvasion ?? 0) > 0)!;
+    const lo = { ...mod({ defId: e.id }), rarity: "mk1" as const, level: 1 };
+    const hi = { ...mod({ defId: e.id }), rarity: "mk5" as const, level: 13 };
+    expect(computeModuleEvasion(hi)).toBeGreaterThan(computeModuleEvasion(lo));
+  });
+
+  it("重甲的拖累不会因为升级而变得更重", () => {
+    // 否则投资一件重甲等于惩罚自己,那没人会升级它。
+    const heavy = MODULE_DEFS.find((d) => d.type === "armor" && (d.baseThrust ?? 0) < 0)!;
+    const lo = { ...mod({ defId: heavy.id }), rarity: "mk1" as const, level: 1 };
+    const hi = { ...mod({ defId: heavy.id }), rarity: "mk5" as const, level: 13 };
+    expect(computeModuleThrust(hi)).toBe(computeModuleThrust(lo));
+  });
+
+  it("单件装备不该一个人就顶满推力上限", () => {
+    // 实测抓到的:第一版按稀有度倍率(3.04x)放大推力,一件 mk5 掠夺者轻甲单独
+    // 给出 +52%,而总上限是 +60%——一件就顶满,后面所有推力设计当场作废。
+    const light = MODULE_DEFS.filter((d) => (d.baseThrust ?? 0) > 0);
+    for (const d of light) {
+      const best: ModuleInstance = {
+        id: "m", defId: d.id, rarity: "mk5", level: 13, traits: [], lockedTraitSlot: null, quality: 1,
+      };
+      expect(computeModuleThrust(best), `${d.id} 单件推力 ${computeModuleThrust(best)}`).toBeLessThan(0.3);
     }
   });
 });

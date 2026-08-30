@@ -5,7 +5,8 @@ import { powerStrainMultiplier } from "../../engine/combat";
 import { computePowerCapacity } from "../../engine/ships";
 import { moduleDefById, fabricatorCost, MODULE_RARITY_ORDER } from "../../data/modules";
 import { moduleEffectById } from "../../data/moduleEffects";
-import { computeModuleDamage, computeModuleBlock, lockTrait, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel } from "../../engine/modules";
+import { setProgress, SET_TWO, SET_FOUR } from "../../data/setBonuses";
+import { computeModuleDamage, computeModuleBlock, lockTrait, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
 import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon, ResourceIcon } from "../components/Icons";
@@ -85,6 +86,8 @@ export function Modules() {
         )}
       </div>
 
+      <SetBonusPanel equipped={ship.equipped.map((id) => (id ? state.value.modules.find((m) => m.id === id) : null)).filter((m): m is ModuleInstance => !!m)} />
+
       {/* The loadout, shown as a ship rather than a form — hardpoints arranged
           around the hull, filled sockets glowing in their type colour. Clicking a
           socket jumps to that slot's picker. */}
@@ -128,6 +131,14 @@ export function Modules() {
                     <span>{t("modules.cd", { value: def.cooldown ?? "—" })}</span>
                     {def.baseDamage ? <span style={{ color: "var(--red)" }}>{t("modules.dmg", { value: computeModuleDamage(mod) })}</span> : null}
                     {def.baseBlock ? <span style={{ color: "var(--cyan)" }}>{t("modules.block", { value: computeModuleBlock(mod) })}</span> : null}
+                    {/* 装备的闪避和推力(2026-08-30)。不显示出来的话,引擎又会回到
+                        "看不出它做了什么"的状态——那正是审计 #11 的一半病因。 */}
+                    {def.baseEvasion ? <span style={{ color: "var(--green)" }}>{t("modules.eva", { value: computeModuleEvasion(mod).toFixed(1) })}</span> : null}
+                    {def.baseThrust ? (
+                      <span style={{ color: computeModuleThrust(mod) >= 0 ? "var(--amber)" : "var(--red)" }}>
+                        {t("modules.thrust", { value: `${computeModuleThrust(mod) >= 0 ? "+" : ""}${Math.round(computeModuleThrust(mod) * 100)}` })}
+                      </span>
+                    ) : null}
                   </div>
                   {(def.baseDamage !== undefined || def.baseBlock !== undefined) && (
                     <div style={{ marginBottom: "0.5rem" }}>
@@ -379,6 +390,17 @@ function UpgradeRow({ mod }: { mod: ModuleInstance }) {
           <span style={{ color: "var(--green)" }}> (+{after - before})</span>
         </div>
       )}
+      {/* 引擎和大部分工具模组没有伤害/格挡数值,所以从前这里什么都不显示——
+          按钮照样收合金,玩家没有任何办法看出那笔钱换来了什么(其实什么都没换来,
+          见 module-system-audit-round2.md #11)。现在等级会抬高效果强度,那就把
+          效果强度显示出来。 */}
+      {!maxed && before === null && (
+        <div style={{ marginTop: "0.3rem", fontSize: "0.66rem", color: "var(--text-dim)" }}>
+          {t("modules.potency")} {(effectPotency(mod) * 100).toFixed(0)}%
+          {" → "}
+          <span style={{ color: "var(--green)", fontWeight: 700 }}>{(effectPotency(next) * 100).toFixed(0)}%</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -474,6 +496,43 @@ function PickerModal({
         <div style={{ marginTop: "0.75rem" }}>
           <button className="btn ghost" onClick={onClose}>{t("modules.cancel")}</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** 家族套装面板。
+ *
+ * 套装如果不显示出来,它就等于不存在——玩家不会去猜"是不是穿三件同族有奖励"。
+ * 所以已凑够的和差一件的都要写清楚,包括还差几件。 */
+function SetBonusPanel({ equipped }: { equipped: ModuleInstance[] }) {
+  const rows = setProgress(equipped);
+  if (rows.length === 0) return null;
+  return (
+    <div className="panel" style={{ padding: "0.9rem 1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+        <span className="eyebrow">{t("sets.title")}</span>
+        <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>{t("sets.hint")}</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+        {rows.map(({ set, pieces }) => {
+          const twoOn = pieces >= SET_TWO;
+          const fourOn = pieces >= SET_FOUR;
+          return (
+            <div key={set.family} style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.72rem" }}>
+              <span style={{ fontWeight: 700, color: twoOn ? "var(--text-hi)" : "var(--text-dim)", minWidth: "5.5em" }}>
+                {t(`family.${set.family}`)}
+              </span>
+              <span style={{ color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{pieces}/4</span>
+              <span style={{ color: twoOn ? "var(--green)" : "var(--text-dim)" }}>
+                2 · {localizedTrait(set as any, set.two).label}
+              </span>
+              <span style={{ color: fourOn ? "var(--violet)" : "var(--text-dim)" }}>
+                4 · {localizedTrait(set as any, set.four).label}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

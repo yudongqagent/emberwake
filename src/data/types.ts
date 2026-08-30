@@ -87,6 +87,13 @@ export interface ModuleDef {
   cooldown: number | null;
   baseDamage?: number;
   baseBlock?: number;
+  /** 闪避点数(1 ≈ 1%)。2026-08-30 新增,修 module-system-audit-round2.md 的
+   * #11/#12:**50 件引擎一个数值都没有**,所以升级引擎花合金什么都不给,而 mk5
+   * 引擎因为耗电更多,严格劣于 mk1。轻甲也有一点,这样护甲才有"厚"和"灵"两条路。 */
+  baseEvasion?: number;
+  /** 航速修正(百分比,可负)。直接进战斗里的距离拉锯,所以引擎第一次跟
+   * 「接近/保持/撤离」这套指令挂上钩,而重甲要为它的厚度付机动的账。 */
+  baseThrust?: number;
   /** The fixed effect that defines this module — present on every instance,
    * unlike traitPool which is rolled per instance. See docs/module-system.md. */
   signature: string;

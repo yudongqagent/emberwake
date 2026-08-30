@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { encounterById } from "../../data/encounters";
 import { moduleDefById } from "../../data/modules";
-import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSignature } from "../../engine/modules";
+import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSignature, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad, effectsFor } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
+import { activeSetBonuses } from "../../data/setBonuses";
 import { applyEmberLoad } from "../../data/emberLoad";
 import { crewDefById } from "../../data/crew";
 import { hullClassAbility } from "../../data/namedShips";
@@ -334,23 +335,46 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // effects — no separate boon plumbing to keep in sync.
   const sortieBoons = state.value.sortieBoons;
   for (const b of sortieBoons) shipEffects.add(b);
+  // 家族套装(data/setBonuses.ts):成套穿同一派的装备,拿到那一派的信条。
+  // 只发已实现的效果 id,所以它立刻是真的,不需要任何新的战斗管线。
+  const setBonusEffects = activeSetBonuses(equippedModuleList).flatMap((s) => s.effects);
+  for (const e of setBonusEffects) shipEffects.add(e);
   const hasEffect = (id: string) => shipEffects.has(id);
-  /** How many equipped modules carry an effect — for the ones that stack. A boon
-   * counts as one more source, so taking Coolant as a boon stacks with a Coolant
-   * module rather than being swallowed by it. */
+  /** 这艘船在某个效果上有多强。
+   *
+   * 从前这里数的是"有几个模组带这个效果"(见 module-system-audit-round2.md #13),
+   * 所以一块 mk1 偏转板和一块 mk5 满级偏转板一模一样,而引擎因为没有数值,升级
+   * 完全等于白花钱。现在每个模组按 effectPotency 折算:稀有度、等级、品质都算数。
+   *
+   * 出击增益(Refit Draft)按 1.0 计——它没有稀有度也没有等级,给它一个基准值
+   * 而不是零,才能和模组叠加。 */
   const effectStacks = (id: string) =>
-    equippedModuleList.filter((m) => modHasEffect(m, id)).length + sortieBoons.filter((b) => b === id).length;
+    equippedModuleList.filter((m) => modHasEffect(m, id)).reduce((sum, m) => sum + effectPotency(m), 0)
+    + sortieBoons.filter((b) => b === id).length
+    + setBonusEffects.filter((e) => e === id).length;
 
   const armorBlock = equippedModuleList
     .filter((m) => moduleDefById(m.defId).baseBlock !== undefined)
     .reduce((sum, m) => sum + (moduleDefById(m.defId).baseBlock ?? 0), 0);
   const evasionTraitCount = effectStacks("evasion");
+  // 2026-08-30:装备第一次给出真正的闪避和推力数值(见 tools/genGear.py)。
+  // 从前引擎一个数值都没有,所以"升级引擎"是纯粹的骗钱,而 mk5 引擎因为耗电更多,
+  // 严格劣于 mk1(module-system-audit-round2.md #11/#12)。
+  const gearEvasion = equippedModuleList.reduce((sum, m) => sum + computeModuleEvasion(m), 0) / 100;
+  // 推力进距离拉锯:装重甲会拖慢你接近和撤离,装引擎会让你抢到想要的距离。
+  // 上下限:堆满引擎不该把一档 14~18 秒的距离拉锯压成五秒——那会让「接近/保持/
+  // 撤离」这套指令失去意义;堆满重甲也不该慢到永远抢不到距离。
+  const gearThrust = Math.max(-0.35, Math.min(0.6,
+    equippedModuleList.reduce((sum, m) => sum + computeModuleThrust(m), 0)));
   // Passive trait aggregates — every trait id in the game now does something real:
   // hullBonus grows the flagship's effective max hull for this fight, regen ticks
   // hull back each round, jumpRange shaves a turn off weapon cooldowns, an armor-slot
   // shieldBreak grants bonus evasion, and yieldBonus boosts salvage/alloy on victory.
   // Unit 7-Requiem's passive ("+15% max hull fleet-wide") stacks with equipment hullBonus traits.
-  const hullBonusFraction = 0.15 * effectStacks("hullBonus") + (hasCrewRecruited("unit7Requiem") ? 0.15 : 0);
+  // 效果强度现在会随稀有度/等级增长(见 engine/modules.ts 的 effectPotency),
+  // 所以原来靠"最多也就装得下几件"隐式封顶的地方,现在必须写出显式上限——
+  // 三件满级 mk5 的船体模组会给到 +110%,那不是丰富,那是崩了。
+  const hullBonusFraction = Math.min(0.6, 0.15 * effectStacks("hullBonus")) + (hasCrewRecruited("unit7Requiem") ? 0.15 : 0);
   // Generic recruit helms passively contribute "+5% evasion fleet-wide" each, just by being recruited.
   const recruitHelmEvasionBonus = crewCount("recruitHelm") * 0.05;
   const regenStacks = effectStacks("regen");
@@ -358,7 +382,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const shieldBreakArmorStacks = equippedModuleList.filter(
     (m) => moduleDefById(m.defId).type === "armor" && modHasEffect(m, "shieldBreak"),
   ).length;
-  const yieldBonusFraction = 0.2 * effectStacks("yieldBonus");
+  const yieldBonusFraction = Math.min(0.8, 0.2 * effectStacks("yieldBonus"));
   const assignedCrew = state.value.crew.filter((c) => c.assignedShipId === ship.id);
   // The ship's own rolled attributes — real itemization variance, not a flat rarity number.
   const shipBaseEvasion = computeBaseEvasion(ship);
@@ -525,6 +549,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
    * other *Ref here — the draw call needs the count every frame. */
   const allyCountRef = useRef(alliedFleet.length);
   allyCountRef.current = alliedFleet.length;
+  // 距离拉锯跑在 setInterval 的闭包里,闭包在挂载时就冻住了,所以任何在里面读的
+  // 状态都必须每次渲染镜像进 ref(见文件头的说明)。
+  const gearThrustRef = useRef(gearThrust);
+  gearThrustRef.current = gearThrust;
   // Ion Disruptor's Overload: a per-module shot counter, keyed by module instance id
   // so two Ion Disruptors equipped at once track independently.
   const overloadCountersRef = useRef<Record<string, number>>({});
@@ -965,7 +993,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     // siegeMult carries an artillery ship's telegraphed strike (see EnemyRole).
     const dmgMultiplier = (charged && !chargeDodged ? 2 : 1) * (frenzied ? 1.4 : 1) * hiveBonus * siegeMult;
     // Interceptor's Blink Vector: a flat evasion buff over time.
-    const baseEvasion = shipBaseEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus
+    const baseEvasion = shipBaseEvasion + gearEvasion + evasionTraitCount * 0.05 + shieldBreakArmorStacks * 0.08 + recruitHelmEvasionBonus
       + (hasMomentum ? Math.min(0.15, unhitStreakRef.current * 0.03) : 0)
       + (evasionBoostSecRef.current > 0 ? 0.25 : 0)
       + enginesEvasionBonus(reactorRef.current.engines);
@@ -1257,7 +1285,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       // (~16s → ~10s) without erasing range as a tactical resource.
       const playerRate = (1 / BASE_CLOSE_SECONDS)
         * Math.sqrt(shipSpeed / REFERENCE_SHIP_SPEED)
-        * enginesRateMultiplier(reactorRef.current.engines);
+        * enginesRateMultiplier(reactorRef.current.engines)
+        // 装备推力。下限 0.5 是因为堆满重甲不该变成"永远抢不到距离"——
+        // 那样重甲流就没得玩了,只是被慢慢打死。
+        * Math.max(0.5, 1 + gearThrustRef.current);
       const prevBand = rangeBandRef.current;
       const next = advanceRangeBand(
         { band: rangeBandRef.current, progress: rangeProgressRef.current },
@@ -1356,7 +1387,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
 
     // Recycler: bleeds weapon cooldowns down over time on top of normal decay.
     if (hasEffect("recycler")) {
-      const extra = 0.35 * effectStacks("recycler") * dt;
+      const extra = Math.min(1.2, 0.35 * effectStacks("recycler")) * dt;
       setCooldowns((prev) => {
         const next: Record<string, number> = {};
         for (const [k, v] of Object.entries(prev)) next[k] = Math.max(0, v - extra);
@@ -1370,7 +1401,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       playerRegenAccumRef.current += dt;
       if (playerRegenAccumRef.current >= REGEN_INTERVAL_SEC) {
         playerRegenAccumRef.current -= REGEN_INTERVAL_SEC;
-        const tick = Math.round(maxHull * 0.04 * regenStacks);
+        const tick = Math.round(maxHull * Math.min(0.14, 0.04 * regenStacks));
         if (tick > 0) {
           setPlayerHull((prev) => {
             if (prev <= 0 || prev >= maxHull) return prev;
@@ -1760,7 +1791,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       }
       // Nova Coil: landing hits charges the ultimate faster.
       if (result.hit && modHasEffect(mod, "novaCharge")) {
-        setEmberNovaCharge((c) => Math.min(EMBER_NOVA_MAX, c + 8 * effectStacks("novaCharge")));
+        setEmberNovaCharge((c) => Math.min(EMBER_NOVA_MAX, c + Math.min(28, 8 * effectStacks("novaCharge"))));
       }
       // Overkill: damage past a kill splashes to another living enemy.
       if (result.hit && modHasEffect(mod, "overkill") && result.damageDealt > target.hull) {
@@ -1922,7 +1953,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     const alphaStrikePenalty = wasAlphaStrike ? 2 : 0;
     // Coolant shortens weapon cooldowns; Overdrive Sync removes Overcharge's
     // cooldown penalty, turning its downside off rather than just softening it.
-    const coolantReduction = 0.18 * effectStacks("coolant");
+    const coolantReduction = Math.min(0.55, 0.18 * effectStacks("coolant"));
     const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
     const syncedOverchargePenalty = hasEffect("overdriveSync") ? 0 : overchargePenalty;
     const rawCooldownSec = Math.max(0, ((def.cooldown ?? 0) + syncedOverchargePenalty + alphaStrikePenalty - cooldownReduction) * TURN_SECONDS)
