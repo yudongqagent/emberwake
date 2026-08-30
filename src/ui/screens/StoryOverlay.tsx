@@ -3,10 +3,16 @@ import type { StoryScene } from "../../data/types";
 import { playSfx } from "../../audio/engine";
 import { t } from "../../i18n/strings";
 import { localizedScene } from "../../i18n/story";
+import { applyReactiveLines } from "../../data/story/reactive";
+import { storyContext } from "../../state/store";
+import { language } from "../../i18n/language";
 import { getSettings, TEXT_SPEED_CPS } from "../../engine/settings";
 
 export function StoryOverlay({ scene: rawScene, onComplete }: { scene: StoryScene; onComplete: (scene: StoryScene) => void }) {
-  const scene = localizedScene(rawScene);
+  // 先本地化,再插"认得出玩家"的那句——插入用的是下标,而中文覆盖层和英文原文
+  // 行数是一一对应的,所以顺序反过来也对;放在后面只是因为插进去的那句自带两种
+  // 语言,不需要再过一次覆盖层。
+  const scene = applyReactiveLines(localizedScene(rawScene), storyContext(), language.value === "zh" ? "zh" : "en");
   const [lineIdx, setLineIdx] = useState(0);
   const [showChoices, setShowChoices] = useState(false);
   const line = scene.lines[lineIdx];

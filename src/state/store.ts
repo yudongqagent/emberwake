@@ -19,6 +19,7 @@ import { ACT5_SCENES } from "../data/story/act5";
 import { ACT6_SCENES } from "../data/story/act6";
 import { encounterById } from "../data/encounters";
 import { isHunterId, hunterEncounterId } from "../data/hunters";
+import type { StoryContext } from "../data/story/reactive";
 import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
@@ -343,6 +344,25 @@ export function stationPrice(base: number): number {
   const f = stationOwner();
   if (!f) return base;
   return Math.max(1, Math.round(base * effectsFor(f).priceMultiplier));
+}
+
+/** 给"会看玩家的剧情"用的快照 (data/story/reactive.ts)。
+ *
+ * 单独拎出来是为了让那批条件可以纯函数测试——把 when() 写成直接摸 signal 的形式,
+ * 就再也没法在测试里构造"重铸过四次、跟公国敌对"的玩家了。 */
+export function storyContext(): StoryContext {
+  const ship = flagship.value;
+  return {
+    level: ship?.level ?? 1,
+    ascensions: ship?.ascendedFrom.length ?? 0,
+    hullClassName: ship ? hullClassById(ship.hullClass).name : "",
+    reputation: state.value.reputation,
+    cinderTrust: state.value.cinderTrust,
+    alliedShips: state.value.alliedShips.length,
+    capturedShips: state.value.capturedShips.length,
+    voluntaryLoad: state.value.voluntaryLoad,
+    flags: state.value.flags,
+  };
 }
 
 /** How many equipped modules on the flagship carry an effect (signature counts). */
