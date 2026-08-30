@@ -70,3 +70,37 @@ describe("等级门槛得够得着", () => {
     expect(grind, `只刷悬赏要打 ${Math.round(grind)} 场`).toBeLessThan(120);
   });
 });
+
+// 实测时看到的:威胁 7 的悬赏对一把 mk4 一级武器只吃 1 点伤害。查下来是对的
+// ——那本来就不该打得动——但格挡是**减法**,所以它一旦超过该阶段玩家的伤害,
+// 那场仗就不是"难",是"不可能",而且不会有任何报错。
+describe("悬赏的格挡不能超过该阶段玩家打得出的伤害", () => {
+  const TIER_DPS: Record<string, number> = { mk1: 9, mk2: 14, mk3: 21, mk4: 31, mk5: 46 };
+  const RARITY_MULT: Record<string, number> = { mk1: 1, mk2: 1.32, mk3: 1.74, mk4: 2.3, mk5: 3.04 };
+  // 威胁 T 时玩家大致带的装备。
+  const GEAR: Record<number, { rarity: string; level: number }> = {
+    1: { rarity: "mk1", level: 1 }, 2: { rarity: "mk2", level: 3 }, 3: { rarity: "mk3", level: 5 },
+    4: { rarity: "mk4", level: 7 }, 5: { rarity: "mk5", level: 9 }, 6: { rarity: "mk5", level: 11 },
+    7: { rarity: "mk5", level: 13 },
+  };
+
+  function playerHit(threat: number): number {
+    const g = GEAR[threat];
+    // 一把节奏中庸的武器:TIER_DPS × 间隔,再按实例稀有度和等级放大。
+    const base = (TIER_DPS[g.rarity] * 2.4) / RARITY_MULT[g.rarity];
+    return base * RARITY_MULT[g.rarity] * Math.pow(1.14, g.level - 1);
+  }
+
+  it("每条悬赏的格挡都远低于同档玩家的单发伤害", () => {
+    for (const b of BOUNTY_ENCOUNTER_DEFS) {
+      // 从经验反推它被放在哪一档(genBounties.py 用的是同一条曲线)。
+      const threat = Math.max(1, Math.min(7, Math.round(1 + Math.log(b.xp / 34 / 0.62) / Math.log(1.85))));
+      const block = Math.max(...b.enemies.map((e) => e.block));
+      const hit = playerHit(threat);
+      expect(
+        block,
+        `${b.id}(威胁 ${threat}) 格挡 ${block},而该档玩家单发只有 ${Math.round(hit)}`,
+      ).toBeLessThan(hit * 0.35);
+    }
+  });
+});
