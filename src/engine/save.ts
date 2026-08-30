@@ -1,9 +1,10 @@
-import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance } from "../data/types";
+import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance, FactionId } from "../data/types";
 import { MODULE_DEFS } from "../data/modules";
+import { CHOICE_REPUTATION, clampRep } from "../data/reputation";
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 const SAVE_KEY = "emberwake.save";
 /** Rolling copy of the previous save, written before every overwrite. */
 const BACKUP_KEY = "emberwake.save.backup";
@@ -43,6 +44,11 @@ export interface GameState {
    * ascension already imposes. Higher Load means harder encounters and richer
    * rewards; opting in is what makes it a decision rather than a difficulty knob. */
   voluntaryLoad: number;
+  /** 派系声望 (docs/story-engagement-analysis.md)。玩家的剧情选择、击杀、悬赏
+   * 都会改动它,而它决定价格、盟友、巡逻队敌意——即"选择有后果"的载体。 */
+  reputation: Partial<Record<FactionId, number>>;
+  /** 余烬对你的信任。面对身世揭底的三种反应改的是这个,不是外部势力。 */
+  cinderTrust: number;
   /** Captured ships that have been gifted on to family/allies. They're gone from
    * the player's own hands for good, but they fight alongside Whisper in fleet
    * battles (团战) — see EncounterDef.fleetBattle. Never in the extradimensional
@@ -84,6 +90,8 @@ export function createInitialState(): GameState {
     alliedShips: [],
     sortieBoons: [],
     voluntaryLoad: 0,
+    reputation: {},
+    cinderTrust: 0,
   };
 }
 
@@ -184,7 +192,31 @@ const migrations: Record<number, (s: any) => any> = {
   // Ember Load — existing saves start at zero voluntary load, so nothing about
   // their difficulty changes except what their own ascensions already imply.
   8: (s: any) => ({ ...s, schemaVersion: 9, voluntaryLoad: s.voluntaryLoad ?? 0 }),
+  // 声望。已有存档从 0 开始,但它们的剧情选择已经写在 flags 里了 ——
+  // migrateReputationFromFlags 会把那些选择追认成声望,所以老玩家的选择
+  // 不会白做。
+  9: (s: any) => ({
+    ...s,
+    schemaVersion: 10,
+    reputation: s.reputation ?? migrateReputationFromFlags(s.flags ?? {}),
+    cinderTrust: s.cinderTrust ?? 0,
+  }),
 };
+
+/** 把一个老存档里已经做过的剧情选择,追认成声望。
+ *
+ * 这些 flag 一直被写进存档,只是从来没人读。老玩家在血债、山脊、安氏终局上做的
+ * 决定,现在应当立刻兑现,而不是"从今往后才算数"。 */
+export function migrateReputationFromFlags(flags: Record<string, boolean>): Partial<Record<FactionId, number>> {
+  const rep: Partial<Record<FactionId, number>> = {};
+  for (const [flag, deltas] of Object.entries(CHOICE_REPUTATION)) {
+    if (!flags[flag]) continue;
+    for (const [fac, d] of Object.entries(deltas)) {
+      rep[fac as FactionId] = clampRep((rep[fac as FactionId] ?? 0) + (d ?? 0));
+    }
+  }
+  return rep;
+}
 
 /** Exposed for tests — migrations are only otherwise reachable through
  * localStorage, and the legacy module remap is exactly the kind of thing that
@@ -307,6 +339,8 @@ function repairState(raw: any): GameState {
     alliedShips: Array.isArray(raw.alliedShips) ? raw.alliedShips : [],
     sortieBoons: Array.isArray(raw.sortieBoons) ? raw.sortieBoons.filter((b: any) => typeof b === "string") : [],
     voluntaryLoad: typeof raw.voluntaryLoad === "number" && raw.voluntaryLoad >= 0 ? raw.voluntaryLoad : 0,
+    reputation: raw.reputation && typeof raw.reputation === "object" ? raw.reputation : {},
+    cinderTrust: typeof raw.cinderTrust === "number" ? raw.cinderTrust : 0,
   };
 }
 

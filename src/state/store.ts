@@ -1,7 +1,7 @@
 import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
-import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId, ShipInstance } from "../data/types";
+import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId, ShipInstance, FactionId } from "../data/types";
 import { fabricatorCost, MARKET_MAX_RARITY, moduleDefById } from "../data/modules";
 import { hullClassById, ascensionRequirementsMet } from "../data/hullClasses";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
@@ -17,7 +17,7 @@ import { ACT3_SCENES } from "../data/story/act3";
 import { ACT4_SCENES } from "../data/story/act4";
 import { ACT5_SCENES } from "../data/story/act5";
 import { ACT6_SCENES } from "../data/story/act6";
-import { encounterById } from "../data/encounters";
+import { encounterById, BOUNTY_ENCOUNTER_DEFS } from "../data/encounters";
 import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
@@ -26,6 +26,7 @@ import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed } from "../engine/modules";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
+import { CHOICE_REPUTATION, clampRep, repEffects, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, REP_PER_BOUNTY, type RepEffects } from "../data/reputation";
 import { canEvolve, evolveModule } from "../data/evolutions";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
@@ -202,7 +203,50 @@ function setFlags(flags: string[]) {
   const next = { ...state.value.flags };
   for (const f of flags) next[f] = true;
   state.value = { ...state.value, flags: next };
+  // 声望:剧情选择在这里兑现。这是那 16 个"死 flag"复活的地方——它们一直被写进
+  // 存档,只是从前没有任何代码读。
+  applyChoiceReputation(flags);
   checkNamedCrewUnlocks();
+}
+
+/** 把刚设置的 flag 里带声望后果的部分结算掉。 */
+function applyChoiceReputation(flags: string[]) {
+  const rep = { ...state.value.reputation };
+  let changed = false;
+  for (const f of flags) {
+    const deltas = CHOICE_REPUTATION[f];
+    if (!deltas) continue;
+    for (const [fac, d] of Object.entries(deltas)) {
+      rep[fac as FactionId] = clampRep((rep[fac as FactionId] ?? 0) + (d ?? 0));
+      changed = true;
+    }
+  }
+  if (changed) state.value = { ...state.value, reputation: rep };
+}
+
+export function reputationOf(faction: FactionId): number {
+  return state.value.reputation[faction] ?? 0;
+}
+
+/** 声望带来的实际效果。不讲道理的派系(虫群/构装体/空壳/裂隙)永远是中立值。 */
+export function effectsFor(faction: FactionId): RepEffects {
+  if (!isDiplomatic(faction)) return repEffects(0);
+  return repEffects(reputationOf(faction));
+}
+
+/** 改动声望并存盘。delta 可正可负。 */
+export function adjustReputation(faction: FactionId, delta: number): void {
+  if (!isDiplomatic(faction) || delta === 0) return;
+  const rep = { ...state.value.reputation };
+  rep[faction] = clampRep((rep[faction] ?? 0) + delta);
+  state.value = { ...state.value, reputation: rep };
+  persist();
+}
+
+/** 面对余烬身世的三种反应,改的是余烬对你的信任,不是外部势力。 */
+export function adjustCinderTrust(delta: number): void {
+  state.value = { ...state.value, cinderTrust: Math.max(-3, Math.min(3, state.value.cinderTrust + delta)) };
+  persist();
 }
 
 function checkNamedCrewUnlocks() {
@@ -574,13 +618,22 @@ export function resolveCombatVictory(
   if (insightStacks > 0 && Math.random() < Math.min(0.6, 0.2 * insightStacks)) {
     rewards.insight = (rewards.insight ?? 0) + insightStacks;
   }
+  // 打谁,谁记仇 (docs/story-engagement-analysis.md)。这让"去哪儿打"变成有后果的
+  // 选择,而不只是刷哪张地图的问题。悬赏是对方委托的,所以反而加分。
+  if (isDiplomatic(enc.faction)) {
+    const isBounty = BOUNTY_ENCOUNTER_DEFS.some((b) => b.id === enc.id);
+    adjustReputation(enc.faction, isBounty ? REP_PER_BOUNTY : REP_PER_KILL * enc.enemies.length);
+  }
+
   // Ember Load's payoff (core-loop redesign #3): fighting under Load pays more,
   // which is the whole reason to opt into it. Applied last so it scales the real
   // total rather than the authored base.
   // emberLoad() now includes the region's threat, so a fight in a region above
   // your ship pays proportionally more. That temptation is the point of an open
   // world — without it, "go anywhere" just means the map is bigger.
-  const loadMult = emberLoadRewardMultiplier(emberLoad());
+  const loadMult = emberLoadRewardMultiplier(emberLoad())
+    // 盟友会分你战利品——声望的第二个摸得着的好处。
+    * (1 + (isDiplomatic(enc.faction) ? 0 : Math.max(0, ...DIPLOMATIC_FACTIONS.map((f) => effectsFor(f).rewardBonus))));
   if (loadMult > 1) {
     for (const k of Object.keys(rewards) as ResourceType[]) {
       if (rewards[k]) rewards[k] = Math.round(rewards[k]! * loadMult);
