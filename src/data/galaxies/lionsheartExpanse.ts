@@ -132,6 +132,18 @@ export const LIONSHEART_EXPANSE: GalaxyDef = {
           requiresFlag: "act2.hollowFleet.cleared",
           data: { encounterId: "bountyShipyardSalvagers", respawnSeconds: 100, bounty: true },
         },
+        {
+          // 掠夺者贴出来的活。接它会得罪商会——这条赏金存在的意义就是让"修复
+          // 一段关系"必须以另一段为代价,而不是刷一刷就四方都满意。
+          id: "hollowMarkedConvoyBounty",
+          kind: "patrol",
+          name: "Reaver-Marked Combine Convoy",
+          x: 200,
+          y: 470,
+          radius: 85,
+          requiresFlag: "act2.hollowFleet.cleared",
+          data: { encounterId: "bountyMarkedCombineConvoy", respawnSeconds: 150, bounty: true },
+        },
       ],
     },
   ],

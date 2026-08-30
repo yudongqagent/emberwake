@@ -36,6 +36,7 @@ export const SYSTEM_NAMES_ZH: Record<string, string> = {
 };
 
 export const POI_NAMES_ZH: Record<string, string> = {
+  hollowMarkedConvoyBounty: "掠夺者悬红:商会运输队",
   // Bauhinia Reach
   amaranthFieldA: "苋红星带矿场",
   amaranthFieldB: "余烬碎片带",

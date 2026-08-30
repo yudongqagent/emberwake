@@ -1,3 +1,4 @@
+import { generateHunterEncounter, parseHunterId } from "./hunters";
 import type { EncounterDef } from "./types";
 
 export const ENCOUNTER_DEFS: EncounterDef[] = [
@@ -363,6 +364,10 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
 ];
 
 // --- Bounties: repeatable, always-farmable encounters that respawn after a cooldown.
+//
+// 声望(2026-08-30):每条赏金都显式写出 `reputation`,因为默认的"打谁谁记仇"规则
+// 在这里是反的——赏金的 faction 是**目标**的派系。委托方是谁,只能一条条写。
+// 这也让赏金板成了修复关系的唯一途径:得罪了一方,就去接他们委托的活。
 // Rewards are deliberately capped to Salvage/Source Points/Alloy/Insight — Origin
 // Essence stays story-only so grinding can never replace the campaign (see
 // docs/systems-design.md's pacing model).
@@ -375,6 +380,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     enemies: [{ name: "Scavenger Skiff", hull: 35, damage: 6, block: 1, evasion: 0.12 }],
     rewards: { salvage: 25, sourcePoints: 8 },
     xp: 12,
+    reputation: { reavers: -6, bauhinia: 5 },
   },
   {
     id: "bountyArthaineSmugglers",
@@ -384,6 +390,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     enemies: [{ name: "Smuggler Cutter", hull: 55, damage: 8, block: 4, evasion: 0.15 }],
     rewards: { salvage: 35, alloy: 10 },
     xp: 18,
+    reputation: { bauhinia: -6, lionsheart: 5 },
   },
   {
     id: "bountyReaverRemnants",
@@ -396,6 +403,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     ],
     rewards: { salvage: 40, sourcePoints: 15, alloy: 10 },
     xp: 20,
+    reputation: { reavers: -6, lionsheart: 5 },
   },
   {
     id: "bountyConcordSparringPartner",
@@ -405,6 +413,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     enemies: [{ name: "Sparring Skiff", hull: 70, damage: 9, block: 5, evasion: 0.2 }],
     rewards: { salvage: 45, sourcePoints: 20 },
     xp: 25,
+    reputation: { lionsheart: 8 },
   },
   {
     id: "bountyShipyardSalvagers",
@@ -417,6 +426,23 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     ],
     rewards: { salvage: 50, alloy: 25 },
     xp: 28,
+    reputation: { reavers: -6, swanreach: 5 },
+  },
+  {
+    // 掠夺者唯一会付钱的活。没有这条,得罪了掠夺者就再也回不去了——
+    // reputation.test.ts 里"每个可交涉派系都有修复关系的路子"那条会失败。
+    // 代价也是真的:接了它,商会就恨你。这正是声望该有的样子。
+    id: "bountyMarkedCombineConvoy",
+    name: "Reaver-Marked Combine Convoy",
+    faction: "swanreach",
+    isBoss: false,
+    enemies: [
+      { name: "Convoy Escort", hull: 90, damage: 11, block: 8, evasion: 0.1 },
+      { name: "Convoy Hauler", hull: 140, damage: 6, block: 12, evasion: 0.05 },
+    ],
+    rewards: { salvage: 95, sourcePoints: 40, alloy: 35 },
+    xp: 38,
+    reputation: { swanreach: -10, reavers: 9 },
   },
   {
     id: "bountyCombineSmuggler",
@@ -426,6 +452,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     enemies: [{ name: "Smuggler Interceptor", hull: 50, damage: 7, block: 3, evasion: 0.18 }],
     rewards: { salvage: 40, alloy: 15 },
     xp: 20,
+    reputation: { swanreach: -6, bauhinia: 5 },
   },
   {
     id: "bountySwarmStragglers",
@@ -435,6 +462,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     enemies: [{ name: "Swarm Straggler", hull: 60, damage: 9, block: 1, evasion: 0.1, regen: 5 }],
     rewards: { salvage: 55, sourcePoints: 25 },
     xp: 22,
+    reputation: { bauhinia: 3, lionsheart: 3, swanreach: 3 },
   },
   {
     id: "bountyRiftScavengers",
@@ -447,6 +475,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     ],
     rewards: { salvage: 60, sourcePoints: 20, alloy: 15 },
     xp: 24,
+    reputation: { bauhinia: 3, lionsheart: 3, swanreach: 3 },
   },
   {
     id: "bountyConstructOutriders",
@@ -456,6 +485,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     enemies: [{ name: "Construct Outrider", hull: 100, damage: 12, block: 10, evasion: 0 }],
     rewards: { salvage: 70, sourcePoints: 35, alloy: 20 },
     xp: 30,
+    reputation: { lionsheart: 4, swanreach: 4 },
   },
   {
     id: "bountyHollowEchoes",
@@ -465,6 +495,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     enemies: [{ name: "Hollow Echo", hull: 120, damage: 14, block: 5, evasion: 0.12 }],
     rewards: { salvage: 85, sourcePoints: 45, alloy: 25 },
     xp: 35,
+    reputation: { bauhinia: 4, lionsheart: 4 },
   },
   {
     id: "bountyChoirStragglers",
@@ -477,6 +508,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     ],
     rewards: { salvage: 100, sourcePoints: 55, alloy: 30 },
     xp: 40,
+    reputation: { bauhinia: 4, lionsheart: 4, swanreach: 4 },
   },
 ];
 
@@ -494,6 +526,10 @@ export function registerRuntimeEncounter(def: EncounterDef): EncounterDef {
 }
 
 export function encounterById(id: string): EncounterDef {
+  // 猎杀队是从 id 里算出来的(hunt:<派系>:<威胁度>),不进注册表——注册表只放得下
+  // 一条,而猎杀队和裂隙波次可能同时存在。
+  const hunter = parseHunterId(id);
+  if (hunter) return generateHunterEncounter(hunter.faction, hunter.threat);
   const runtime = runtimeEncounters.get(id);
   if (runtime) return runtime;
   const bounty = BOUNTY_ENCOUNTER_DEFS.find((e) => e.id === id);

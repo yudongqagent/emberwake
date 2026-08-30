@@ -17,7 +17,8 @@ import { ACT3_SCENES } from "../data/story/act3";
 import { ACT4_SCENES } from "../data/story/act4";
 import { ACT5_SCENES } from "../data/story/act5";
 import { ACT6_SCENES } from "../data/story/act6";
-import { encounterById, BOUNTY_ENCOUNTER_DEFS } from "../data/encounters";
+import { encounterById } from "../data/encounters";
+import { isHunterId, hunterEncounterId } from "../data/hunters";
 import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
@@ -26,7 +27,7 @@ import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed } from "../engine/modules";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
-import { CHOICE_REPUTATION, clampRep, repEffects, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, REP_PER_BOUNTY, type RepEffects } from "../data/reputation";
+import { CHOICE_REPUTATION, clampRep, repEffects, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
 import { canEvolve, evolveModule } from "../data/evolutions";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
@@ -299,6 +300,49 @@ export function isPoiAvailable(poi: Poi): boolean {
   const respawnSeconds = poi.data?.respawnSeconds as number | undefined;
   if (!respawnSeconds) return false; // permanently cleared (story-gated one-off)
   return Date.now() - (rt.clearedAt ?? 0) >= respawnSeconds * 1000;
+}
+
+/** 一个星系里实际存在的目标 = 作者写死的那些 + 声望招来的猎杀队。
+ *
+ * 猎杀队不写进星区数据,因为它们的存在取决于存档里的声望,而星区数据是静态的。
+ * 敌对(<= -50)时,那个派系控制的每个星系都会多出一队冲你来的船。
+ *
+ * 位置用星系 id 做哈希算出来,所以同一个星系里猎杀队永远在同一个地方——玩家能
+ * 记住"那边有埋伏",而不是每次进来都被随机糊一脸。 */
+export function systemPois(system: SystemDef, galaxy: GalaxyDef): Poi[] {
+  const f = system.controllingFaction;
+  if (!f || !isDiplomatic(f) || !effectsFor(f).huntsYou) return system.pois;
+  let h = 0;
+  for (let i = 0; i < system.id.length; i++) h = (h * 31 + system.id.charCodeAt(i)) >>> 0;
+  return [
+    ...system.pois,
+    {
+      id: `hunter:${system.id}`,
+      kind: "patrol",
+      name: t("rep.hunterPatrol", { faction: t(`faction.${f}`) }),
+      x: 180 + (h % 620),
+      y: 120 + ((h >> 8) % 340),
+      radius: 95,
+      // 清掉之后过几分钟他们会再派一队来——只要你还是敌对。
+      data: { encounterId: hunterEncounterId(f, galaxy.threat), respawnSeconds: 240 },
+    },
+  ];
+}
+
+/** 当前星系归谁管。中立星系(controllingFaction 为 null)和不讲道理的派系都返回 null。 */
+export function stationOwner(): FactionId | null {
+  const f = currentSystem.value.controllingFaction;
+  return f && isDiplomatic(f) ? f : null;
+}
+
+/** 站点标价。声望的第一个摸得着的后果:得罪谁,就在谁的地盘上多掏钱。
+ *
+ * 刻意不做成"敌对方拒绝交易"。那样只是把一家店关掉,玩家绕开就行;多掏 60%
+ * 是每次点下去都会疼一下的东西。 */
+export function stationPrice(base: number): number {
+  const f = stationOwner();
+  if (!f) return base;
+  return Math.max(1, Math.round(base * effectsFor(f).priceMultiplier));
 }
 
 /** How many equipped modules on the flagship carry an effect (signature counts). */
@@ -619,10 +663,17 @@ export function resolveCombatVictory(
     rewards.insight = (rewards.insight ?? 0) + insightStacks;
   }
   // 打谁,谁记仇 (docs/story-engagement-analysis.md)。这让"去哪儿打"变成有后果的
-  // 选择,而不只是刷哪张地图的问题。悬赏是对方委托的,所以反而加分。
-  if (isDiplomatic(enc.faction)) {
-    const isBounty = BOUNTY_ENCOUNTER_DEFS.some((b) => b.id === enc.id);
-    adjustReputation(enc.faction, isBounty ? REP_PER_BOUNTY : REP_PER_KILL * enc.enemies.length);
+  // 选择,而不只是刷哪张地图的问题。
+  //
+  // 遭遇自带 `reputation` 时以它为准——赏金必须这样,因为赏金的 faction 是**目标**
+  // 的派系,套默认规则会变成"清掉掠夺者让掠夺者更喜欢你"。
+  //
+  // 找上门的猎杀队(hunt:*)刻意不改任何声望:敌对方主动来打你,自卫再扣分就成了
+  // 一个爬不出来的坑,而声望的意义恰恰是给玩家可以扭转的东西。
+  if (enc.reputation) {
+    for (const [f, d] of Object.entries(enc.reputation)) adjustReputation(f as FactionId, d!);
+  } else if (isDiplomatic(enc.faction) && !isHunterId(enc.id)) {
+    adjustReputation(enc.faction, REP_PER_KILL * enc.enemies.length);
   }
 
   // Ember Load's payoff (core-loop redesign #3): fighting under Load pays more,
@@ -631,9 +682,12 @@ export function resolveCombatVictory(
   // emberLoad() now includes the region's threat, so a fight in a region above
   // your ship pays proportionally more. That temptation is the point of an open
   // world — without it, "go anywhere" just means the map is bigger.
-  const loadMult = emberLoadRewardMultiplier(emberLoad())
-    // 盟友会分你战利品——声望的第二个摸得着的好处。
-    * (1 + (isDiplomatic(enc.faction) ? 0 : Math.max(0, ...DIPLOMATIC_FACTIONS.map((f) => effectsFor(f).rewardBonus))));
+  // 盟友会分你战利品——声望的第二个摸得着的好处。只算**没在跟你打**的那些盟友:
+  // 正在被你围攻的一方不会同时给你分成。
+  const allyShare = Math.max(0, ...DIPLOMATIC_FACTIONS
+    .filter((f) => f !== enc.faction)
+    .map((f) => effectsFor(f).rewardBonus));
+  const loadMult = emberLoadRewardMultiplier(emberLoad()) * (1 + allyShare);
   if (loadMult > 1) {
     for (const k of Object.keys(rewards) as ResourceType[]) {
       if (rewards[k]) rewards[k] = Math.round(rewards[k]! * loadMult);

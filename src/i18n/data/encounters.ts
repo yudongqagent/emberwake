@@ -5,6 +5,14 @@
  * the same translation everywhere it shows up. Same fallback-to-English pattern as
  * every other overlay in i18n/. Original prose, not sourced. */
 export const ENCOUNTER_NAMES_ZH: Record<string, string> = {
+  bountyMarkedCombineConvoy: "掠夺者悬红:商会运输队",
+  // 猎杀队(data/hunters.ts):这四条是运行时按 id 生成的,data.test.ts 的
+  // 遍历看不见它们——上一次同类的东西(裂隙波次)就这么在中文界面里漏了一批
+  // 英文名出去。所以另写了 hunters 的针对性测试。
+  "hunt:bauhinia": "公国执令队",
+  "hunt:lionsheart": "狮心报复联队",
+  "hunt:swanreach": "商会契约猎手",
+  "hunt:reavers": "掠夺者血群",
   kestrelsRestRaid: "掠夺者袭击队",
   thornwakeDefenseGrid: "残余防御网",
   coldreachAnchorage: "虎鲨的副官",
@@ -44,6 +52,12 @@ export const ENCOUNTER_NAMES_ZH: Record<string, string> = {
 };
 
 export const ENEMY_NAMES_ZH: Record<string, string> = {
+  "Convoy Escort": "运输队护航舰",
+  "Convoy Hauler": "运输队货船",
+  "Writ Enforcer": "执令舰",
+  "Reprisal Lancer": "报复枪骑舰",
+  "Contract Hunter": "契约猎手",
+  "Blood Pack Skiff": "血群快艇",
   "Ark Custodian": "方舟守护者",
   "Automated Turret": "自动炮塔",
   "Construct Outrider": "构装体游骑兵",

@@ -108,6 +108,11 @@ export function localizedEncounterName(def: Pick<EncounterDef, "id" | "name">): 
     return language.value === "zh" ? `异空间侵袭 — 第 ${rift[1]} 层` : `Rift Incursion — Depth ${rift[1]}`;
   }
   if (language.value !== "zh") return def.name;
+  // 猎杀队的 id 带着威胁度(hunt:reavers:4),查表要先把它剥掉。
+  if (def.id.startsWith("hunt:")) {
+    const key = def.id.split(":").slice(0, 2).join(":");
+    return ENCOUNTER_NAMES_ZH[key] ?? def.name;
+  }
   return ENCOUNTER_NAMES_ZH[def.id] ?? def.name;
 }
 

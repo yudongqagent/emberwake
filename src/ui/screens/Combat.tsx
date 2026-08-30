@@ -5,7 +5,8 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSi
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad } from "../../state/store";
+import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad, effectsFor } from "../../state/store";
+import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { applyEmberLoad } from "../../data/emberLoad";
 import { crewDefById } from "../../data/crew";
 import { hullClassAbility } from "../../data/namedShips";
@@ -288,9 +289,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // is defense in depth on top of that opt-in: the extradimensional battlefield
   // is explicitly solo per the brief, and every rift encounter is that faction,
   // so a future rift encounter can't accidentally be flagged into fleet support.
-  const alliedFleet = encounter.fleetBattle && encounter.faction !== "riftEchoes"
-    ? state.value.alliedShips
-    : [];
+  //
+  // 声望(2026-08-30):盟友档(>= 60)的派系会派战舰来。这是"盟友"这个词唯一
+  // 摸得着的地方——面板上写着"他们的战舰会加入你的团战",就必须真的来。
+  // 正在跟你打的那一方当然不来:被你围攻的同时派人帮你打自己,是荒谬的。
+  const alliedFleet: { name: string; level: number }[] =
+    encounter.fleetBattle && encounter.faction !== "riftEchoes"
+      ? [
+          ...state.value.alliedShips.map((sh) => ({ name: sh.name, level: sh.level })),
+          ...DIPLOMATIC_FACTIONS.filter((f) => f !== encounter.faction && effectsFor(f).fightsAlongside)
+            .map((f) => ({
+              name: t("rep.allyJoins", { faction: t(`faction.${f}`) }),
+              // 跟着玩家等级走,否则后期盟友会变成拖油瓶,"结盟"就成了负收益。
+              level: ship.level,
+            })),
+        ]
+      : [];
   const equippedModuleList = ship.equipped
     .map((id) => state.value.modules.find((m) => m.id === id))
     .filter((m): m is NonNullable<typeof m> => !!m);

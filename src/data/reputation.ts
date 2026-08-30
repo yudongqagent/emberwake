@@ -102,8 +102,6 @@ export const CHOICE_REPUTATION: Record<string, Partial<Record<FactionId, number>
 /** 打掉一艘某派系的船，对方会记住。数值很小——一次遭遇不该毁掉一段关系，
  * 但一路杀过去应该。 */
 export const REP_PER_KILL = -3;
-/** 完成某派系的悬赏，对方也会记住。 */
-export const REP_PER_BOUNTY = 6;
 
 export function clampRep(v: number): number {
   return Math.max(REP_MIN, Math.min(REP_MAX, Math.round(v)));

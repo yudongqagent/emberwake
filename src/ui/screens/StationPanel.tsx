@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, repairFlagship } from "../../state/store";
+import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, repairFlagship, stationPrice, stationOwner } from "../../state/store";
 import { CREW_DEFS } from "../../data/crew";
 import { moduleDefById, fabricatorCost, MARKET_MAX_RARITY } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, drawModule } from "../../engine/modules";
@@ -41,6 +41,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
           <div className="title">{t("station.title")}</div>
           <button className="btn ghost" onClick={onClose}>{t("common.close")}</button>
         </div>
+        <StandingPriceNote />
         <div style={{ display: "flex", gap: "0.3rem", padding: "0.75rem 1rem" }}>
           {TAB_META.map(({ id, labelKey, icon }) => (
             <button
@@ -218,7 +219,7 @@ function generateModuleOffers(): ModuleInstance[] {
 function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
   const [offers, setOffers] = useState<ModuleInstance[]>(() => generateModuleOffers());
   const [refreshCount, setRefreshCount] = useState(0);
-  const cost = refreshCost(refreshCount);
+  const cost = stationPrice(refreshCost(refreshCount));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -240,7 +241,7 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
       </div>
       {offers.map((candidate, i) => {
         const def = moduleDefById(candidate.defId);
-        const cost = fabricatorCost(candidate.rarity);
+        const cost = stationPrice(fabricatorCost(candidate.rarity));
         return (
           <div key={i} className="panel compact" style={{ padding: "0.75rem 0.9rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
@@ -294,7 +295,7 @@ function RecruitTab() {
   // resource a distinct, memorable job: Source Points for hulls/modules, Alloy for
   // crew, Origin Essence gates hull tiers, Insight rerolls traits, Salvage repairs
   // and is the base trade currency.
-  const cost = 20;
+  const cost = stationPrice(20);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
       <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
@@ -325,6 +326,36 @@ function RecruitTab() {
           </button>
         </Row>
       ))}
+    </div>
+  );
+}
+
+/** 站点上方的一条横幅:这里为什么比别处贵/便宜。
+ *
+ * 没有这一条,涨价就只是"数字看着不太对",玩家不会把它和三小时前那个选择联系
+ * 起来。声望要有用,首先得让人看见因果。 */
+function StandingPriceNote() {
+  const owner = stationOwner();
+  if (!owner) return null;
+  const mult = stationPrice(1000) / 1000;
+  if (mult === 1) return null;
+  const up = mult > 1;
+  const pct = Math.round(Math.abs(mult - 1) * 100);
+  const color = up ? "var(--red)" : "var(--green)";
+  return (
+    <div
+      style={{
+        margin: "0.5rem 1rem 0",
+        padding: "0.4rem 0.6rem",
+        borderRadius: 6,
+        border: `1px solid ${color}`,
+        background: "rgba(5,8,16,0.6)",
+        color,
+        fontSize: "0.7rem",
+        fontWeight: 600,
+      }}
+    >
+      {t(up ? "rep.priceNote" : "rep.priceNoteDiscount", { faction: t(`faction.${owner}`), pct })}
     </div>
   );
 }

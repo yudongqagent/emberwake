@@ -271,6 +271,12 @@ export interface EncounterDef {
    * battlefield, which stays solo — see alliedFleetJoins() in Combat.tsx, which
    * additionally hard-excludes the riftEchoes faction as defense in depth. */
   fleetBattle?: boolean;
+  /** 打赢之后声望怎么变。缺省时按"打谁谁记仇"处理(每艘 REP_PER_KILL)。
+   *
+   * 显式写出来是因为默认规则对赏金是错的:赏金的 faction 是**目标**的派系,
+   * 照默认规则走,清掉掠夺者反而会让掠夺者更喜欢你。委托方是谁、得罪谁,
+   * 只能一条条写清楚,推不出来。 */
+  reputation?: Partial<Record<FactionId, number>>;
 }
 
 export interface DialogueLine {

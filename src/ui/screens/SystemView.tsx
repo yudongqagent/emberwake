@@ -6,6 +6,7 @@ import {
   mineResource,
   collectWreck,
   isPoiAvailable,
+  systemPois,
   effectiveRemaining,
   getNextObjective,
   effectiveMaxHull,
@@ -90,6 +91,8 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   const engagedRef = useRef(false);
 
   const system = GALAXIES.flatMap((g) => g.systems).find((s) => s.id === state.value.currentSystemId)!;
+  // 猎杀队按星区威胁度缩放,所以取目标需要知道自己在哪个星区。
+  const galaxy = GALAXIES.find((g) => g.id === system.galaxyId)!;
   const objective = getNextObjective();
   const objectivePoiId = objective?.systemId === system.id ? objective.poiId : undefined;
   const objectiveElsewhere = objective && objective.systemId !== system.id ? objective : null;
@@ -242,7 +245,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
       }
 
       // POI proximity (using wander-adjusted effective positions so hit-testing matches rendering)
-      const pois = system.pois.filter(isPoiAvailable);
+      const pois = systemPois(system, galaxy).filter(isPoiAvailable);
       let closest: Poi | null = null;
       let closestDist = Infinity;
       let closestEff = { x: 0, y: 0 };
@@ -449,7 +452,7 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
   const ship = flagship.value;
   const shipHullFrac = ship ? ship.currentHp / effectiveMaxHull(ship) : 0;
   hullFracRef.current = shipHullFrac;
-  const visiblePois = system.pois.filter((p) => isPoiAvailable(p));
+  const visiblePois = systemPois(system, galaxy).filter((p) => isPoiAvailable(p));
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
