@@ -196,8 +196,11 @@ def armor_entry(id_, fam, name, rar):
     fields = [f'baseBlock: {block}']
     if evasion >= 0.5:
         fields.append(f'baseEvasion: {evasion}')
-    if abs(d["thrust"]) >= 0.01:
-        fields.append(f'baseThrust: {round(d["thrust"], 2)}')
+    # 0.8:实测一件 mk5 掠夺者轻甲能给到 +30%,而总上限是 +60%——两件就顶满,
+    # 推力这条轴等于只有两格。压到单件不超过总上限的四成。
+    thrust = round(d["thrust"] * 0.8, 3)
+    if abs(thrust) >= 0.01:
+        fields.append(f'baseThrust: {thrust}')
     return power, None, fields, sig, pool
 
 
@@ -206,7 +209,7 @@ def engine_entry(id_, fam, name, rar):
     budget = ENGINE_BUDGET[rar] / RARITY_MULT[rar]
     evasion = round(budget * d["evasion"] * 0.62, 1)
     # 剩下的预算变成推力百分比。
-    thrust = round(budget * (1 - d["evasion"]) * 0.022, 2)
+    thrust = round(budget * (1 - d["evasion"]) * 0.022 * 0.8, 3)
     power = max(1, round(TIER_POWER[rar] * d["power"]))
     sig = ENGINE_SIGNATURES[fam][TIERS.index(rar)]
     pool = [t for t in ENGINE_POOLS[fam] if t != sig]

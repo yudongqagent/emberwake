@@ -201,12 +201,13 @@ describe("效果强度会随投资增长", () => {
   it("单件装备不该一个人就顶满推力上限", () => {
     // 实测抓到的:第一版按稀有度倍率(3.04x)放大推力,一件 mk5 掠夺者轻甲单独
     // 给出 +52%,而总上限是 +60%——一件就顶满,后面所有推力设计当场作废。
+    // 界限定在总上限的四成:任何一件东西都不该单独决定这条轴。
     const light = MODULE_DEFS.filter((d) => (d.baseThrust ?? 0) > 0);
     for (const d of light) {
       const best: ModuleInstance = {
         id: "m", defId: d.id, rarity: "mk5", level: 13, traits: [], lockedTraitSlot: null, quality: 1,
       };
-      expect(computeModuleThrust(best), `${d.id} 单件推力 ${computeModuleThrust(best)}`).toBeLessThan(0.3);
+      expect(computeModuleThrust(best), `${d.id} 单件推力 ${computeModuleThrust(best)}`).toBeLessThan(0.25);
     }
   });
 });
