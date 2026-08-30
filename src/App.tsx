@@ -22,7 +22,7 @@ import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
 import { registerRuntimeEncounter, encounterById } from "./data/encounters";
-import { grant, grantRiftDrop } from "./state/store";
+import { grant, grantRiftDrop, bankDive } from "./state/store";
 import { setMuted, isMuted } from "./audio/engine";
 import { setMood } from "./audio/music";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
@@ -98,6 +98,7 @@ export function App() {
   const [muted, setMutedState] = useState(isMuted());
   const [riftRun, setRiftRun] = useState<RiftRun | null>(null);
   const [riftDrop, setRiftDrop] = useState<ModuleInstance | null>(null);
+  const [diveResult, setDiveResult] = useState<{ earned: number; newRecord: boolean; depth: number } | null>(null);
   /** Core-loop redesign #1 — the hand of three waiting to be picked from. */
   const [draft, setDraft] = useState<DraftOption[] | null>(null);
   /** Core-loop redesign #5 — an in-progress sortie. The rift's push-your-luck
@@ -129,6 +130,10 @@ export function App() {
   function extractFromRift() {
     if (!riftRun) return;
     grant(riftRun.haul);
+    // 余烬刻印(data/sigils.ts):深潜第一次留下了带得走的东西。在此之前,你潜到
+    // 多深,离开的那一刻就被忘掉了——所以"再深一层"完全没有理由。
+    const dive = bankDive(riftRun.depth);
+    setDiveResult(dive.earned > 0 ? { ...dive, depth: riftRun.depth } : null);
     setRiftDrop(grantRiftDrop(riftRun.depth));
     setRiftRun(null);
   }
@@ -432,6 +437,7 @@ export function App() {
             <StoryOverlay key={scene.id} scene={scene} onComplete={handleSceneComplete} />
           </ErrorBoundary>
         )}
+        <DiveResultToast result={diveResult} onClose={() => setDiveResult(null)} />
         <HullUnlockToast />
         <ErrorToast />
       </div>
@@ -475,6 +481,38 @@ function HullUnlockToast() {
           {t("hullUnlock.body")}
         </div>
         <button className="btn primary" onClick={dismiss}>{t("common.close")}</button>
+      </div>
+    </div>
+  );
+}
+
+/** 深潜结算:这一趟换来多少刻印,有没有刷新纪录。
+ *
+ * 纪录那一行是这套东西的引擎——它只在你比上一次更深的时候出现,所以"再深一层"
+ * 永远是最优解。 */
+function DiveResultToast({ result, onClose }: { result: { earned: number; newRecord: boolean; depth: number } | null; onClose: () => void }) {
+  if (!result) return null;
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 68, display: "flex",
+        alignItems: "center", justifyContent: "center", padding: "1rem",
+        background: "rgba(3,5,9,0.8)", backdropFilter: "blur(3px)",
+      }}
+      onClick={onClose}
+    >
+      <div className="panel pop-in" style={{ width: "min(400px, 100%)", padding: "1.4rem", textAlign: "center", border: "1px solid var(--amber)" }}>
+        <div className="eyebrow" style={{ color: "var(--amber)" }}>{t("sigil.diveTitle")}</div>
+        <div style={{ fontSize: "1.6rem", fontWeight: 700, fontFamily: "var(--font-display)", margin: "0.6rem 0 0.2rem" }}>
+          +{result.earned}
+        </div>
+        <div style={{ fontSize: "0.78rem", color: "var(--text-mid)" }}>{t("sigil.diveDepth", { depth: result.depth })}</div>
+        {result.newRecord && (
+          <div style={{ marginTop: "0.6rem", color: "var(--violet)", fontWeight: 700, fontSize: "0.85rem" }}>
+            {t("sigil.newRecord")}
+          </div>
+        )}
+        <button className="btn primary" style={{ marginTop: "1rem" }} onClick={onClose}>{t("common.close")}</button>
       </div>
     </div>
   );

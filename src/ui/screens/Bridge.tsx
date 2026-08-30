@@ -1,4 +1,5 @@
-import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull, setVoluntaryLoad, reputationOf } from "../../state/store";
+import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull, setVoluntaryLoad, reputationOf, sigilRank, buySigilRank } from "../../state/store";
+import { SIGIL_NODES, sigilUpgradeCost } from "../../data/sigils";
 import { emberLoadRewardMultiplier } from "../../data/emberLoad";
 import { DIPLOMATIC_FACTIONS, repTier, repEffects } from "../../data/reputation";
 import { hullClassById } from "../../data/hullClasses";
@@ -183,6 +184,7 @@ export function Bridge({ onNavigate, onEnterRift }: { onNavigate: (screen: strin
           the rift because both are standing decisions about how much danger to
           invite, rather than places to go. */}
       <EmberLoadPanel />
+      <SigilPanel />
 
       {/* 异空间战场 — the Extradimensional Battlefield.
           Corrected 2026-08-24: this is the Cinder's POWER, invoked from the
@@ -286,6 +288,61 @@ export function Bridge({ onNavigate, onEnterRift }: { onNavigate: (screen: strin
         <button className="btn" onClick={() => onNavigate("crew")}>
           <NavIcon name="crew" size={15} /> {t("bridge.crew")}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** 余烬刻印面板。
+ *
+ * 在此之前,裂隙深潜的深度是一次性的:你潜到多深,离开的那一刻就被忘掉了。
+ * 这里把它变成一条永久的线——每一个节点抬的都是一条硬上限,所以"再深一层"
+ * 买到的东西会让下一次能更深。 */
+function SigilPanel() {
+  const sigils = state.value.sigils;
+  const best = state.value.deepestDive;
+  if (sigils === 0 && best === 0) return null;
+  return (
+    <div className="panel" style={{ padding: "0.9rem 1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.15rem" }}>
+        <span className="eyebrow" style={{ color: "var(--amber)" }}>{t("sigil.title")}</span>
+        <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>{t("sigil.best", { depth: best })}</span>
+      </div>
+      <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: "0.6rem" }}>
+        {t("sigil.hint")}
+      </div>
+      <div style={{ fontSize: "1.3rem", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--amber)", marginBottom: "0.6rem" }}>
+        {sigils}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+        {SIGIL_NODES.map((node) => {
+          const rank = sigilRank(node.id);
+          const cost = sigilUpgradeCost(node.id, rank);
+          const affordable = cost !== null && sigils >= cost;
+          return (
+            <div key={node.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                  {t(`sigil.node.${node.id}`)}{" "}
+                  <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>{rank}/{node.maxRank}</span>
+                </div>
+                <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>{t(`sigil.desc.${node.id}`)}</div>
+              </div>
+              {cost === null ? (
+                <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>{t("modules.maxed")}</span>
+              ) : (
+                <button
+                  className="btn ghost"
+                  style={{ fontSize: "0.66rem", padding: "0.3em 0.6em", flex: "none" }}
+                  disabled={!affordable}
+                  onClick={() => buySigilRank(node.id)}
+                >
+                  {cost}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

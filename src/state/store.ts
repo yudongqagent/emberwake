@@ -31,6 +31,8 @@ import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
 import { CHOICE_REPUTATION, clampRep, repEffects, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
 import { canEvolve, evolveModule } from "../data/evolutions";
+import { sigilBonus, sigilUpgradeCost, sigilsForDive, type SigilNodeId } from "../data/sigils";
+import { setPermanentBonusSource } from "../engine/permanent";
 import { CREW_ALLEGIANCE, APPROVAL_FROM_REPUTATION, APPROVAL_PER_WIN, APPROVAL_PER_LOSS, clampApproval, approvalEffects, type ApprovalEffects } from "../data/crewApproval";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
@@ -142,9 +144,19 @@ export function setVoluntaryLoad(n: number): void {
 }
 
 export function clearSortieBoons(): void {
-  if (state.value.sortieBoons.length === 0) return;
-  state.value = { ...state.value, sortieBoons: [] };
+  // 刻印「决意」:每次离港自带的增益。清空之后立刻补上,所以它是"每次出击的起点
+  // 更高",而不是"多一次性的好处"。
+  const free = startingBoons();
+  if (state.value.sortieBoons.length === 0 && free.length === 0) return;
+  state.value = { ...state.value, sortieBoons: free };
   persist();
+}
+
+/** 刻印「决意」发的开局增益。从已实现的效果里挑,和 Refit Draft 用同一套管线。 */
+const RESOLVE_BOONS = ["coolant", "hullBonus"];
+export function startingBoons(): string[] {
+  const n = Math.min(RESOLVE_BOONS.length, sigilBonusOf("resolve"));
+  return RESOLVE_BOONS.slice(0, n);
 }
 
 export function replaceState(next: GameState) {
@@ -403,6 +415,52 @@ export function storyContext(): StoryContext {
     voluntaryLoad: state.value.voluntaryLoad,
     flags: state.value.flags,
   };
+}
+
+/** 余烬刻印(data/sigils.ts):跨越整局的永久成长。
+ *
+ * 每一个节点都必须在下面某个地方真的被读——一个买得到却没人消费的升级,和之前
+ * 那 16 个死 flag、死掉的 approval、死掉的 lockedTraitSlot 是同一种东西。
+ * sigils.test.ts 里有一条会遍历全部节点,确认它们都被接上了。 */
+/** engine/ 侧的纯函数通过这个取值函数读永久加成(见 engine/permanent.ts)。
+ *
+ * 注册一个函数、而不是推一份快照:注册时不读任何东西,真正读是在渲染时。这样就
+ * 不存在"买了升级但要刷新页面才生效"的同步遗漏,也不存在模块初始化顺序的坑。 */
+setPermanentBonusSource(() => state.value.sigilRanks);
+
+export function sigilRank(id: SigilNodeId): number {
+  return state.value.sigilRanks[id] ?? 0;
+}
+
+export function sigilBonusOf(id: SigilNodeId): number {
+  return sigilBonus(state.value.sigilRanks, id);
+}
+
+/** 一次深潜结束时结算刻印,并更新最深纪录。 */
+export function bankDive(depth: number): { earned: number; newRecord: boolean } {
+  const best = state.value.deepestDive;
+  const earned = sigilsForDive(depth, best);
+  const newRecord = depth > best;
+  state.value = {
+    ...state.value,
+    sigils: state.value.sigils + earned,
+    deepestDive: Math.max(best, depth),
+  };
+  persist();
+  return { earned, newRecord };
+}
+
+export function buySigilRank(id: SigilNodeId): boolean {
+  const rank = sigilRank(id);
+  const cost = sigilUpgradeCost(id, rank);
+  if (cost === null || state.value.sigils < cost) return false;
+  state.value = {
+    ...state.value,
+    sigils: state.value.sigils - cost,
+    sigilRanks: { ...state.value.sigilRanks, [id]: rank + 1 },
+  };
+  persist();
+  return true;
 }
 
 /** How many equipped modules on the flagship carry an effect (signature counts). */

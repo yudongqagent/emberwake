@@ -1,6 +1,7 @@
 import type { ModuleInstance, ModuleRarity } from "../data/types";
 import { MODULE_DEFS, MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, moduleDefById } from "../data/modules";
 import { pickOne, randomId, rollQuality } from "./rng";
+import { permanentBonus } from "./permanent";
 import { evolutionForFamily } from "../data/evolutions";
 
 /** Section B (2026-08-24): a draw is now bounded by where it came from. `maxRarity`
@@ -26,10 +27,10 @@ function rollModuleRarity(
 /** How good a module the rift hands out, by the deepest wave cleared in the run.
  * mk4 and mk5 exist ONLY here — no shop stocks them at any price. */
 export function riftDropRarityFloor(depth: number): ModuleRarity {
-  if (depth >= 7) return "mk5";
-  if (depth >= 4) return "mk4";
-  if (depth >= 2) return "mk3";
-  return "mk2";
+  const base = depth >= 7 ? 4 : depth >= 4 ? 3 : depth >= 2 ? 2 : 1;
+  // 刻印「打捞」:浅层也能捞到更好的东西,让"重跑一遍前面"不再纯属浪费时间。
+  const idx = Math.min(MODULE_RARITY_ORDER.length - 1, base + permanentBonus("salvager"));
+  return MODULE_RARITY_ORDER[idx];
 }
 
 /** A roll of 0 gives 88% of the rarity's baseline stat, 0.5 (neutral) gives exactly
@@ -82,7 +83,8 @@ export function computeModuleDamage(mod: ModuleInstance): number {
   // Core-loop redesign #4: an evolved weapon hits harder on top of everything
   // else. The damage is the payoff; the new signature is the actual change.
   const evoMult = mod.evolved ? (evolutionForFamily(def.family)?.damageMult ?? 1) : 1;
-  return Math.round(base * rarityMult * levelMult * rollMult * evoMult);
+  // 刻印「火力」。
+  return Math.round(base * rarityMult * levelMult * rollMult * evoMult * (1 + permanentBonus("firepower")));
 }
 
 /** The signature a module currently provides — its evolved one if it has
@@ -186,7 +188,8 @@ export function moduleLevelMultiplier(level: number): number {
 }
 
 export function moduleMaxLevel(rarity: ModuleRarity): number {
-  return 5 + MODULE_RARITY_ORDER.indexOf(rarity) * 2;
+  // 刻印「工坊」:永久抬高每一件模组的等级上限,让已经满级的装备重新有得投。
+  return 5 + MODULE_RARITY_ORDER.indexOf(rarity) * 2 + permanentBonus("workshop");
 }
 
 export function isModuleMaxed(mod: ModuleInstance): boolean {

@@ -1,10 +1,11 @@
 import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance, FactionId } from "../data/types";
+import type { SigilNodeId } from "../data/sigils";
 import { MODULE_DEFS } from "../data/modules";
 import { CHOICE_REPUTATION, clampRep } from "../data/reputation";
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 const SAVE_KEY = "emberwake.save";
 /** Rolling copy of the previous save, written before every overwrite. */
 const BACKUP_KEY = "emberwake.save.backup";
@@ -54,6 +55,11 @@ export interface GameState {
    * battles (团战) — see EncounterDef.fleetBattle. Never in the extradimensional
    * battlefield, which stays solo. */
   alliedShips: ShipInstance[];
+  /** 余烬刻印:跨越整局的永久成长货币,从裂隙深潜里赚(见 data/sigils.ts)。 */
+  sigils: number;
+  sigilRanks: Partial<Record<SigilNodeId, number>>;
+  /** 到过的最深一层。刷新它才是刻印的主要来源——所以"再深一层"永远有意义。 */
+  deepestDive: number;
 }
 
 function startingModule(defId: string): ModuleInstance {
@@ -88,6 +94,9 @@ export function createInitialState(): GameState {
     poiState: {},
     capturedShips: [],
     alliedShips: [],
+    sigils: 0,
+    sigilRanks: {},
+    deepestDive: 0,
     sortieBoons: [],
     voluntaryLoad: 0,
     reputation: {},
@@ -145,6 +154,9 @@ const migrations: Record<number, (s: any) => any> = {
     ...s,
     schemaVersion: 6,
     alliedShips: s.alliedShips ?? [],
+    sigils: s.sigils ?? 0,
+    sigilRanks: s.sigilRanks ?? {},
+    deepestDive: s.deepestDive ?? 0,
   }),
   // The 17-module roster was replaced wholesale by the 200-module one
   // (data/moduleDefs.ts), so every id in an existing save now points at nothing —
@@ -200,6 +212,15 @@ const migrations: Record<number, (s: any) => any> = {
     schemaVersion: 10,
     reputation: s.reputation ?? migrateReputationFromFlags(s.flags ?? {}),
     cinderTrust: s.cinderTrust ?? 0,
+  }),
+  // 余烬刻印(data/sigils.ts)。老存档从零开始,但 deepestDive 也从零开始,
+  // 所以他们下一次潜的每一层都算"刷新纪录"——不会因为之前潜过而吃亏。
+  10: (s: any) => ({
+    ...s,
+    schemaVersion: 11,
+    sigils: s.sigils ?? 0,
+    sigilRanks: s.sigilRanks ?? {},
+    deepestDive: s.deepestDive ?? 0,
   }),
 };
 
@@ -337,6 +358,9 @@ function repairState(raw: any): GameState {
     poiState: raw.poiState && typeof raw.poiState === "object" ? raw.poiState : {},
     capturedShips: Array.isArray(raw.capturedShips) ? raw.capturedShips : [],
     alliedShips: Array.isArray(raw.alliedShips) ? raw.alliedShips : [],
+    sigils: typeof raw.sigils === "number" ? raw.sigils : 0,
+    sigilRanks: raw.sigilRanks && typeof raw.sigilRanks === "object" ? raw.sigilRanks : {},
+    deepestDive: typeof raw.deepestDive === "number" ? raw.deepestDive : 0,
     sortieBoons: Array.isArray(raw.sortieBoons) ? raw.sortieBoons.filter((b: any) => typeof b === "string") : [],
     voluntaryLoad: typeof raw.voluntaryLoad === "number" && raw.voluntaryLoad >= 0 ? raw.voluntaryLoad : 0,
     reputation: raw.reputation && typeof raw.reputation === "object" ? raw.reputation : {},

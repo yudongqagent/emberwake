@@ -1,6 +1,7 @@
 import type { HullClassId, ShipInstance, ShipRolls } from "../data/types";
 import { RARITY_ORDER, APTITUDE_WEIGHTS, APTITUDE_GROWTH, RARITY_MULTIPLIER, hullClassById, nextHullClassOptions, ascensionRequirementsMet } from "../data/hullClasses";
 import { weightedPick, rollQuality } from "./rng";
+import { permanentBonus } from "./permanent";
 
 /** A roll of 0 gives 88% of the class baseline, 0.5 (neutral) gives exactly 100%, and a
  * roll of 1 gives 112% — the same ±quality band used for every stat, so a ship's rarity
@@ -107,7 +108,8 @@ export function computeMaxHull(ship: Pick<ShipInstance, "hullClass" | "rarity" |
   const def = hullClassById(ship.hullClass);
   const growth = 1 + (ship.level - 1) * 0.08;
   const roll = qualityMultiplier((ship.rolls ?? NEUTRAL_ROLLS).hull);
-  return Math.round(def.baseHull * RARITY_MULTIPLIER[ship.rarity] * growth * roll);
+  // 刻印「船体」:永久抬高船体上限(data/sigils.ts)。
+  return Math.round(def.baseHull * RARITY_MULTIPLIER[ship.rarity] * growth * roll * (1 + permanentBonus("hull")));
 }
 
 /** Power capacity comes from the HULL, plus a gentle level term.
@@ -130,7 +132,8 @@ export function computeMaxHull(ship: Pick<ShipInstance, "hullClass" | "rarity" |
 export function computePowerCapacity(ship: Pick<ShipInstance, "hullClass" | "rarity"> & Partial<Pick<ShipInstance, "rolls" | "level">>): number {
   const def = hullClassById(ship.hullClass);
   const growth = 1 + ((ship.level ?? 1) - 1) * 0.04;
-  return Math.round(def.basePower * growth);
+  // 刻印「反应堆」:永久多出的功率容量,让更重的配装成为可能。
+  return Math.round(def.basePower * growth) + permanentBonus("reactor");
 }
 
 /** World-units/sec the flagship moves at, both on the system map and in the combat
