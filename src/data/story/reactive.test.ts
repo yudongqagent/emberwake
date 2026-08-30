@@ -13,6 +13,9 @@ import { language } from "../../i18n/language";
 import { DIPLOMATIC_FACTIONS, repTier } from "../reputation";
 
 const SCENES = [...ACT1_SCENES, ...ACT2_SCENES, ...ACT3_SCENES, ...ACT4_SCENES, ...ACT5_SCENES, ...ACT6_SCENES];
+// 散文也覆盖立场戏,所以查散文时要用完整的场景池。reactive 的那几条依然只查主线,
+// 因为 REACTIVE_LINES 只挂在主线上。
+const ALL_SCENES = [...SCENES, ...STANDING_SCENES];
 
 function ctx(over: Partial<StoryContext> = {}): StoryContext {
   return {
@@ -179,7 +182,7 @@ describe("因为立场才发生的戏", () => {
 describe("开场散文", () => {
   it("散文指向的场景都真实存在", () => {
     for (const id of Object.keys(SCENE_PROSE)) {
-      expect(SCENES.some((s) => s.id === id), `散文指向了不存在的场景 "${id}"`).toBe(true);
+      expect(ALL_SCENES.some((s) => s.id === id), `散文指向了不存在的场景 "${id}"`).toBe(true);
     }
   });
 
@@ -211,7 +214,7 @@ describe("开场散文", () => {
     // 中英各查一遍。中文要先过覆盖层,否则等于拿中文散文去比英文台词。
     for (const lang of ["zh", "en"] as const) {
       for (const id of Object.keys(SCENE_PROSE)) {
-        const base = SCENES.find((s) => s.id === id)!;
+        const base = ALL_SCENES.find((s) => s.id === id)!;
         language.value = lang;
         const out = applyProse(lang === "zh" ? localizedScene(base) : base, lang);
         // 只查旁白。台词之间的重复往往是刻意的呼应——英文里陆昭说
@@ -230,7 +233,7 @@ describe("开场散文", () => {
   });
 
   it("只丢开头连续的旁白,绝不会误伤台词", () => {
-    const scene = SCENES.find((s) => s.id === "coldWake")!;
+    const scene = ALL_SCENES.find((s) => s.id === "coldWake")!;
     const out = applyProse(scene, "zh");
     const originalSpoken = scene.lines.filter((l) => l.speaker !== "");
     const keptSpoken = out.lines.filter((l) => l.speaker !== "");
@@ -238,13 +241,30 @@ describe("开场散文", () => {
   });
 
   it("没配散文的场景一个字都不改", () => {
-    const scene = SCENES.find((s) => !SCENE_PROSE[s.id])!;
-    expect(applyProse(scene, "zh")).toBe(scene);
+    // 现在 46 场戏全都配了散文,所以只能构造一个。以后新增场景时,这条保证
+    // "还没来得及写散文"是安全的降级,而不是崩。
+    const bare = { ...ALL_SCENES[0], id: "__沒有散文的場景__" };
+    expect(applyProse(bare, "zh")).toBe(bare);
+  });
+
+  it("每一场戏都有散文", () => {
+    const missing = ALL_SCENES.filter((s) => !SCENE_PROSE[s.id]).map((s) => s.id);
+    expect(missing, `这些戏还是零布景:\n${missing.join("\n")}`).toEqual([]);
   });
 
   it("散文把剧情的体量抬起来了", () => {
     // 原来 6,389 字。散文的意义之一就是让读者慢下来,而慢下来需要字数。
     const added = Object.values(SCENE_PROSE).flatMap((p) => p.zh).reduce((n, t) => n + t.length, 0);
     expect(added, `只加了 ${added} 字`).toBeGreaterThan(2500);
+  });
+
+  it("中文散文只用全角标点", () => {
+    // 实测在界面里看出来的:第二波散文里混进了半角逗号,和原有台词的全角标点
+    // 排在一起一眼就不对。玩家看得见的东西,不能靠"下次注意"。
+    for (const [id, p] of Object.entries(SCENE_PROSE)) {
+      for (const t of p.zh) {
+        expect(/[,:;?!]/.test(t), `${id} 的中文里有半角标点:「${t.slice(0, 30)}…」`).toBe(false);
+      }
+    }
   });
 });
