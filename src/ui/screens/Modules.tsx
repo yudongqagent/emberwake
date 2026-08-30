@@ -6,7 +6,7 @@ import { computePowerCapacity } from "../../engine/ships";
 import { moduleDefById, fabricatorCost, MODULE_RARITY_ORDER } from "../../data/modules";
 import { moduleEffectById } from "../../data/moduleEffects";
 import { setProgress, SET_TWO, SET_FOUR } from "../../data/setBonuses";
-import { computeModuleDamage, computeModuleBlock, lockTrait, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
+import { computeModuleDamage, computeModuleBlock, rerollTrait, rerollCandidates, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
 import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon, ResourceIcon } from "../components/Icons";
@@ -161,7 +161,7 @@ export function Modules() {
                     <button className="btn" onClick={() => setPickerSlot(slot.index)}>{t("modules.swap")}</button>
                     <button className="btn danger" onClick={() => equipModule(ship.id, slot.index, null)}>{t("modules.remove")}</button>
                   </div>
-                  <LockRow moduleId={mod.id} traits={mod.traits} />
+                  <TraitRow moduleId={mod.id} traits={mod.traits} />
                 </>
               ) : (
                 <button className="btn ghost" style={{ marginTop: "0.6rem", width: "100%" }} onClick={() => setPickerSlot(slot.index)}>
@@ -405,36 +405,60 @@ function UpgradeRow({ mod }: { mod: ModuleInstance }) {
   );
 }
 
-function LockRow({ moduleId, traits }: { moduleId: string; traits: string[] }) {
+/** 词条行。点哪一格就换哪一格。
+ *
+ * 原来这里是一个写死"重掷特性1"的按钮:玩家不能选,而且有相当概率花了洞悉换来
+ * 一模一样的东西(见 engine/modules.ts 的 rerollTrait)。 */
+function TraitRow({ moduleId, traits }: { moduleId: string; traits: string[] }) {
   const cost = 8;
   const mod = state.value.modules.find((m) => m.id === moduleId);
   const def = mod ? moduleDefById(mod.defId) : null;
-  const traitPool = def ? def.traitPool : [];
-  const pool = [...traitPool];
+  const [selected, setSelected] = useState<number | null>(null);
+  if (!mod || !def || traits.length === 0) return null;
+  const candidates = rerollCandidates(mod);
+  const affordable = canAfford({ insight: cost });
   return (
     <div style={{ marginTop: "0.55rem" }}>
-      {traits.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginBottom: "0.4rem" }}>
-          {traits.map((traitId, i) => (
-            <span key={i} title={def ? localizedTrait(def, traitId).description : ""} style={{ fontSize: "0.68rem", padding: "0.15em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
-              {def ? localizedTrait(def, traitId).label : traitId}
-            </span>
-          ))}
-        </div>
-      )}
-      {traits.length > 0 && pool.length > 0 && (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginBottom: "0.4rem" }}>
+        {traits.map((traitId, i) => {
+          const on = selected === i;
+          return (
+            <button
+              key={i}
+              title={localizedTrait(def, traitId).description}
+              onClick={() => setSelected(on ? null : i)}
+              className="btn ghost"
+              style={{
+                fontSize: "0.68rem", padding: "0.15em 0.6em", borderRadius: 999,
+                border: `1px solid ${on ? "var(--amber)" : "var(--violet)"}`,
+                color: on ? "var(--amber)" : "var(--violet)",
+                textTransform: "none", letterSpacing: "normal", fontWeight: 600,
+              }}
+            >
+              {localizedTrait(def, traitId).label}
+            </button>
+          );
+        })}
+      </div>
+      {candidates.length === 0 ? (
+        <div style={{ fontSize: "0.66rem", color: "var(--text-dim)" }}>{t("modules.rerollExhausted")}</div>
+      ) : selected === null ? (
+        <div style={{ fontSize: "0.66rem", color: "var(--text-dim)" }}>{t("modules.rerollHint")}</div>
+      ) : (
         <button
           className="btn ghost"
           style={{ fontSize: "0.62rem", padding: "0.35em 0.6em" }}
-          disabled={!canAfford({ insight: cost })}
+          disabled={!affordable}
           onClick={() => {
             spend({ insight: cost });
-            const rerolled = pickOne(pool);
-            const modules = state.value.modules.map((m) => (m.id === moduleId ? lockTrait(m, rerolled, 0) : m));
+            const modules = state.value.modules.map((m) =>
+              m.id === moduleId ? rerollTrait(m, selected, pickOne) : m,
+            );
             state.value = { ...state.value, modules };
+            setSelected(null);
           }}
         >
-          {t("modules.lockReroll", { cost })}
+          {t("modules.rerollSlot", { trait: localizedTrait(def, traits[selected]).label, cost })}
         </button>
       )}
     </div>

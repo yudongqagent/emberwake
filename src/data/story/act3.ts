@@ -111,6 +111,5 @@ export const ACT3_SCENES: StoryScene[] = [
     ],
     onCompleteFlags: ["act3.originTide.cleared"],
     startEncounter: "originTideRiftStorm",
-    unlockHullClass: "dreadnought",
   },
 ];

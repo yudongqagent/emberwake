@@ -213,8 +213,31 @@ export function levelUpModule(mod: ModuleInstance): ModuleInstance {
   return { ...mod, level: mod.level + 1 };
 }
 
-export function lockTrait(mod: ModuleInstance, traitId: string, slotIndex: number): ModuleInstance {
+/** 把某一格的词条换成另一个。
+ *
+ * 2026-08-30 重写。原来的实现有三个问题,而且都在花玩家的洞悉:
+ *
+ * 1. 永远只改第 0 格(界面上的按钮字面写着"重掷特性1"),玩家不能选要换哪一个。
+ * 2. 新词条从整个词条池里随机取,**包括它现在已经有的那个**——所以有相当概率
+ *    花了 8 点洞悉,什么都没变。
+ * 3. 也可能掷出这个模组另一格已经有的词条。同一个模组上重复的词条只算一次
+ *    (effectStacks 按模组计),所以那一格直接作废。
+ *
+ * 现在:玩家点哪一格换哪一格,候选里排除掉这个模组已经拥有的全部词条。花出去的
+ * 洞悉一定换来一个**不同的**、**不重复的**词条。 */
+export function rerollTrait(mod: ModuleInstance, slotIndex: number, pick: (pool: string[]) => string): ModuleInstance {
+  const def = moduleDefById(mod.defId);
+  const owned = new Set(mod.traits);
+  const candidates = def.traitPool.filter((t) => !owned.has(t));
+  if (candidates.length === 0) return mod;
   const traits = [...mod.traits];
-  traits[slotIndex] = traitId;
-  return { ...mod, traits, lockedTraitSlot: slotIndex };
+  traits[slotIndex] = pick(candidates);
+  return { ...mod, traits };
+}
+
+/** 这一格还有得换吗?没有的话按钮不该亮着,更不该收钱。 */
+export function rerollCandidates(mod: ModuleInstance): string[] {
+  const def = moduleDefById(mod.defId);
+  const owned = new Set(mod.traits);
+  return def.traitPool.filter((t) => !owned.has(t));
 }

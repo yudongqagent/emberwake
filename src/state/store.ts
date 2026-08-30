@@ -1,9 +1,9 @@
 import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
-import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId, ShipInstance, FactionId } from "../data/types";
+import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId, HullClassDef, ShipInstance, FactionId } from "../data/types";
 import { fabricatorCost, MARKET_MAX_RARITY, moduleDefById } from "../data/modules";
-import { hullClassById, ascensionRequirementsMet } from "../data/hullClasses";
+import { hullClassById, ascensionRequirementsMet, HULL_CLASSES } from "../data/hullClasses";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
 import { LIONSHEART_EXPANSE } from "../data/galaxies/lionsheartExpanse";
 import { SWANREACH_COMBINE } from "../data/galaxies/swanreachCombine";
@@ -608,8 +608,29 @@ export function availableScene(systemId: string): StoryScene | null {
   );
 }
 
+/** 这一幕结束时,有哪些舰级刚刚解锁。
+ *
+ * 从 hullClasses 的 unlockFlag 反推,而**不是**读场景上那个 `unlockHullClass`
+ * 字段——那个字段五处声明、零处读取(2026-08-30 扫出来的死字段),而且它一处只
+ * 写得下一个舰级,实际上好几个解锁 flag 一次开两条线。两份真相里,能自动对上的
+ * 那一份才是真的。 */
+export function hullClassesUnlockedBy(flags: string[]): HullClassDef[] {
+  const before = state.value.flags;
+  return HULL_CLASSES.filter(
+    (h) => h.unlockFlag !== null && flags.includes(h.unlockFlag) && !before[h.unlockFlag],
+  );
+}
+
+/** 刚刚解锁、还没被玩家看过的舰级。剧情结束后弹一次。 */
+export const pendingHullUnlocks = signal<HullClassDef[]>([]);
+
 export function completeScene(scene: StoryScene) {
+  // 必须在 setFlags 之前算——setFlags 之后 flag 已经写进去了,"之前没有"就判不出来了。
+  const unlocked = hullClassesUnlockedBy(scene.onCompleteFlags);
   setFlags(scene.onCompleteFlags);
+  // 整个游戏最大的进度事件从前是**静悄悄**发生的:剧情演完,新舰级就那么出现在
+  // 进阶页里,没有任何人告诉玩家。
+  if (unlocked.length > 0) pendingHullUnlocks.value = unlocked;
   // Section A (2026-08-24 player brief): a scripted, guaranteed rarity upgrade —
   // e.g. the "second ship" shipyard beat — not a draw. Whisper is still the only
   // ship (see docs/story/research-notes-ship-ascension.md); this just raises the

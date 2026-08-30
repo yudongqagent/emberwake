@@ -27,6 +27,8 @@ import { setMuted, isMuted } from "./audio/engine";
 import { setMood } from "./audio/music";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
+import { pendingHullUnlocks } from "./state/store";
+import { localizedHullClassDisplay } from "./i18n/data";
 import { SaveRecovery } from "./ui/components/SaveRecovery";
 import { hasExistingSave, createInitialState } from "./engine/save";
 import { t } from "./i18n/strings";
@@ -430,7 +432,49 @@ export function App() {
             <StoryOverlay key={scene.id} scene={scene} onComplete={handleSceneComplete} />
           </ErrorBoundary>
         )}
+        <HullUnlockToast />
         <ErrorToast />
+      </div>
+    </div>
+  );
+}
+
+/** 新舰级解锁的提示。
+ *
+ * 整个游戏最大的进度事件从前是**静悄悄**发生的:剧情演完,新舰级就那么出现在
+ * 进阶页里,没有任何人告诉玩家。场景数据上那个 `unlockHullClass` 字段五处声明、
+ * 零处读取——它本来就是想干这件事的,只是从来没接上。 */
+function HullUnlockToast() {
+  const unlocked = pendingHullUnlocks.value;
+  if (unlocked.length === 0) return null;
+  const dismiss = () => { pendingHullUnlocks.value = []; };
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 70, display: "flex",
+        alignItems: "center", justifyContent: "center", padding: "1rem",
+        background: "rgba(3,5,9,0.8)", backdropFilter: "blur(3px)",
+      }}
+      onClick={dismiss}
+    >
+      <div className="panel pop-in" style={{ width: "min(420px, 100%)", padding: "1.4rem", textAlign: "center", border: "1px solid var(--violet)" }}>
+        <div className="eyebrow" style={{ color: "var(--violet)" }}>{t("hullUnlock.title")}</div>
+        <div style={{ margin: "0.8rem 0 0.4rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {unlocked.map((h) => (
+            <div key={h.id}>
+              <div style={{ fontSize: "1.15rem", fontWeight: 700, fontFamily: "var(--font-display)" }}>
+                {localizedHullClassDisplay(h)}
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                {t("hullUnlock.req", { level: h.minLevel, essence: h.essenceCost })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: "0.78rem", color: "var(--text-mid)", lineHeight: 1.5, margin: "0.6rem 0 1rem" }}>
+          {t("hullUnlock.body")}
+        </div>
+        <button className="btn primary" onClick={dismiss}>{t("common.close")}</button>
       </div>
     </div>
   );

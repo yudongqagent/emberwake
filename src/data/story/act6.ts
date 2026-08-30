@@ -135,7 +135,6 @@ export const ACT6_SCENES: StoryScene[] = [
       { speaker: "The Cinder", text: "It's an answer. Four hundred years is long enough to wait for one. Take her up, Kade — she's earned the last frame there is." },
     ],
     onCompleteFlags: ["act6.civilizationDisqualified.cleared", "campaign.act6.complete"],
-    unlockHullClass: "anthem",
     startEncounter: "civilizationDisqualifiedFinale",
   },
 ];

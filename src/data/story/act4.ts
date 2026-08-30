@@ -118,6 +118,5 @@ export const ACT4_SCENES: StoryScene[] = [
     ],
     onCompleteFlags: ["act4.deepOrigin.cleared", "campaign.act4.complete"],
     startEncounter: "deepOriginArkDefense",
-    unlockHullClass: "sovereign",
   },
 ];

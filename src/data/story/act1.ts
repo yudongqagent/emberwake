@@ -96,7 +96,6 @@ export const ACT1_SCENES: StoryScene[] = [
       { speaker: "The Cinder", text: "Whisper can carry more than she was built to now. Take her up a class. Let them see what's coming." },
     ],
     onCompleteFlags: ["act1.tigersReach.cleared"],
-    unlockHullClass: "destroyer",
   },
   {
     id: "houseRules",
@@ -140,7 +139,6 @@ export const ACT1_SCENES: StoryScene[] = [
       { speaker: "The Cinder", text: "Twenty years of that. Take her up again. The Reach is small, and you're going to outgrow it." },
     ],
     onCompleteFlags: ["act1.emberRising.cleared", "campaign.act1.complete"],
-    unlockHullClass: "cruiser",
     grantRarityUpgrade: "prototype",
   },
 ];

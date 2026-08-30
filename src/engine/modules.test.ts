@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { qualityMultiplier, drawModule, riftDropRarityFloor, moduleMaxLevel, moduleUpgradeCost, isModuleMaxed, levelUpModule, computeModuleDamage, effectPotency, computeModuleEvasion, computeModuleThrust } from "./modules";
+import { qualityMultiplier, drawModule, riftDropRarityFloor, moduleMaxLevel, moduleUpgradeCost, isModuleMaxed, levelUpModule, computeModuleDamage, effectPotency, computeModuleEvasion, computeModuleThrust, rerollTrait, rerollCandidates } from "./modules";
 import { MODULE_DEFS } from "../data/moduleDefs";
 import type { ModuleInstance } from "../data/types";
 import { MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, MARKET_MAX_RARITY, fabricatorCost, moduleDefById } from "../data/modules";
@@ -209,5 +209,50 @@ describe("效果强度会随投资增长", () => {
       };
       expect(computeModuleThrust(best), `${d.id} 单件推力 ${computeModuleThrust(best)}`).toBeLessThan(0.25);
     }
+  });
+});
+
+// 2026-08-30 扫死字段时抓到的。原来的"重掷"按钮:
+//   lockTrait(m, pickOne(def.traitPool), 0)
+// 三个问题,而且每一个都在花玩家的洞悉。
+describe("词条重掷", () => {
+  const withTraits = (traits: string[]): ModuleInstance => {
+    const def = MODULE_DEFS.find((d) => d.traitPool.length >= 3)!;
+    return { id: "m", defId: def.id, rarity: "mk1", level: 1, traits, lockedTraitSlot: null, quality: 0.5 };
+  };
+
+  it("永远不会掷出它已经有的那个——花了洞悉就必须有变化", () => {
+    const def = MODULE_DEFS.find((d) => d.traitPool.length >= 3)!;
+    const mod = withTraits([def.traitPool[0]]);
+    for (let i = 0; i < 200; i++) {
+      const out = rerollTrait(mod, 0, (pool) => pool[Math.floor(Math.random() * pool.length)]);
+      expect(out.traits[0]).not.toBe(def.traitPool[0]);
+    }
+  });
+
+  it("永远不会在同一个模组上掷出重复词条", () => {
+    // 同一个模组上重复的词条只算一次(effectStacks 按模组计),所以那一格直接作废。
+    const def = MODULE_DEFS.find((d) => d.traitPool.length >= 3)!;
+    const mod = withTraits([def.traitPool[0], def.traitPool[1]]);
+    for (let i = 0; i < 200; i++) {
+      const out = rerollTrait(mod, 0, (pool) => pool[Math.floor(Math.random() * pool.length)]);
+      expect(new Set(out.traits).size).toBe(out.traits.length);
+    }
+  });
+
+  it("换的是玩家点的那一格,不是永远的第 0 格", () => {
+    const def = MODULE_DEFS.find((d) => d.traitPool.length >= 3)!;
+    const mod = withTraits([def.traitPool[0], def.traitPool[1]]);
+    const out = rerollTrait(mod, 1, (pool) => pool[0]);
+    expect(out.traits[0]).toBe(def.traitPool[0]);
+    expect(out.traits[1]).not.toBe(def.traitPool[1]);
+  });
+
+  it("词条池掏空之后不再有候选,按钮该是灰的", () => {
+    const def = MODULE_DEFS.find((d) => d.traitPool.length >= 3)!;
+    const mod = withTraits([...def.traitPool]);
+    expect(rerollCandidates(mod)).toEqual([]);
+    // 没得换的时候原样返回,绝不能收了钱什么都不做。
+    expect(rerollTrait(mod, 0, (pool) => pool[0])).toBe(mod);
   });
 });

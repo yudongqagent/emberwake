@@ -321,7 +321,6 @@ export interface StoryScene {
    * 这是"内容按你怎么玩发,而不是按主线进度发"的载体:走安氏路线和走掠夺者
    * 路线的玩家,会看到两批不同的戏,而不是同一批戏配不同的结局文字。 */
   requiresStanding?: { faction: FactionId; min?: number; max?: number };
-  unlockHullClass?: HullClassId;
   /** Section A of the 2026-08-24 player brief: a scripted, guaranteed rarity
    * upgrade tied to a specific story beat (e.g. the "second ship" shipyard
    * moment) — not a draw, not RNG. Applied directly in completeScene. */

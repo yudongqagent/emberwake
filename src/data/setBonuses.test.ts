@@ -3,6 +3,15 @@ import { FAMILY_SETS, activeSetBonuses, setProgress, SET_TWO, SET_FOUR } from ".
 import { MODULE_DEFS } from "./modules";
 import { MODULE_EFFECTS } from "./moduleEffects";
 import type { ModuleFamily, ModuleInstance } from "./types";
+import { HULL_CLASSES } from "./hullClasses";
+import { ACT1_SCENES } from "./story/act1";
+import { ACT2_SCENES } from "./story/act2";
+import { ACT3_SCENES } from "./story/act3";
+import { ACT4_SCENES } from "./story/act4";
+import { ACT5_SCENES } from "./story/act5";
+import { ACT6_SCENES } from "./story/act6";
+
+const ALL_STORY = [...ACT1_SCENES, ...ACT2_SCENES, ...ACT3_SCENES, ...ACT4_SCENES, ...ACT5_SCENES, ...ACT6_SCENES];
 
 const EFFECT_IDS = new Set(MODULE_EFFECTS.map((e) => e.id));
 
@@ -77,5 +86,31 @@ describe("门派套装", () => {
       const types = new Set(MODULE_DEFS.filter((d) => d.family === s.family).map((d) => d.type));
       expect(types.size, `家族 "${s.family}" 只有 ${types.size} 种槽位,凑不出四件套`).toBeGreaterThanOrEqual(4);
     }
+  });
+});
+
+// 舰级解锁提示的数据侧保证。手写的 `unlockHullClass` 字段(五处声明、零处读取)
+// 已经删掉,改成从 hullClasses 的 unlockFlag 反推——两份真相里,能自动对上的
+// 那一份才是真的。
+describe("舰级解锁", () => {
+  it("每个带解锁 flag 的舰级,那个 flag 都真的会被某场戏设上", () => {
+    // 否则那条舰级永远解不开,而且不会有任何报错。
+    const setFlags = new Set(ALL_STORY.flatMap((s) => s.onCompleteFlags));
+    for (const h of HULL_CLASSES) {
+      if (h.unlockFlag === null) continue;
+      expect(setFlags, `舰级 "${h.id}" 等的 flag "${h.unlockFlag}" 没有任何场景会设上`).toContain(h.unlockFlag);
+    }
+  });
+
+  it("一个 flag 一次开出的所有舰级都会被提示到", () => {
+    // 手写字段一处只写得下一个,而实测「本源潮汐」那一场同时开出歼星舰和掠夺舰
+    // ——照原来的写法,掠夺舰会被静悄悄漏掉。
+    const byFlag = new Map<string, string[]>();
+    for (const h of HULL_CLASSES) {
+      if (!h.unlockFlag) continue;
+      byFlag.set(h.unlockFlag, [...(byFlag.get(h.unlockFlag) ?? []), h.id]);
+    }
+    const multi = [...byFlag.values()].filter((v) => v.length > 1);
+    expect(multi.length, "没有任何 flag 一次开多条舰级,那这条测试就没有意义了").toBeGreaterThan(0);
   });
 });
