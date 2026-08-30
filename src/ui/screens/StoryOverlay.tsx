@@ -4,6 +4,7 @@ import { playSfx } from "../../audio/engine";
 import { t } from "../../i18n/strings";
 import { localizedScene } from "../../i18n/story";
 import { applyReactiveLines } from "../../data/story/reactive";
+import { applyProse } from "../../data/story/prose";
 import { storyContext } from "../../state/store";
 import { language } from "../../i18n/language";
 import { getSettings, TEXT_SPEED_CPS } from "../../engine/settings";
@@ -12,7 +13,16 @@ export function StoryOverlay({ scene: rawScene, onComplete }: { scene: StoryScen
   // 先本地化,再插"认得出玩家"的那句——插入用的是下标,而中文覆盖层和英文原文
   // 行数是一一对应的,所以顺序反过来也对;放在后面只是因为插进去的那句自带两种
   // 语言,不需要再过一次覆盖层。
-  const scene = applyReactiveLines(localizedScene(rawScene), storyContext(), language.value === "zh" ? "zh" : "en");
+  const lang = language.value === "zh" ? "zh" : "en";
+  // 顺序是有讲究的:本地化 → 插"认得出玩家"的那句 → 最后在**最前面**加散文开场。
+  //
+  // reactive 用的是行下标(after: N),而那些下标是按原始台词数写的。散文如果先插,
+  // 每一条 reactive 插入都会被散文的行数顶偏——而且不会报错,只会让台词悄悄出现在
+  // 错的位置。散文放最后、且只往前面加,就永远不会动到已经算好的下标。
+  const scene = applyProse(
+    applyReactiveLines(localizedScene(rawScene), storyContext(), lang),
+    lang,
+  );
   const [lineIdx, setLineIdx] = useState(0);
   const [showChoices, setShowChoices] = useState(false);
   const line = scene.lines[lineIdx];
@@ -117,7 +127,23 @@ export function StoryOverlay({ scene: rawScene, onComplete }: { scene: StoryScen
                 {line.speaker}
               </div>
             )}
-            <div style={{ fontSize: "1.08rem", lineHeight: 1.55 }}>
+            {/* 散文和对白必须长得不一样,否则一段一百五十字的描写会和一句台词
+                挤在同一个框里,读起来还是剧本。旁白(无说话人)走"书页"排版:行距
+                更松、首行缩进、左边一道竖线,颜色压暗一点——让眼睛知道这段要慢读。 */}
+            <div
+              style={
+                line.speaker
+                  ? { fontSize: "1.08rem", lineHeight: 1.55 }
+                  : {
+                      fontSize: "1.02rem",
+                      lineHeight: 1.95,
+                      color: "var(--text-mid)",
+                      textIndent: "2em",
+                      paddingLeft: "0.9rem",
+                      borderLeft: "2px solid var(--line)",
+                    }
+              }
+            >
               {full.slice(0, shown)}
               {typing && <span style={{ opacity: 0.5 }}>▌</span>}
             </div>

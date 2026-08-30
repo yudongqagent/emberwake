@@ -7,6 +7,9 @@ import { ACT4_SCENES } from "./act4";
 import { ACT5_SCENES } from "./act5";
 import { ACT6_SCENES } from "./act6";
 import { STANDING_SCENES } from "./standing";
+import { SCENE_PROSE, applyProse } from "./prose";
+import { localizedScene } from "../../i18n/story";
+import { language } from "../../i18n/language";
 import { DIPLOMATIC_FACTIONS, repTier } from "../reputation";
 
 const SCENES = [...ACT1_SCENES, ...ACT2_SCENES, ...ACT3_SCENES, ...ACT4_SCENES, ...ACT5_SCENES, ...ACT6_SCENES];
@@ -169,5 +172,79 @@ describe("因为立场才发生的戏", () => {
     expect(count("Kaan Ferrous")).toBeGreaterThanOrEqual(6);
     expect(count("Ori Vashti")).toBeGreaterThanOrEqual(6);
     expect(count("Sir Arthaine")).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// --- 开场散文 (data/story/prose.ts)
+describe("开场散文", () => {
+  it("散文指向的场景都真实存在", () => {
+    for (const id of Object.keys(SCENE_PROSE)) {
+      expect(SCENES.some((s) => s.id === id), `散文指向了不存在的场景 "${id}"`).toBe(true);
+    }
+  });
+
+  it("中英两套段数一致", () => {
+    for (const [id, p] of Object.entries(SCENE_PROSE)) {
+      expect(p.zh.length, `${id}: 中英段数不一致`).toBe(p.en.length);
+      expect(p.zh.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("不许混语言", () => {
+    for (const [id, p] of Object.entries(SCENE_PROSE)) {
+      for (const z of p.zh) expect(/[a-zA-Z]{4,}/.test(z), `${id} 的中文里混进了英文`).toBe(false);
+      for (const e of p.en) expect(/[一-鿿]/.test(e), `${id} 的英文里混进了中文`).toBe(false);
+    }
+  });
+
+  it("散文必须真的是散文——一句格言不算", () => {
+    // 整件事的起点就是"每句平均 27.9 字,全篇都是一句接一句的格言"。如果新写的
+    // 段落还是那个长度,那什么都没改变。
+    const all = Object.values(SCENE_PROSE).flatMap((p) => p.zh);
+    const avg = all.reduce((n, t) => n + t.length, 0) / all.length;
+    expect(avg, `散文平均 ${avg.toFixed(1)} 字,和原来的台词一样短`).toBeGreaterThan(50);
+  });
+
+  it("散文不许和它替换的旁白说同一件事", () => {
+    // 实测抓到的:「第一舰队的残骸」里"几百具船体,全都朝着同一个方向"连着出现两次。
+    // 散文本来就是把原句展开写的,所以原句必须让位——这条会抓住以后所有同类重复。
+    // 中英各查一遍。中文要先过覆盖层,否则等于拿中文散文去比英文台词。
+    for (const lang of ["zh", "en"] as const) {
+      for (const id of Object.keys(SCENE_PROSE)) {
+        const base = SCENES.find((s) => s.id === id)!;
+        language.value = lang;
+        const out = applyProse(lang === "zh" ? localizedScene(base) : base, lang);
+        // 只查旁白。台词之间的重复往往是刻意的呼应——英文里陆昭说
+        // "Twenty years of that."、余烬原样接一句,那是写法,不是 bug。
+        const texts = out.lines.filter((l) => l.speaker === "").map((l) => l.text);
+        const n = lang === "zh" ? 12 : 24;
+        for (let i = 0; i < texts.length; i++) {
+          for (let j = i + 1; j < texts.length; j++) {
+            const a = texts[i].slice(0, n);
+            expect(texts[j].startsWith(a), `${lang}/${id}: 第 ${i} 句和第 ${j} 句开头相同 —— 「${a}…」`).toBe(false);
+          }
+        }
+      }
+    }
+    language.value = "en";
+  });
+
+  it("只丢开头连续的旁白,绝不会误伤台词", () => {
+    const scene = SCENES.find((s) => s.id === "coldWake")!;
+    const out = applyProse(scene, "zh");
+    const originalSpoken = scene.lines.filter((l) => l.speaker !== "");
+    const keptSpoken = out.lines.filter((l) => l.speaker !== "");
+    expect(keptSpoken).toEqual(originalSpoken);
+  });
+
+  it("没配散文的场景一个字都不改", () => {
+    const scene = SCENES.find((s) => !SCENE_PROSE[s.id])!;
+    expect(applyProse(scene, "zh")).toBe(scene);
+  });
+
+  it("散文把剧情的体量抬起来了", () => {
+    // 原来 6,389 字。散文的意义之一就是让读者慢下来,而慢下来需要字数。
+    const added = Object.values(SCENE_PROSE).flatMap((p) => p.zh).reduce((n, t) => n + t.length, 0);
+    expect(added, `只加了 ${added} 字`).toBeGreaterThan(2500);
   });
 });
