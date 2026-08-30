@@ -37,7 +37,7 @@ export const ACT3_SCENES: StoryScene[] = [
     lines: [
       { speaker: "", text: "A signal runs under everything here — too regular to be noise, too slow to be speech." },
       { speaker: "The Cinder", text: "That's not the Swarm talking to itself. That's the Swarm being told." },
-      { speaker: "Kade Ren", text: "By what?" },
+      { speaker: "Kade Ren", text: "Then I want to meet whatever is doing the telling." },
       { speaker: "The Cinder", text: "Something with the patience to spend a species. Follow the signal inward and you'll meet whatever is holding the other end of it." },
     ],
     onCompleteFlags: ["act3.hiveSignal.cleared"],

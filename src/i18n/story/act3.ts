@@ -18,7 +18,7 @@ export const ACT3_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
     lines: [
       { speaker: "", text: "这一带的底噪里埋着一道信号。太规整，不像杂音；太慢，不像交谈。" },
       { speaker: "余烬", text: "那不是虫群在互相说话。那是有人在给虫群下令。" },
-      { speaker: "陆昭", text: "谁？" },
+      { speaker: "陆昭", text: "那我要见下令的那个。" },
       { speaker: "余烬", text: "一个耐心到可以拿整个种族当消耗品的东西。顺着信号往里飞，你就能见到握着另一头的它。" },
     ],
   },

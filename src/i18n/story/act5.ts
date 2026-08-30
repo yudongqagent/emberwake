@@ -30,7 +30,7 @@ export const ACT5_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
       { speaker: "", text: "暗影线在重放那一战。第一舰队一遍遍地死，顺序随它高兴。" },
       { speaker: "陆昭", text: "这些是真的通讯记录。" },
       { speaker: "余烬", text: "是真的。两万人，还在陆续「抵达」。因为这里没有任何东西，能就那件事到底发生在什么时候达成一致。" },
-      { speaker: "陆昭", text: "里面有你吗？" },
+      { speaker: "陆昭", text: "这些声音里有一个是你。我不问是哪一个。" },
       { speaker: "余烬", text: "有好几个。别去听。暗影线就是这么把人拖走的。" },
     ],
   },
@@ -55,7 +55,7 @@ export const ACT5_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
     lines: [
       { speaker: "", text: "那道缝裂得比第一舰队见过的任何时候都宽。「絮语」号第一个进去，因为只有她进得去。" },
       { speaker: "余烬", text: "这就是我上次做不到的事。我有一整支舰队，却没有一艘船撑得住关上它的代价。" },
-      { speaker: "陆昭", text: "现在呢？" },
+      { speaker: "陆昭", text: "现在你有了。告诉我封上它要付什么。" },
       { speaker: "余烬", text: "现在我有一艘船，被一个本来活不到今天的人重铸了十一次。全烧进去，陆昭。她有多少烧多少。" },
     ],
   },

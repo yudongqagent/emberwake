@@ -26,7 +26,7 @@ export const ACT1_SCENES: StoryScene[] = [
     lines: [
       { speaker: "", text: "You die in twenty years. Hull breached, bridge dark, the flagship coming apart around you." },
       { speaker: "The Cinder", text: "That was the ending. I've put you back before it." },
-      { speaker: "Kade Ren", text: "Put me — who are you?" },
+      { speaker: "Kade Ren", text: "You've read twenty years I haven't lived yet. Start with what you want from me." },
       { speaker: "The Cinder", text: "Later. Right now you're aboard Whisper, she's a salvage-grade corvette, and she is the only thing standing between you and that ending happening again." },
       { speaker: "The Cinder", text: "So fly. There's wreckage in the belt ahead. Take what's in it." },
     ],
@@ -108,8 +108,9 @@ export const ACT1_SCENES: StoryScene[] = [
     lines: [
       { speaker: "", text: "Not a clerk this time. House Arthaine sends someone who owns things." },
       { speaker: "Sir Arthaine", text: "You've made the Reavers someone else's problem, which makes you useful. Useful independents get a contract. Contracted independents get a registration that isn't a joke." },
-      { speaker: "Kade Ren", text: "And what does the House get?" },
+      { speaker: "Kade Ren", text: "You didn't fly out here to hand me paperwork." },
       { speaker: "Sir Arthaine", text: "First refusal. On the ship, and on whatever is making her grow like that." },
+      { speaker: "Sir Arthaine", text: "I won't ask what it is. At my age one knows what to ask about and what to simply buy." },
       { speaker: "The Cinder", text: "He doesn't know what I am. He knows there's something. Choose carefully — this is the answer he'll remember you by." },
     ],
     // Labels rewritten; setFlags deliberately untouched. They have no gameplay

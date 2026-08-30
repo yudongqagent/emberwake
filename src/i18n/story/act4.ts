@@ -9,8 +9,8 @@ export const ACT4_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
       { speaker: "", text: "几百具船体，全都朝着同一个方向。没有一艘掉过头。" },
       { speaker: "陆昭", text: "这是一支撞在墙上、然后全军覆没的舰队。" },
       { speaker: "余烬", text: "这是第一舰队。他们来这里，是要关上某个东西。他们没关上。" },
-      { speaker: "陆昭", text: "你怎么知道？" },
-      { speaker: "余烬", text: "因为我当时就在其中一艘上。" },
+      { speaker: "陆昭", text: "你不是从残骸上读出来的。你来过。" },
+      { speaker: "余烬", text: "我当时就在其中一艘上。" },
     ],
   },
   ghostProtocol: {
@@ -29,7 +29,7 @@ export const ACT4_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
     lines: [
       { speaker: "", text: "整整一年，安鹤龄把自己的名字往你的打捞品上挂。仲裁庭终于看见了。" },
       { speaker: "安鹤龄", text: "你从帷幕里拖回来的一切，都归在本家的特许权名下。要争，你就得在听证厅里耗三年。" },
-      { speaker: "陆昭", text: "不争呢？" },
+      { speaker: "陆昭", text: "要么在听证室里耗三年，要么我签字。后半句你自己说出来。" },
       { speaker: "安鹤龄", text: "不争，我们各留各的。舰长，你不是第一个在外面找到东西的人，你只是第一个撑到现在还活着的。" },
       { speaker: "余烬", text: "他知道的比他该知道的多。你打算怎么了结——这事会一直跟着你。" },
     ],
@@ -73,7 +73,7 @@ export const ACT4_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
       { speaker: "", text: "方舟开了。里面不是武器，是一具没造完的船体，等着什么东西来把它造完。" },
       { speaker: "陆昭", text: "这形状……和她一样。" },
       { speaker: "余烬", text: "这是她从星带那天起就一直在长的形状。不是我设计的。我只是知道，只要她活得够久，就会长成这样。" },
-      { speaker: "陆昭", text: "那接下来呢？" },
+      { speaker: "陆昭", text: "那就让她自己长完。她别的事都是这么过来的。" },
       { speaker: "余烬", text: "接下来她能扛住主权级的骨架了。再往后，就只剩暗影线——和第一舰队没能关上的那个东西。" },
     ],
   },

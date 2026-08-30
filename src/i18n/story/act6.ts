@@ -18,6 +18,7 @@ export const ACT6_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
     lines: [
       { speaker: "", text: "没席位，没头衔。只有洋紫荆本星的一个泊位。如今疆域里半数独立船主，把它当成一个地址。" },
       { speaker: "柳芸", text: "你推掉了公国的席位，却搭起了一个票数压过它的东西。这要么是很聪明，要么是很走运。" },
+      { speaker: "柳芸", text: "我在子午交易所给你估过一次价。那次我估低了。这是我十四年里唯一一次估低。" },
       { speaker: "陆昭", text: "不能两样都占？" },
       { speaker: "余烬", text: "通常都是两样都占。别告诉他们。" },
     ],
@@ -38,6 +39,7 @@ export const ACT6_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
     lines: [
       { speaker: "", text: "特遣舰队得有一个指挥官。四个势力各推一个，谁也不肯认别人的。" },
       { speaker: "柳芸", text: "所以他们只能认你。恭喜，舰长——你是被最少人讨厌的那个。" },
+      { speaker: "柳芸", text: "别谢我。这个位子上一个人，是被自己人卖掉的。我只是把价钱记在了另一边。" },
       { speaker: "陆昭", text: "这话听着真有联合体的味道。" },
       { speaker: "余烬", text: "接下来。深域外面的东西，不会等一个委员会开完会。" },
     ],
@@ -48,6 +50,7 @@ export const ACT6_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
     lines: [
       { speaker: "陆昭", text: "我不要指挥链。我要四支舰队，各自清楚自己最擅长什么。" },
       { speaker: "铁衡", text: "特遣舰队不是这么带的。" },
+      { speaker: "铁衡", text: "我带过三支。三支都是照规矩带的，三支都散了。所以我不反对——我只是得先听你把话说完。" },
       { speaker: "陆昭", text: "可「絮语」号就是这么造的。她身上没有哪个部件比另一个高一等，各干各的那一份。" },
       { speaker: "余烬", text: "……他在引用我的话。引得很烂。但他说得对。" },
     ],
@@ -67,7 +70,7 @@ export const ACT6_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
     chapterTitle: "福音文明",
     lines: [
       { speaker: "", text: "这不是一座图书馆。这是一份「某个文明受审」的记录，而审判至今还没停。" },
-      { speaker: "陆昭", text: "谁在审？" },
+      { speaker: "陆昭", text: "有东西还在给他们打分。一直没停过。" },
       { speaker: "余烬", text: "「空壳」。是它还愿意讲道理的时候的样子。陆昭，我现在觉得「空壳」最初不是武器，是一套标准。" },
       { speaker: "陆昭", text: "而合唱没达标。" },
       { speaker: "余烬", text: "合唱到现在还在唱它的申辩。迟了四百年，唱给一个早就不听了的房间。" },
@@ -81,7 +84,7 @@ export const ACT6_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
       { speaker: "余烬", text: "它从头到尾都不是在跟你打。它只是把最后接到的那支曲子，演给任何靠得够近、听得见的东西。" },
       { speaker: "陆昭", text: "所以我们也一直在被审。" },
       { speaker: "余烬", text: "一直在。不管那套标准是什么，疆域交上去的答卷，是一艘死活不肯停止重铸的废品级轻护卫舰。" },
-      { speaker: "陆昭", text: "这算过了吗？" },
+      { speaker: "陆昭", text: "那就让它算一个回答。不是求情。" },
       { speaker: "余烬", text: "这算一个回答。四百年，等一个回答也够久了。把她升上去吧，陆昭——最后那副骨架，她配得上。" },
     ],
   },

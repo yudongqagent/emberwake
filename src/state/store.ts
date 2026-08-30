@@ -17,6 +17,7 @@ import { ACT3_SCENES } from "../data/story/act3";
 import { ACT4_SCENES } from "../data/story/act4";
 import { ACT5_SCENES } from "../data/story/act5";
 import { ACT6_SCENES } from "../data/story/act6";
+import { STANDING_SCENES } from "../data/story/standing";
 import { encounterById } from "../data/encounters";
 import { isHunterId, hunterEncounterId } from "../data/hunters";
 import type { StoryContext } from "../data/story/reactive";
@@ -42,7 +43,9 @@ export const GALAXIES: GalaxyDef[] = [
   UMBRAL_LINE,
   CHORUS_DEEP,
 ];
-export const STORY_SCENES: StoryScene[] = [...ACT1_SCENES, ...ACT2_SCENES, ...ACT3_SCENES, ...ACT4_SCENES, ...ACT5_SCENES, ...ACT6_SCENES];
+// 立场戏排在主线之后:availableScene 取的是第一个满足条件的场景,主线优先,
+// 免得一场角色戏把玩家正在追的那条线顶掉。
+export const STORY_SCENES: StoryScene[] = [...ACT1_SCENES, ...ACT2_SCENES, ...ACT3_SCENES, ...ACT4_SCENES, ...ACT5_SCENES, ...ACT6_SCENES, ...STANDING_SCENES];
 
 export const state = signal<GameState>(loadGame() ?? createInitialState());
 
@@ -548,6 +551,11 @@ export function sceneProgressMet(sc: StoryScene): boolean {
   const ship = flagship.value;
   if (sc.requiresAscensions !== undefined && (ship?.ascendedFrom.length ?? 0) < sc.requiresAscensions) return false;
   if (sc.requiresLevel !== undefined && (ship?.level ?? 1) < sc.requiresLevel) return false;
+  if (sc.requiresStanding) {
+    const v = reputationOf(sc.requiresStanding.faction);
+    if (sc.requiresStanding.min !== undefined && v < sc.requiresStanding.min) return false;
+    if (sc.requiresStanding.max !== undefined && v > sc.requiresStanding.max) return false;
+  }
   return true;
 }
 

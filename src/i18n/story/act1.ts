@@ -19,7 +19,7 @@ export const ACT1_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
     lines: [
       { speaker: "", text: "二十年后，你会死在这艘船上。船体裂开，舰桥断电，旗舰在你四周一块块散掉。" },
       { speaker: "余烬", text: "那是你的结局。我把你送回了结局之前。" },
-      { speaker: "陆昭", text: "送回……你到底是什么东西？" },
+      { speaker: "陆昭", text: "我还没活过的二十年，你已经读完了。先说你要我做什么。" },
       { speaker: "余烬", text: "以后再说。你现在在「絮语」号上，一艘废品级轻护卫舰。她是你和那个结局之间唯一的东西。" },
       { speaker: "余烬", text: "先干活。前面星带里有一片残骸，能拆的都拆回来。" },
     ],
@@ -74,8 +74,9 @@ export const ACT1_SCENES_ZH: Record<string, Partial<Pick<StoryScene, "lines" | "
     lines: [
       { speaker: "", text: "这回来的不是书记员。安氏派了个真正说了算的人。" },
       { speaker: "安鹤龄", text: "你把掠夺者变成了别人的麻烦，所以你有用。有用的独立船主，本家给契约；签了契约的，本家给一份像样的注册。" },
-      { speaker: "陆昭", text: "那本家要什么？" },
+      { speaker: "陆昭", text: "你不是飞这一趟来给我送文书的。" },
       { speaker: "安鹤龄", text: "优先权。这艘船的优先权，还有让她这么疯长的那个东西的优先权。" },
+      { speaker: "安鹤龄", text: "我不问那是什么。我这个岁数了，知道什么该问、什么该买。" },
       { speaker: "余烬", text: "他不知道我是什么，但他知道有个什么。想好了再答——他会拿这句话记住你。" },
     ],
     choices: [

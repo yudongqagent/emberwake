@@ -6,6 +6,8 @@ import { ACT3_SCENES } from "./act3";
 import { ACT4_SCENES } from "./act4";
 import { ACT5_SCENES } from "./act5";
 import { ACT6_SCENES } from "./act6";
+import { STANDING_SCENES } from "./standing";
+import { DIPLOMATIC_FACTIONS, repTier } from "../reputation";
 
 const SCENES = [...ACT1_SCENES, ...ACT2_SCENES, ...ACT3_SCENES, ...ACT4_SCENES, ...ACT5_SCENES, ...ACT6_SCENES];
 
@@ -108,5 +110,64 @@ describe("会看玩家的剧情", () => {
     });
     const touched = SCENES.filter((s) => applyReactiveLines(s, veteran, "zh") !== s);
     expect(touched.length, `只有 ${touched.length} 场戏认得出这个玩家`).toBeGreaterThanOrEqual(6);
+  });
+});
+
+// --- 立场戏 (data/story/standing.ts)
+describe("因为立场才发生的戏", () => {
+  it("每场都挂着声望门槛,否则它就只是六场随便什么时候都会跳的过场", () => {
+    for (const s of STANDING_SCENES) {
+      expect(s.requiresStanding, `"${s.id}" 没有声望门槛`).toBeDefined();
+      const { min, max } = s.requiresStanding!;
+      expect(min !== undefined || max !== undefined, `"${s.id}" 的门槛是空的`).toBe(true);
+    }
+  });
+
+  it("门槛落在真实存在的档位上,不会写出一个永远够不到的数", () => {
+    for (const s of STANDING_SCENES) {
+      const { faction, min, max } = s.requiresStanding!;
+      expect(DIPLOMATIC_FACTIONS, `"${s.id}" 挂在不可交涉的派系上`).toContain(faction);
+      if (min !== undefined) expect(repTier(min)).toMatch(/friendly|allied/);
+      if (max !== undefined) expect(repTier(max)).toBe("hostile");
+    }
+  });
+
+  it("同一个星系里的两场戏不会同时满足条件", () => {
+    // 盟友版和翻脸版都挂在同一个星系上。如果门槛写重叠了,玩家会连着看到
+    // 两场互相矛盾的戏——而 availableScene 只取第一个,后一场会永远不出现。
+    const bySystem: Record<string, typeof STANDING_SCENES> = {};
+    for (const s of STANDING_SCENES) (bySystem[s.systemId] ??= []).push(s);
+    for (const [sys, list] of Object.entries(bySystem)) {
+      for (let v = -100; v <= 100; v++) {
+        const hit = list.filter((s) => {
+          const { min, max } = s.requiresStanding!;
+          return (min === undefined || v >= min) && (max === undefined || v <= max);
+        });
+        expect(hit.length, `星系 "${sys}" 在声望 ${v} 时同时满足 ${hit.map((h) => h.id).join(", ")}`)
+          .toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("每场都是一次性的,不会在同一个星系里反复弹", () => {
+    for (const s of STANDING_SCENES) {
+      expect(s.onCompleteFlags, `"${s.id}" 完成后不设 flag`).toContain(s.hiddenAfterFlag);
+    }
+  });
+
+  it("说话人只能是在册的角色", () => {
+    const CAST = new Set(["", "Kade Ren", "The Cinder", "Kaan Ferrous", "Ori Vashti", "Sir Arthaine", "Tiger Shark"]);
+    for (const s of STANDING_SCENES) {
+      for (const l of s.lines) expect(CAST, `"${s.id}" 里出现了不在册的 "${l.speaker}"`).toContain(l.speaker);
+    }
+  });
+
+  it("露脸太少的三个人,确实因此多了戏", () => {
+    // 这批戏存在的理由就是这个。铁衡/柳芸/安鹤龄在主线上各自只有个位数台词。
+    const count = (name: string) =>
+      STANDING_SCENES.flatMap((s) => s.lines).filter((l) => l.speaker === name).length;
+    expect(count("Kaan Ferrous")).toBeGreaterThanOrEqual(6);
+    expect(count("Ori Vashti")).toBeGreaterThanOrEqual(6);
+    expect(count("Sir Arthaine")).toBeGreaterThanOrEqual(3);
   });
 });

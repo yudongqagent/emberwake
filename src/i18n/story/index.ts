@@ -6,6 +6,7 @@ import { ACT3_SCENES_ZH } from "./act3";
 import { ACT4_SCENES_ZH } from "./act4";
 import { ACT5_SCENES_ZH } from "./act5";
 import { ACT6_SCENES_ZH } from "./act6";
+import { STANDING_SCENES_ZH } from "./standing";
 
 /** Issue #11 (2026-08-23 playtest): translated scenes keyed by scene id, one module
  * per act, registered here. An act with no entry (or a scene id missing from an
@@ -19,6 +20,7 @@ const SCENE_OVERLAYS: Record<string, Partial<Pick<StoryScene, "lines" | "choices
   ...ACT4_SCENES_ZH,
   ...ACT5_SCENES_ZH,
   ...ACT6_SCENES_ZH,
+  ...STANDING_SCENES_ZH,
 };
 
 export function localizedScene(scene: StoryScene): StoryScene {

@@ -5,12 +5,14 @@ import { ACT3_SCENES } from "../../data/story/act3";
 import { ACT4_SCENES } from "../../data/story/act4";
 import { ACT5_SCENES } from "../../data/story/act5";
 import { ACT6_SCENES } from "../../data/story/act6";
+import { STANDING_SCENES } from "../../data/story/standing";
 import { ACT1_SCENES_ZH } from "./act1";
 import { ACT2_SCENES_ZH } from "./act2";
 import { ACT3_SCENES_ZH } from "./act3";
 import { ACT4_SCENES_ZH } from "./act4";
 import { ACT5_SCENES_ZH } from "./act5";
 import { ACT6_SCENES_ZH } from "./act6";
+import { STANDING_SCENES_ZH } from "./standing";
 import { localizedScene } from "./index";
 import { language } from "../language";
 
@@ -21,6 +23,8 @@ const ACTS = [
   { en: ACT4_SCENES, zh: ACT4_SCENES_ZH, name: "act4" },
   { en: ACT5_SCENES, zh: ACT5_SCENES_ZH, name: "act5" },
   { en: ACT6_SCENES, zh: ACT6_SCENES_ZH, name: "act6" },
+  // 立场戏走同一套校验——中英一一对应、人名在册、不许混语言。
+  { en: STANDING_SCENES, zh: STANDING_SCENES_ZH, name: "standing" },
 ];
 
 // Issue #11: caught a real bug this way — a translated `choices` array that drops

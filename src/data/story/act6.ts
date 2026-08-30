@@ -33,6 +33,7 @@ export const ACT6_SCENES: StoryScene[] = [
     lines: [
       { speaker: "", text: "No seat, no title. A berth at Bauhinia Prime that half the independents in the Reach now treat as an address." },
       { speaker: "Ori Vashti", text: "You refused a Principality seat and built something that outvotes it anyway. That was either very clever or very lucky." },
+      { speaker: "Ori Vashti", text: "I priced you once, at the Exchange. I priced you low. In fourteen years that is the only time I have been under." },
       { speaker: "Kade Ren", text: "Can it be both?" },
       { speaker: "The Cinder", text: "It's usually both. Don't tell them that." },
     ],
@@ -63,6 +64,7 @@ export const ACT6_SCENES: StoryScene[] = [
     lines: [
       { speaker: "", text: "The task force needs one commander. Four factions each have a candidate, and none of them will accept another's." },
       { speaker: "Ori Vashti", text: "So they'll accept yours. Congratulations, captain — nobody trusts you least." },
+      { speaker: "Ori Vashti", text: "Don't thank me. The last man in that chair was sold by his own side. I only wrote the price on the other page." },
       { speaker: "Kade Ren", text: "That's the most Combine sentence I've ever heard." },
       { speaker: "The Cinder", text: "Take it. Whatever's out past the Deep, it won't wait for a committee." },
     ],
@@ -78,6 +80,7 @@ export const ACT6_SCENES: StoryScene[] = [
     lines: [
       { speaker: "Kade Ren", text: "I don't want a chain of command. I want four fleets that each know what they're best at." },
       { speaker: "Kaan Ferrous", text: "That isn't how a task force works." },
+      { speaker: "Kaan Ferrous", text: "I ran three. All three by the book. All three came apart. So I'm not against it — I need you to finish the sentence." },
       { speaker: "Kade Ren", text: "It's how Whisper works. Nothing aboard her outranks anything else. It just does the part it's for." },
       { speaker: "The Cinder", text: "...He's quoting me. Badly. But he's right." },
     ],
@@ -108,7 +111,7 @@ export const ACT6_SCENES: StoryScene[] = [
     hiddenAfterFlag: "act6.gospelCivilization.cleared",
     lines: [
       { speaker: "", text: "The archive is not a library. It is a recording of a civilisation being assessed, and the assessment is still running." },
-      { speaker: "Kade Ren", text: "Assessed by whom?" },
+      { speaker: "Kade Ren", text: "Something is still grading them. It never stopped." },
       { speaker: "The Cinder", text: "By whatever the Hollow was before it stopped being anything that judges kindly. I don't think the Hollow began as a weapon, Kade. I think it began as a standard." },
       { speaker: "Kade Ren", text: "And the Choir failed it." },
       { speaker: "The Cinder", text: "The Choir is still singing its answer. Four hundred years late, to a room that stopped listening." },
@@ -128,7 +131,7 @@ export const ACT6_SCENES: StoryScene[] = [
       { speaker: "The Cinder", text: "It was never fighting you. It was performing the last thing it was told to perform, at anything that came close enough to hear." },
       { speaker: "Kade Ren", text: "So we were being assessed too." },
       { speaker: "The Cinder", text: "We were. And whatever the standard is, the Reach just answered it with a salvage-grade corvette that refused to stop being rebuilt." },
-      { speaker: "Kade Ren", text: "Is that a pass?" },
+      { speaker: "Kade Ren", text: "Then let it stand as an answer. Not a plea." },
       { speaker: "The Cinder", text: "It's an answer. Four hundred years is long enough to wait for one. Take her up, Kade — she's earned the last frame there is." },
     ],
     onCompleteFlags: ["act6.civilizationDisqualified.cleared", "campaign.act6.complete"],
