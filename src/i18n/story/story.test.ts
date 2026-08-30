@@ -90,3 +90,62 @@ describe("story translation overlays stay structurally in sync with the English 
     });
   }
 });
+
+// 玩家反馈 (2026-08-29):「中文剧本简直垃圾，什么都看不懂」。两个具体成因:
+// 音译人名读起来像劣质译制片,而且同一个角色在不同文件里有两个不同音译
+// (卡恩·费洛斯 / 凯恩·费罗斯、奥莉·瓦什提 / 欧莉·瓦什蒂) —— 玩家会当成两个人。
+// 这两条都是回归风险,所以用测试钉住。
+describe("Chinese script uses Chinese names", () => {
+  const ZH_SOURCES = [ACT1_SCENES_ZH, ACT2_SCENES_ZH, ACT3_SCENES_ZH, ACT4_SCENES_ZH, ACT5_SCENES_ZH, ACT6_SCENES_ZH];
+
+  function allZhText(): string[] {
+    const out: string[] = [];
+    for (const table of ZH_SOURCES) {
+      for (const scene of Object.values(table)) {
+        out.push(scene.chapter ?? "", scene.chapterTitle ?? "");
+        for (const l of scene.lines ?? []) out.push(l.speaker, l.text);
+        for (const c of scene.choices ?? []) out.push(c.label);
+      }
+    }
+    return out.filter(Boolean);
+  }
+
+  it("never reintroduces a transliterated Western name", () => {
+    const banned = ["凯德", "卡恩", "凯恩", "费洛斯", "费罗斯", "奥莉", "欧莉", "瓦什", "阿尔泰因", "普里娅", "奥塞伊"];
+    for (const text of allZhText()) {
+      for (const b of banned) {
+        expect(text.includes(b), `中文文本出现音译名「${b}」: ${text.slice(0, 40)}`).toBe(false);
+      }
+    }
+  });
+
+  it("uses the interpunct only for real compound names, never for transliteration", () => {
+    // 「·」 in Chinese prose is the tell-tale of a transliterated foreign name.
+    for (const text of allZhText()) {
+      expect(text.includes("·"), `中文文本仍含音译间隔号: ${text.slice(0, 40)}`).toBe(false);
+    }
+  });
+
+  it("only ever uses speakers from one approved cast", () => {
+    // The original bug was one character with two spellings in different files.
+    // A fuzzy similarity check was the first attempt and it was wrong — it
+    // flagged 「安氏书记员」 vs 「安氏信使」, which are genuinely two different
+    // people from the same house. An explicit cast list is precise: adding a
+    // character is a deliberate act, and a second spelling of an existing one
+    // fails immediately.
+    const CAST = new Set([
+      // 主要角色
+      "余烬", "陆昭", "铁衡", "柳芸", "安鹤龄", "虎鲨",
+      // 有名有姓之外的角色,按身份称呼
+      "安氏书记员", "安氏信使", "掠夺者副官",
+    ]);
+    for (const table of ZH_SOURCES) {
+      for (const scene of Object.values(table)) {
+        for (const l of scene.lines ?? []) {
+          if (!l.speaker) continue; // 旁白
+          expect(CAST.has(l.speaker), `未登记的说话人「${l.speaker}」——是新角色,还是旧角色的另一种写法?`).toBe(true);
+        }
+      }
+    }
+  });
+});

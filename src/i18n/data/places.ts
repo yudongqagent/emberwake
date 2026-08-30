@@ -43,7 +43,7 @@ export const POI_NAMES_ZH: Record<string, string> = {
   bauhiniaPrimeExchange: "洋紫荆本星交易所",
   primeOrbitalBelt: "本星轨道带",
   primeCargoWreck: "废弃货运舱",
-  primeSmugglerBounty: "阿尔泰因走私快艇",
+  primeSmugglerBounty: "安氏走私快艇",
   kestrelsRestOutpost: "茶隼歇息地前哨站",
   kestrelsRestRaidPoi: "求救信号",
   emberRisingAssaultPoi: "掠夺者突袭舰队",

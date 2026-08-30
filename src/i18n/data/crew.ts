@@ -11,7 +11,7 @@ export interface CrewZh {
 
 export const CREW_ZH: Record<string, CrewZh> = {
   oriVashti: {
-    name: "欧莉·瓦什蒂",
+    name: "柳芸",
     passive: "全舰队从战斗残骸打捞中额外获得+8%合金。",
     active: "野战维修 — 战斗中为旗舰恢复船体。",
   },
@@ -21,12 +21,12 @@ export const CREW_ZH: Record<string, CrewZh> = {
     active: "聚焦火力 — 下一次武器齐射必定暴击。",
   },
   kaanFerrous: {
-    name: "剑客凯恩·费罗斯",
+    name: "剑客铁衡",
     passive: "远距离交战时闪避+10%。",
     active: "反击 — 闪避命中后发动一次免费反击。",
   },
   priyaOsei: {
-    name: "军需官普里娅·奥塞伊",
+    name: "军需官苏萤",
     passive: "交易兑换获得的废料与合金+10%。",
     active: "低价倾销 — 使所有敌人的格挡降低，持续两回合。",
   },
@@ -41,7 +41,7 @@ export const CREW_ZH: Record<string, CrewZh> = {
     active: "构装体超驰 — 抵消一回合内的所有受到伤害。",
   },
   velaCantor: {
-    name: "薇拉，圣咏团最后的领唱者",
+    name: "云筝，圣咏团最后的领唱者",
     passive: "全舰队从重大首领战获得的本源精华+12%。",
     active: "断章破音 — 对所有存活敌人造成伤害，并打破圣咏团的共同共鸣。",
   },
