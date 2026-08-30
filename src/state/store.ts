@@ -31,6 +31,7 @@ import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
 import { CHOICE_REPUTATION, clampRep, repEffects, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
 import { canEvolve, evolveModule } from "../data/evolutions";
+import { CREW_ALLEGIANCE, APPROVAL_FROM_REPUTATION, APPROVAL_PER_WIN, APPROVAL_PER_LOSS, clampApproval, approvalEffects, type ApprovalEffects } from "../data/crewApproval";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -217,16 +218,52 @@ function setFlags(flags: string[]) {
 /** 把刚设置的 flag 里带声望后果的部分结算掉。 */
 function applyChoiceReputation(flags: string[]) {
   const rep = { ...state.value.reputation };
+  const repDelta: Partial<Record<FactionId, number>> = {};
   let changed = false;
   for (const f of flags) {
     const deltas = CHOICE_REPUTATION[f];
     if (!deltas) continue;
     for (const [fac, d] of Object.entries(deltas)) {
-      rep[fac as FactionId] = clampRep((rep[fac as FactionId] ?? 0) + (d ?? 0));
+      const k = fac as FactionId;
+      rep[k] = clampRep((rep[k] ?? 0) + (d ?? 0));
+      repDelta[k] = (repDelta[k] ?? 0) + (d ?? 0);
       changed = true;
     }
   }
-  if (changed) state.value = { ...state.value, reputation: rep };
+  if (!changed) return;
+  // 船员就在你船上,他们知道你为他们那一派做了什么、又卖了什么。
+  // 直接从声望变化换算,而不是再维护一张平行的表——两张表迟早会对不上,
+  // 而那种不一致不报错,只会让玩家觉得游戏的反应莫名其妙。
+  const crew = state.value.crew.map((c) => {
+    const side = CREW_ALLEGIANCE[c.defId];
+    const d = side ? repDelta[side] : undefined;
+    if (!d) return c;
+    return { ...c, approval: clampApproval(c.approval + d * APPROVAL_FROM_REPUTATION) };
+  });
+  state.value = { ...state.value, reputation: rep, crew };
+}
+
+/** 支持度:带着谁打赢,谁就更信你;打输了,信任掉得比涨得快。
+ *
+ * 只动**派在这条船上**的人。没上船的人不知道刚才发生了什么。 */
+export function adjustAssignedCrewApproval(delta: number): void {
+  const shipId = flagship.value?.id;
+  if (!shipId || delta === 0) return;
+  let changed = false;
+  const crew = state.value.crew.map((c) => {
+    if (c.assignedShipId !== shipId) return c;
+    const next = clampApproval(c.approval + delta);
+    if (next === c.approval) return c;
+    changed = true;
+    return { ...c, approval: next };
+  });
+  if (changed) state.value = { ...state.value, crew };
+}
+
+/** 某个船员当前的支持度效果。没派上船的人按中间档算。 */
+export function approvalEffectsFor(crewInstanceId: string): ApprovalEffects {
+  const c = state.value.crew.find((x) => x.id === crewInstanceId);
+  return approvalEffects(c?.approval ?? 50);
 }
 
 export function reputationOf(faction: FactionId): number {
@@ -698,6 +735,9 @@ export function resolveCombatVictory(
   //
   // 找上门的猎杀队(hunt:*)刻意不改任何声望:敌对方主动来打你,自卫再扣分就成了
   // 一个爬不出来的坑,而声望的意义恰恰是给玩家可以扭转的东西。
+  // 带着他打赢仗,他就更信你一点。数值很小,靠一路打下去累积。
+  adjustAssignedCrewApproval(APPROVAL_PER_WIN);
+
   if (enc.reputation) {
     for (const [f, d] of Object.entries(enc.reputation)) adjustReputation(f as FactionId, d!);
   } else if (isDiplomatic(enc.faction) && !isHunterId(enc.id)) {
@@ -748,6 +788,7 @@ export function resolveCombatVictory(
 }
 
 export function resolveCombatDefeat() {
+  adjustAssignedCrewApproval(APPROVAL_PER_LOSS);
   if (flagship.value) {
     const ships = state.value.ships.map((s) =>
       s.id === flagship.value!.id ? { ...s, currentHp: Math.round(s.currentHp * 0.5 + 1) } : s,

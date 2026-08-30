@@ -4,6 +4,7 @@ import type { CrewRole } from "../../data/types";
 import { CrewRoleIcon, CREW_ROLE_COLOR, CREW_RARITY_COLOR } from "../components/Icons";
 import { Bar } from "../components/StatBlock";
 import { t } from "../../i18n/strings";
+import { approvalEffects, approvalTier, CREW_ALLEGIANCE } from "../../data/crewApproval";
 import { localizedCrewName, localizedCrewPassive, localizedCrewActive } from "../../i18n/data";
 
 const STATIONS: CrewRole[] = ["helm", "gunner", "engineer", "tactician"];
@@ -77,13 +78,29 @@ export function Crew() {
                     <div><strong style={{ color: "var(--text-hi)" }}>{t("crew.passive")}</strong> — {localizedCrewPassive(def)}</div>
                     <div><strong style={{ color: "var(--text-hi)" }}>{t("crew.active")}</strong> — {localizedCrewActive(def)} <span style={{ color: "var(--text-dim)" }}>{t("crew.cooldown", { value: def.activeCooldown })}</span></div>
                   </div>
-                  <div style={{ marginTop: "0.6rem" }}>
-                    <div className="eyebrow" style={{ marginBottom: "0.25rem", display: "flex", justifyContent: "space-between" }}>
-                      <span>{t("crew.approval")}</span>
-                      <span>{c.approval}%</span>
-                    </div>
-                    <Bar fraction={c.approval / 100} kind="good" />
-                  </div>
+                  {/* 支持度从前是个死字段:初始化成 50,画了条,然后没人读也没人改。
+                      现在它决定被动强度和主动冷却,所以必须把**后果**写出来——
+                      光有一个百分比,玩家还是不知道它意味着什么。 */}
+                  {(() => {
+                    const eff = approvalEffects(c.approval);
+                    const side = CREW_ALLEGIANCE[def.id];
+                    return (
+                      <div style={{ marginTop: "0.6rem" }}>
+                        <div className="eyebrow" style={{ marginBottom: "0.25rem", display: "flex", justifyContent: "space-between" }}>
+                          <span>{t("crew.approval")}</span>
+                          <span>{t(`crew.approvalTier.${approvalTier(c.approval)}`)} · {c.approval}%</span>
+                        </div>
+                        <Bar fraction={c.approval / 100} kind={c.approval < 40 ? "danger" : "good"} />
+                        <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.35rem", lineHeight: 1.5 }}>
+                          {t("crew.approvalEffect", {
+                            passive: Math.round(eff.passiveMultiplier * 100),
+                            cooldown: Math.round(eff.cooldownMultiplier * 100),
+                          })}
+                          {side && <> {t("crew.allegiance", { faction: t(`faction.${side}`) })}</>}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

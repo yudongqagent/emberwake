@@ -10,6 +10,7 @@ import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
 import { applyEmberLoad } from "../../data/emberLoad";
 import { crewDefById } from "../../data/crew";
+import { approvalEffects } from "../../data/crewApproval";
 import { hullClassAbility } from "../../data/namedShips";
 import { playSfx } from "../../audio/engine";
 import type { FactionId, ResourceType, ModuleInstance, EnemyRole } from "../../data/types";
@@ -384,6 +385,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   ).length;
   const yieldBonusFraction = Math.min(0.8, 0.2 * effectStacks("yieldBonus"));
   const assignedCrew = state.value.crew.filter((c) => c.assignedShipId === ship.id);
+  /** 某个船员的被动打几折/几倍。支持度低的人还在岗位上,只是不再为你多做一分
+   * (见 data/crewApproval.ts —— approval 从前是个没人读的死字段)。 */
+  const crewPassive = (defId: string): number => {
+    const c = assignedCrew.find((x) => x.defId === defId);
+    return c ? approvalEffects(c.approval).passiveMultiplier : 0;
+  };
   // The ship's own rolled attributes — real itemization variance, not a flat rarity number.
   const shipBaseEvasion = computeBaseEvasion(ship);
   const shipBaseCrit = computeBaseCritChance(ship);
@@ -553,6 +560,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // 状态都必须每次渲染镜像进 ref(见文件头的说明)。
   const gearThrustRef = useRef(gearThrust);
   gearThrustRef.current = gearThrust;
+  // fireModule 也跑在冻结的闭包里,所以船员支持度同样要镜像。
+  const crewPassiveRef = useRef(crewPassive);
+  crewPassiveRef.current = crewPassive;
   // Ion Disruptor's Overload: a per-module shot counter, keyed by module instance id
   // so two Ion Disruptors equipped at once track independently.
   const overloadCountersRef = useRef<Record<string, number>>({});
@@ -998,8 +1008,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       + (evasionBoostSecRef.current > 0 ? 0.25 : 0)
       + enginesEvasionBonus(reactorRef.current.engines);
     // Kaan Ferrous: "+10% evasion when at Long range" — only when he's assigned to the flagship.
-    const kaanAssigned = assignedCrew.some((c) => c.defId === "kaanFerrous");
-    const evasion = Math.min(0.75, baseEvasion + (kaanAssigned && band === "long" ? 0.1 : 0));
+    // enemyAttack 同样在冻结的闭包里,所以这里也走 ref 镜像,而不是直接读 crewPassive。
+    const kaanBonus = band === "long" ? 0.1 * crewPassiveRef.current("kaanFerrous") : 0;
+    const evasion = Math.min(0.75, baseEvasion + kaanBonus);
     // Iron Verdict's Fortify: armor block doubles for its duration.
     const fortifyMult = fortifySecRef.current > 0 ? 2 : 1;
     // Bulwark: plating bites harder the closer Whisper is to going down — a
@@ -1631,7 +1642,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     const baseDmg = computeModuleDamage(mod);
     const vulnerable = (target.vulnerableSec ?? 0) > 0;
     // Ratchet Koi: "+10% weapon damage when at Close range" — only when he's assigned.
-    const ratchetBonus = band === "close" && assignedCrew.some((c) => c.defId === "ratchetKoi") ? 1.1 : 1;
+    const ratchetBonus = band === "close" ? 1 + 0.1 * crewPassiveRef.current("ratchetKoi") : 1;
     // Railgun's Execute: a finisher axis, not a raw-damage lead — it does nothing
     // against a healthy target and swings hard against a dying one.
     const executeMult = modHasEffect(mod, "execute") && target.hull <= target.maxHull * 0.25 ? 1.5 : 1;
@@ -2115,9 +2126,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       pushLog(t("combat.log.chorusBreak", { dmg }));
       playSfx("laser");
     }
-    const cooldownValue = crewDefById(state.value.crew.find((c) => c.id === crewId)!.defId).activeCooldown;
+    const crewInst = state.value.crew.find((c) => c.id === crewId)!;
+    const cooldownValue = crewDefById(crewInst.defId).activeCooldown;
     const hasteMult = Math.max(0.5, 1 - 0.15 * effectStacks("haste"));
-    setCrewCooldowns((prev) => ({ ...prev, [crewId]: cooldownValue * TURN_SECONDS * hasteMult }));
+    // 支持度高的人反应更快,低的人磨蹭。
+    const approvalMult = approvalEffects(crewInst.approval).cooldownMultiplier;
+    setCrewCooldowns((prev) => ({ ...prev, [crewId]: cooldownValue * TURN_SECONDS * hasteMult * approvalMult }));
     setEnemies(nextEnemies);
   }
 
