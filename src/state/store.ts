@@ -794,7 +794,16 @@ export function resolveCombatVictory(
     const before = flagship.value.level;
     const ships = state.value.ships.map((s) => {
       if (s.id !== flagship.value!.id) return s;
-      const leveled = applyXp(s, enc.xp);
+      // 经验也吃余烬负荷。
+      //
+      // 2026-08-30:从前只有资源吃 loadMult,经验拿的是遭遇表上的原始值。
+      // 于是"去更危险的地方,赚得更多"这条循环给的是材料而**不是等级**,
+      // 而等级恰恰是最高舰级(55 级)唯一的门槛。量出来的结果:整个战役的
+      // 全部经验之和是 6,782,而 55 级需要 39,285——战役的 5.8 倍。
+      // 打完剧情之后,唯一的出路是刷 164 场悬赏,或者反复深潜裂隙。
+      //
+      // 负荷本来的承诺就是"更难的仗付得更多"。等级也是一种报酬。
+      const leveled = applyXp(s, Math.round(enc.xp * loadMult));
       if (endingHullPoints === undefined) return leveled;
       return { ...leveled, currentHp: Math.max(1, Math.min(computeMaxHull(leveled), Math.round(endingHullPoints))) };
     });
