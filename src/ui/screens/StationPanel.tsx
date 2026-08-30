@@ -150,7 +150,9 @@ function TradeTab() {
   const alloyOut = Math.round(10 * tradeBonus);
   const salvageOut = Math.round(20 * tradeBonus);
   const missingHp = ship ? effectiveMaxHull(ship) - ship.currentHp : 0;
-  const repairCost = Math.round(missingHp * 0.5);
+  // 修船也按立场收费。原来只有招募和制造工坊吃声望,交易页不吃——同一个柜台
+  // 一半的价签会看你脸色、另一半不会,那比完全不做还难懂。
+  const repairCost = stationPrice(Math.round(missingHp * 0.5));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       {ship && (
