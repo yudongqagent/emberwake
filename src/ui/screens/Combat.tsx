@@ -4,7 +4,7 @@ import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSignature, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
+import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
@@ -2265,7 +2265,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     const hasteMult = Math.max(0.5, 1 - 0.15 * effectStacks("haste"));
     // 支持度高的人反应更快,低的人磨蹭。
     const approvalMult = approvalEffects(crewInst.approval).cooldownMultiplier;
-    setCrewCooldowns((prev) => ({ ...prev, [crewId]: cooldownValue * TURN_SECONDS * hasteMult * approvalMult }));
+    setCrewCooldowns((prev) => ({ ...prev, [crewId]: abilityCooldownSeconds(cooldownValue) * hasteMult * approvalMult }));
     setEnemies(nextEnemies);
   }
 
@@ -2414,7 +2414,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       hitPulseRef.current.player = performance.now();
       pushLog(t("combat.log.sanctuaryFieldArm", { amount: heal }));
     }
-    setNamedAbilityCooldown(namedDef.activeCooldown * TURN_SECONDS * Math.max(0.5, 1 - 0.15 * effectStacks("haste")));
+    setNamedAbilityCooldown(abilityCooldownSeconds(namedDef.activeCooldown) * Math.max(0.5, 1 - 0.15 * effectStacks("haste")));
     playSfx("click");
   }
 
