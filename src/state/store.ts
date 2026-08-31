@@ -1081,6 +1081,18 @@ export function resolveCombatVictory(
   if (rewards.salvage) rewards.salvage = Math.round(rewards.salvage * (1 + salvageBonus));
   if (rewards.alloy) rewards.alloy = Math.round(rewards.alloy * (1 + alloyBonus));
   if (rewards.insight && insightBonus > 0) rewards.insight = Math.round(rewards.insight * (1 + insightBonus));
+  // 薇拉·坎托的被动:「重大 BOSS 战 +12% 本源精华,全舰队生效」。
+  //
+  // 2026-08-31(/loop 第 28 轮)实测:全游戏 9 名船员里,8 名的被动都接上了,唯独
+  // 她没有——而她是**唯一的传奇稀有度船员**,第六幕才解锁,也就是玩家在战役
+  // 高潮处拿到的那份奖励。本源精华是进阶货币,全游戏最稀缺的东西。玩家读到那句
+  // 话、把她招上船,然后什么都不会发生。
+  //
+  // 搜到的话正好是这个:「大部分属性和技能根本没有效果,描述是彻头彻尾的谎话」
+  // ——一张卡面写了却不兑现,损的是玩家对**所有**卡面的信任,不只是这一张。
+  if (enc.isBoss && rewards.originEssence && hasCrewRecruited("velaCantor")) {
+    rewards.originEssence = Math.round(rewards.originEssence * 1.12);
+  }
   // Insight Draw: a chance to recover the scarcest resource from a win, giving
   // Insight a repeatable trickle instead of being purely story-gated.
   const insightStacks = equippedEffectStacks("insightDraw");
