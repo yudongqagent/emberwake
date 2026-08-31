@@ -102,6 +102,8 @@ export function App() {
   const [riftDrop, setRiftDrop] = useState<ModuleInstance | null>(null);
   const [diveResult, setDiveResult] = useState<{ earned: number; newRecord: boolean; depth: number } | null>(null);
   const [pendingEvent, setPendingEvent] = useState<{ event: GameEvent; poiId: string } | null>(null);
+  /** 这一次会话是玩家自己选的"新的开始"。用来压掉存档恢复提示——见 onNewGame。 */
+  const [freshStart, setFreshStart] = useState(false);
   /** Core-loop redesign #1 — the hand of three waiting to be picked from. */
   const [draft, setDraft] = useState<DraftOption[] | null>(null);
   /** Core-loop redesign #5 — an in-progress sortie. The rift's push-your-luck
@@ -216,6 +218,10 @@ export function App() {
             // saveGame keeps the previous campaign as a backup, so "New Game"
             // is recoverable through the same path a bad load uses.
             replaceState(createInitialState());
+            // 但**不要**再拿恢复提示去问他。玩家刚刚点过一次"新的开始",又在覆盖
+            // 警告上确认过一次——第三次追问不是保护,是打扰,而且它会盖在开场散文
+            // 上面。备份仍然留着,入口挪到设置里(见 Settings 的"恢复之前的存档")。
+            setFreshStart(true);
             setAtTitle(false);
           }}
         />
@@ -385,7 +391,7 @@ export function App() {
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Offers a previous campaign back if this save looks like it replaced one.
           Silent when there's nothing better to return to. */}
-      <SaveRecovery current={state.value} onRestore={replaceState} />
+      <SaveRecovery current={state.value} onRestore={replaceState} suppressed={freshStart} />
       {settingsOpen && <SettingsScreen onClose={() => setSettingsOpen(false)} />}
       {navBar}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>

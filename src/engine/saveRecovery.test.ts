@@ -161,3 +161,31 @@ describe("previous-save recovery", () => {
     expect(recoverableSave()).toBeNull();
   });
 });
+
+// 2026-08-30 实测(/loop 第 6 轮):新玩家点「新的开始」→ 在覆盖警告上确认 →
+// 开场散文刚出来,存档恢复的横幅就压在上面问他"要不要恢复之前的存档"。
+//
+// 判定用的是"新存档的 flag 比备份少",而**刚重开的存档 flag 就是 0** ——
+// 于是每一次正常的重开都会触发。恢复提示是给"存档在玩家没要求的情况下丢了"
+// 用的,不是给"玩家自己选择重来"用的。
+describe("重开之后不该再被追问", () => {
+  it("刚重开的存档,flag 一定是 0 —— 这就是误报的来源", () => {
+    const fresh = createInitialState();
+    expect(Object.keys(fresh.flags).length).toBe(0);
+  });
+
+  it("而任何有进度的备份,flag 都大于 0", () => {
+    // 两者相减必然为正,所以原来的判定对每一次重开都成立。
+    const played = { ...createInitialState(), flags: { "act1.coldWake.cleared": true } };
+    expect(Object.keys(played.flags).length).toBeGreaterThan(Object.keys(createInitialState().flags).length);
+  });
+
+  it("备份不能因为压掉提示就被删掉", () => {
+    // 重开必须是可逆的。提示不再弹,但设置里的"找回之前的战役"要还能找到它。
+    localStorage.clear();
+    const played = { ...createInitialState(), flags: { "act1.coldWake.cleared": true } };
+    saveGame(played);
+    saveGame(createInitialState());   // 模拟"新的开始"
+    expect(recoverableSave(), "重开之后备份没了,玩家再也回不去").not.toBeNull();
+  });
+});

@@ -14,12 +14,28 @@ import { t } from "../../i18n/strings";
  * a stored campaign with real progress, while the live save has less. Silence is
  * the correct behaviour in every other case — a recovery prompt that appears on a
  * healthy save would be its own bug. */
-export function SaveRecovery({ current, onRestore }: { current: GameState; onRestore: (s: GameState) => void }) {
+export function SaveRecovery({
+  current,
+  onRestore,
+  suppressed = false,
+}: {
+  current: GameState;
+  onRestore: (s: GameState) => void;
+  /** 玩家自己刚点了"新的开始"。
+   *
+   * 实测(2026-08-30):新玩家点「新的开始」→ 在覆盖警告上确认 → 开场散文刚出来,
+   * 这个横幅就压在上面问他"要不要恢复之前的存档"。判定用的是"新存档的 flag 比
+   * 备份少",而刚重开的存档 flag 当然是 0 —— 于是每一次**正常的**重开都会触发。
+   *
+   * 恢复提示是给"存档在玩家没要求的情况下丢了"用的,不是给"玩家自己选择重来"
+   * 用的。备份不删(重开是可逆的),只是不再追问;入口在设置里。 */
+  suppressed?: boolean;
+}) {
   const [dismissed, setDismissed] = useState(false);
   const [outcome] = useState<LoadOutcome>(() => getLastLoadOutcome());
   const [candidate] = useState(() => recoverableSave());
 
-  if (dismissed) return null;
+  if (dismissed || suppressed) return null;
 
   const currentProgress = Object.keys(current.flags).length;
   const better = candidate && Object.keys(candidate.state.flags).length > currentProgress;

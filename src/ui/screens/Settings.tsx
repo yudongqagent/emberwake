@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import { getSettings, updateSettings, type TextSpeed } from "../../engine/settings";
 import { setMuted, setVolume, playSfx } from "../../audio/engine";
 import { refreshMusicVolume } from "../../audio/music";
-import { clearSave } from "../../engine/save";
+import { clearSave, recoverableSave, restoreSave } from "../../engine/save";
 import { t } from "../../i18n/strings";
 import { language, setLanguage } from "../../i18n/language";
 
@@ -97,6 +97,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         </Row>
 
         <div style={{ borderTop: "1px solid var(--line)", marginTop: "0.9rem", paddingTop: "0.9rem" }}>
+          <RecoverPreviousRun />
           <DangerZone />
         </div>
 
@@ -148,6 +149,43 @@ function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange:
 
 /** Deleting a campaign is irreversible, so it takes two deliberate actions and
  * says exactly what it destroys. */
+/** 找回上一次的战役。
+ *
+ * 存档恢复的横幅原来会在**每一次正常的重开**之后弹出来(判定是"新存档 flag 比
+ * 备份少",而刚重开的存档 flag 就是 0)。横幅现在只在存档真的出问题时出现,
+ * 所以主动找回的入口挪到这里——安全网必须还在,只是不再追着人问。 */
+function RecoverPreviousRun() {
+  const [candidate] = useState(() => recoverableSave());
+  const [armed, setArmed] = useState(false);
+  if (!candidate) return null;
+  const flags = Object.keys(candidate.state.flags).length;
+  const lvl = candidate.state.ships[0]?.level ?? 1;
+  if (!armed) {
+    return (
+      <button className="btn ghost" style={{ width: "100%" }} onClick={() => setArmed(true)}>
+        {t("settings.recover")}
+      </button>
+    );
+  }
+  return (
+    <div className="panel accent" style={{ padding: "0.7rem", ["--accent" as never]: "var(--amber)" }}>
+      <div style={{ fontSize: "0.76rem", color: "var(--text-mid)", lineHeight: 1.45 }}>
+        {t("settings.recoverWarn", { flags, level: lvl })}
+      </div>
+      <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.55rem" }}>
+        <button className="btn ghost" style={{ flex: 1 }} onClick={() => setArmed(false)}>{t("common.cancel")}</button>
+        <button
+          className="btn primary"
+          style={{ flex: 1 }}
+          onClick={() => { restoreSave(candidate.state); location.reload(); }}
+        >
+          {t("settings.recoverConfirm")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DangerZone() {
   const [armed, setArmed] = useState(false);
   if (!armed) {
