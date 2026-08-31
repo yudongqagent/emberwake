@@ -8,6 +8,7 @@ import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, ran
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad, effectsFor } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
+import { pactModifiers } from "../../data/pacts";
 import { applyEmberLoad } from "../../data/emberLoad";
 import { crewDefById } from "../../data/crew";
 import { approvalEffects } from "../../data/crewApproval";
@@ -60,7 +61,7 @@ const AUTO_FIRE_MIN_INTERVAL = 0.6;
  * the intent arcs rather than mashed. */
 const BRACE_WINDOW_SEC = 1.3;
 const BRACE_COOLDOWN_SEC = 4.5;
-const BRACE_REDUCTION = 0.5;
+// 抗冲减伤的默认值现在在 data/pacts.ts 的 NO_PACTS 里(契约「抗冲专精」会改它)。
 /** How full an enemy's attack clock must be to count as "about to fire" — shared
  * by the intent arc's hot state and the Brace prompt so the cue the player reads
  * and the window they're being asked to react to are the same thing. */
@@ -346,6 +347,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   for (const b of sortieBoons) shipEffects.add(b);
   // 家族套装(data/setBonuses.ts):成套穿同一派的装备,拿到那一派的信条。
   // 只发已实现的效果 id,所以它立刻是真的,不需要任何新的战斗管线。
+  // 余烬契约(data/pacts.ts):改玩法而不是改数字的那一类。它们走 sortieBoons
+  // 这条已有的管线,所以生命周期(出击期间有效、回港作废)和别的增益一致。
+  const pacts = pactModifiers(state.value.sortiePacts);
   const setBonusEffects = activeSetBonuses(equippedModuleList).flatMap((s) => s.effects);
   for (const e of setBonusEffects) shipEffects.add(e);
   const hasEffect = (id: string) => shipEffects.has(id);
@@ -362,9 +366,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     + sortieBoons.filter((b) => b === id).length
     + setBonusEffects.filter((e) => e === id).length;
 
-  const armorBlock = equippedModuleList
+  const armorBlock = Math.round(equippedModuleList
     .filter((m) => moduleDefById(m.defId).baseBlock !== undefined)
-    .reduce((sum, m) => sum + (moduleDefById(m.defId).baseBlock ?? 0), 0);
+    .reduce((sum, m) => sum + (moduleDefById(m.defId).baseBlock ?? 0), 0) * pacts.blockMult);
   const evasionTraitCount = effectStacks("evasion");
   // 2026-08-30:装备第一次给出真正的闪避和推力数值(见 tools/genGear.py)。
   // 从前引擎一个数值都没有,所以"升级引擎"是纯粹的骗钱,而 mk5 引擎因为耗电更多,
@@ -411,7 +415,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const [enemies, setEnemies] = useState<EnemyState[]>(
     loadedEncounter.enemies.map((e) => ({ ...e, name: localizedEnemyName(e.name), maxHull: e.hull })),
   );
-  const maxHull = Math.round(computeMaxHull(ship) * (1 + hullBonusFraction));
+  const maxHull = Math.round(computeMaxHull(ship) * (1 + hullBonusFraction) * pacts.maxHullMult);
   const [playerHull, setPlayerHull] = useState(Math.min(maxHull, Math.round(ship.currentHp * (1 + hullBonusFraction))));
   /** 开打那一刻的船体,用来在战后报告里算真实的承受伤害。 */
   const startingHullRef = useRef(playerHull);
@@ -573,6 +577,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // fireModule 也跑在冻结的闭包里,所以船员支持度同样要镜像。
   const crewPassiveRef = useRef(crewPassive);
   crewPassiveRef.current = crewPassive;
+  // 契约同样要镜像:节奏、锁位、闪避、抗冲都在冻结的战斗闭包里读。
+  const pactsRef = useRef(pacts);
+  pactsRef.current = pacts;
   // Ion Disruptor's Overload: a per-module shot counter, keyed by module instance id
   // so two Ion Disruptors equipped at once track independently.
   const overloadCountersRef = useRef<Record<string, number>>({});
@@ -1033,7 +1040,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     // Kaan Ferrous: "+10% evasion when at Long range" — only when he's assigned to the flagship.
     // enemyAttack 同样在冻结的闭包里,所以这里也走 ref 镜像,而不是直接读 crewPassive。
     const kaanBonus = band === "long" ? 0.1 * crewPassiveRef.current("kaanFerrous") : 0;
-    const evasion = Math.min(0.75, baseEvasion + kaanBonus);
+    const evasion = Math.min(0.75, (baseEvasion + kaanBonus) * pactsRef.current.evasionMult);
     // Iron Verdict's Fortify: armor block doubles for its duration.
     const fortifyMult = fortifySecRef.current > 0 ? 2 : 1;
     // Bulwark: plating bites harder the closer Whisper is to going down — a
@@ -1064,7 +1071,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     // something to act on rather than just something to read.
     const braced = result.hit && braceUntilRef.current > Date.now();
     if (braced) {
-      result = { ...result, damageDealt: Math.max(1, Math.round(result.damageDealt * (1 - BRACE_REDUCTION))) };
+      result = { ...result, damageDealt: Math.max(1, Math.round(result.damageDealt * (1 - pactsRef.current.braceReduction))) };
     }
     // Reactor: the shields channel is a flat reduction on whatever got through,
     // applied here so every downstream use of damageDealt stays consistent.
@@ -1329,6 +1336,19 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         // 装备推力。下限 0.5 是因为堆满重甲不该变成"永远抢不到距离"——
         // 那样重甲流就没得玩了,只是被慢慢打死。
         * Math.max(0.5, 1 + gearThrustRef.current);
+      // 契约「咬死」/「长枪」把阵位锁死:舵手指令失效,换来那个档位的额外伤害。
+      //
+      // 注意这里**不能** early return:外面是一个裸的 `{ }` 块,不是函数,所以
+      // return 会从整个 combatTick 返回,把开火、敌人攻击、回血全部跳过——
+      // 带锁位契约的战斗会直接冻住。实测时就是这么发现的。
+      const locked = pactsRef.current.lockedBand;
+      if (locked) {
+        if (rangeBandRef.current !== locked) {
+          rangeBandRef.current = locked;
+          rangeProgressRef.current = 0;
+          setRangeBand(locked);
+        }
+      } else {
       const prevBand = rangeBandRef.current;
       const next = advanceRangeBand(
         { band: rangeBandRef.current, progress: rangeProgressRef.current },
@@ -1346,6 +1366,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         bandChangedSinceLastShotRef.current = true;
         const closed = RANGE_ORDER.indexOf(next.band) < RANGE_ORDER.indexOf(prevBand);
         pushLog(t(closed ? "combat.log.rangeClosed" : "combat.log.rangeOpened", { band: t(`combat.rangeBand.${next.band}`) }));
+      }
       }
     }
 
@@ -1750,7 +1771,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       const chorusDmgMult = chorusShotActive ? 1.3 : 1;
       // Weapon-system audit #9: the weapon's own preferred band, on top of the
       // global per-band modifier every weapon already shared.
-      const profileMult = rangeProfileMultiplier(def.rangeProfile, rangeBandRef.current);
+      const profileMult = rangeProfileMultiplier(def.rangeProfile, rangeBandRef.current)
+        // 锁位契约:代价是失去舵手指令,回报是这个档位上的额外伤害。
+        * (pactsRef.current.lockedBand === rangeBandRef.current ? pactsRef.current.lockedBandDamageMult : 1);
       const rawResult = resolveAttack(Math.round(dmg * chorusDmgMult * profileMult), effectiveBlock, targetEvasion, outgoingMult, chorusRoll, critChance);
       if (chorusShotActive) setChorusOvertureShots((c) => Math.max(0, c - 1));
       // Bauhinia/Swanreach doctrine: Point Defense. Utilitarian military-industrial
@@ -1845,7 +1868,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       }
       // Nova Coil: landing hits charges the ultimate faster.
       if (result.hit && modHasEffect(mod, "novaCharge")) {
-        setEmberNovaCharge((c) => Math.min(EMBER_NOVA_MAX, c + Math.min(28, 8 * effectStacks("novaCharge"))));
+        setEmberNovaCharge((c) => Math.min(EMBER_NOVA_MAX, c + Math.min(28, 8 * effectStacks("novaCharge")) * pactsRef.current.novaChargeMult));
       }
       // Overkill: damage past a kill splashes to another living enemy.
       if (result.hit && modHasEffect(mod, "overkill") && result.damageDealt > target.hull) {
@@ -2011,7 +2034,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     const cooldownReduction = jumpRangeStacks > 0 ? 1 : 0;
     const syncedOverchargePenalty = hasEffect("overdriveSync") ? 0 : overchargePenalty;
     const rawCooldownSec = Math.max(0, ((def.cooldown ?? 0) + syncedOverchargePenalty + alphaStrikePenalty - cooldownReduction) * TURN_SECONDS)
-      * Math.max(0.4, 1 - coolantReduction);
+      * Math.max(0.4, 1 - coolantReduction)
+      // 契约「孤注一掷」/「铁壁」直接改武器节奏。
+      * pactsRef.current.cadenceMult;
     // Item #2: weapon-type modules only ever fire via auto-fire now — floor their
     // cadence at AUTO_FIRE_MIN_INTERVAL so a 0-cooldown weapon (e.g. Pulse Cannon)
     // doesn't refire every render. Utility actives keep their raw authored cooldown.
@@ -2748,9 +2773,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
               }}
               disabled={status !== "active" || braceCooldown > 0}
               onClick={() => {
-                braceUntilRef.current = Date.now() + BRACE_WINDOW_SEC * 1000;
+                braceUntilRef.current = Date.now() + BRACE_WINDOW_SEC * pacts.braceWindowMult * 1000;
                 setBracing(true);
-                setBraceCooldown(BRACE_COOLDOWN_SEC);
+                setBraceCooldown(BRACE_COOLDOWN_SEC * pacts.braceCooldownMult);
                 playSfx("click");
               }}
               title={t("combat.braceTitle")}

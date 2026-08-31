@@ -320,6 +320,7 @@ export function App() {
                 shipLevel: ship?.level ?? 1,
                 owned: state.value.modules,
                 activeBoons: state.value.sortieBoons,
+                activePacts: state.value.sortiePacts,
               }));
             }
             if (!riftRun && sortie) {

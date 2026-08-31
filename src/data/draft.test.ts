@@ -99,7 +99,8 @@ describe("Refit Draft", () => {
       const hand = generateDraft({ faction: "riftEchoes", shipLevel: 1, owned: [], activeBoons: [] });
       expect(hand.length).toBe(3);
       for (const o of hand) {
-        expect(o.kind === "module" || o.kind === "boon").toBe(true);
+        // 2026-08-30 起第三格还可能是余烬契约(data/pacts.ts)。
+        expect(o.kind === "module" || o.kind === "boon" || o.kind === "pact").toBe(true);
       }
     }
   });

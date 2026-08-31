@@ -5,7 +5,7 @@ import { CHOICE_REPUTATION, clampRep } from "../data/reputation";
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 const SAVE_KEY = "emberwake.save";
 /** Rolling copy of the previous save, written before every overwrite. */
 const BACKUP_KEY = "emberwake.save.backup";
@@ -41,6 +41,9 @@ export interface GameState {
    * effects the ship's own modules provide, so a boon can be any of the 46
    * already-implemented effects rather than needing new combat plumbing. */
   sortieBoons: string[];
+  /** 本次出击生效的余烬契约(data/pacts.ts)。和 sortieBoons 分开存,因为增益是
+   * "已实现的效果 id",契约是另一种东西——混在一起迟早出现同名冲突。 */
+  sortiePacts: string[];
   /** Core-loop redesign #3 — Ember Load the player has opted into on top of what
    * ascension already imposes. Higher Load means harder encounters and richer
    * rewards; opting in is what makes it a decision rather than a difficulty knob. */
@@ -98,6 +101,7 @@ export function createInitialState(): GameState {
     sigilRanks: {},
     deepestDive: 0,
     sortieBoons: [],
+    sortiePacts: [],
     voluntaryLoad: 0,
     reputation: {},
     cinderTrust: 0,
@@ -215,6 +219,7 @@ const migrations: Record<number, (s: any) => any> = {
   }),
   // 余烬刻印(data/sigils.ts)。老存档从零开始,但 deepestDive 也从零开始,
   // 所以他们下一次潜的每一层都算"刷新纪录"——不会因为之前潜过而吃亏。
+  11: (s: any) => ({ ...s, schemaVersion: 12, sortiePacts: s.sortiePacts ?? [] }),
   10: (s: any) => ({
     ...s,
     schemaVersion: 11,
@@ -362,6 +367,7 @@ function repairState(raw: any): GameState {
     sigilRanks: raw.sigilRanks && typeof raw.sigilRanks === "object" ? raw.sigilRanks : {},
     deepestDive: typeof raw.deepestDive === "number" ? raw.deepestDive : 0,
     sortieBoons: Array.isArray(raw.sortieBoons) ? raw.sortieBoons.filter((b: any) => typeof b === "string") : [],
+    sortiePacts: Array.isArray(raw.sortiePacts) ? raw.sortiePacts.filter((b: any) => typeof b === "string") : [],
     voluntaryLoad: typeof raw.voluntaryLoad === "number" && raw.voluntaryLoad >= 0 ? raw.voluntaryLoad : 0,
     reputation: raw.reputation && typeof raw.reputation === "object" ? raw.reputation : {},
     cinderTrust: typeof raw.cinderTrust === "number" ? raw.cinderTrust : 0,

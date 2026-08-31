@@ -77,6 +77,8 @@ export function applyDraftChoice(opt: DraftOption): void {
     next.modules = next.modules.map((m) => (m.id === opt.targetModuleId ? levelUpModule(m) : m));
   } else if (opt.kind === "boon" && opt.boonId) {
     next.sortieBoons = [...next.sortieBoons, opt.boonId];
+  } else if (opt.kind === "pact" && opt.pactId) {
+    next.sortiePacts = [...next.sortiePacts, opt.pactId];
   }
   state.value = next;
   persist();
@@ -147,8 +149,9 @@ export function clearSortieBoons(): void {
   // 刻印「决意」:每次离港自带的增益。清空之后立刻补上,所以它是"每次出击的起点
   // 更高",而不是"多一次性的好处"。
   const free = startingBoons();
-  if (state.value.sortieBoons.length === 0 && free.length === 0) return;
-  state.value = { ...state.value, sortieBoons: free };
+  if (state.value.sortieBoons.length === 0 && state.value.sortiePacts.length === 0 && free.length === 0) return;
+  // 契约和增益同寿:都持续到回港。
+  state.value = { ...state.value, sortieBoons: free, sortiePacts: [] };
   persist();
 }
 

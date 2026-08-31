@@ -3,6 +3,7 @@ import { moduleEffectById } from "../../data/moduleEffects";
 import { computeModuleDamage, computeModuleBlock, moduleMaxLevel } from "../../engine/modules";
 import { localizedModuleName, localizedTrait } from "../../i18n/data";
 import { t } from "../../i18n/strings";
+
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, HullIcon } from "../components/Icons";
 import type { DraftOption } from "../../data/draft";
@@ -109,6 +110,21 @@ function DraftCard({
             <span style={{ color: "var(--green)" }}>{after}</span>
           </div>
         )}
+      </>
+    );
+  } else if (opt.kind === "pact" && opt.pactId) {
+    // 余烬契约(data/pacts.ts)。用琥珀色而不是紫色,因为它和普通增益是**不同性质**
+    // 的东西:普通增益是白给的加成,契约是有代价的交换。玩家必须一眼看出区别。
+    heading = t("draft.pactTitle");
+    body = (
+      <>
+        <div className="eyebrow" style={{ color: "var(--amber)", marginTop: "0.3rem" }}>
+          {t(`pact.${opt.pactId}`)}
+        </div>
+        <div style={{ fontSize: "0.74rem", color: "var(--text-mid)", marginTop: "0.3rem", lineHeight: 1.5 }}>
+          {t(`pact.${opt.pactId}.desc`)}
+        </div>
+        <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>{t("draft.untilDock")}</div>
       </>
     );
   } else if (opt.kind === "boon" && opt.boonId) {

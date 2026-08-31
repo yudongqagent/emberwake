@@ -3,6 +3,7 @@ import { drawModule, moduleMaxLevel } from "../engine/modules";
 import { MODULE_DEFS } from "./modules";
 import { moduleDefById } from "./modules";
 import { pickOne } from "../engine/rng";
+import { PACT_IDS } from "./pacts";
 
 /** 整备抉择 — the Refit Draft.
  *
@@ -24,7 +25,7 @@ import { pickOne } from "../engine/rng";
  *    rule: no option should be free.
  */
 
-export type DraftOptionKind = "module" | "upgrade" | "boon";
+export type DraftOptionKind = "module" | "upgrade" | "boon" | "pact";
 
 export interface DraftOption {
   id: string;
@@ -35,6 +36,13 @@ export interface DraftOption {
   targetModuleId?: string;
   /** kind="boon" — an effect id from data/moduleEffects.ts, active until docking. */
   boonId?: string;
+  /** kind="pact" — 一条余烬契约(data/pacts.ts),同样持续到回港。
+   *
+   * 刻意不和 boonId 共用一个字段:增益是"已实现的效果 id",契约是另一种东西
+   * (有代价的玩法交换)。两个概念挤在一个数组里,迟早会出现"某个新效果和某条
+   * 契约同名"这种不报错的 bug——draft.test.ts 里那条"每个 boon 都必须是已实现
+   * 的效果"当场就抓到了我第一版的这个错。 */
+  pactId?: string;
   /** Greedy options are stronger and cost hull. Never more than a bruise. */
   hullCost?: number;
 }
@@ -86,8 +94,9 @@ export function generateDraft(opts: {
   shipLevel: number;
   owned: ModuleInstance[];
   activeBoons: string[];
+  activePacts?: string[];
 }): DraftOption[] {
-  const { faction, shipLevel, owned, activeBoons } = opts;
+  const { faction, shipLevel, owned, activeBoons, activePacts = [] } = opts;
   const family = FAMILY_FOR_FACTION[faction] ?? "bauhinia";
   const out: DraftOption[] = [];
 
@@ -110,8 +119,16 @@ export function generateDraft(opts: {
   // worth upgrading. Upgrades are preferred because they deepen a build rather
   // than widening it.
   const upgradable = owned.filter((m) => m.level < moduleMaxLevel(m.rarity));
+  const pactCandidates = PACT_IDS.filter((p) => !activePacts.includes(p));
   const boonCandidates = BOON_POOL.filter((b) => !activeBoons.includes(b));
-  if (upgradable.length > 0 && (boonCandidates.length === 0 || Math.random() < 0.5)) {
+  // 余烬契约(data/pacts.ts):改玩法而不是改数字的那一类,四分之一的概率占掉第三格。
+  //
+  // 量出来的理由:一整个战役里"我现在会做一件新事"的时刻只有 6~9 次,而哈迪斯
+  // 单次跑动就有 30+。契约挂在这里,是因为它只持续一次出击——玩家因此**敢**去
+  // 拿"冷却减四成但护甲归零"这种极端的东西。
+  if (pactCandidates.length > 0 && Math.random() < 0.25) {
+    out.push({ id: "opt-third", kind: "pact", pactId: pickOne(pactCandidates) });
+  } else if (upgradable.length > 0 && (boonCandidates.length === 0 || Math.random() < 0.5)) {
     // Favour a module the player has actually invested in already.
     const best = [...upgradable].sort((a, b) => b.level - a.level)[0];
     out.push({ id: "opt-third", kind: "upgrade", targetModuleId: best.id });
@@ -136,5 +153,5 @@ export function draftOptionSubject(opt: DraftOption, owned: ModuleInstance[]): s
     const m = owned.find((x) => x.id === opt.targetModuleId);
     return m ? moduleDefById(m.defId).id : "";
   }
-  return opt.boonId ?? "";
+  return opt.pactId ?? opt.boonId ?? "";
 }
