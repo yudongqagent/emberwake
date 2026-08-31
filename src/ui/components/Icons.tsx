@@ -101,16 +101,16 @@ const RESOURCE_LABEL_ZH: Record<ResourceType, string> = {
 const RESOURCE_INFO_EN: Record<ResourceType, string> = {
   salvage: "Raw scrap from combat and mining. Repairs your hull at any station, and trades for Alloy.",
   sourcePoints: "源点 (Source Points) — the novel's own name for this. Spend it on new modules and rerolling the Fabricator's offers.",
-  alloy: "Refined material. Outfits new crew recruits, or trades back to Salvage if you're short on it.",
-  originEssence: "本源精华 (Origin Essence) — drawn from 文明本源 ('civilization's origin'), the source novel's term for it. Earned only from tougher fights. The only thing that lets Whisper ascend to her next hull class.",
-  insight: "Earned from story and exploration. Spend it to lock in a module's trait instead of leaving it to the next roll.",
+  alloy: "Refined material. Levels up your fitted modules, outfits new crew recruits, and trades back to Salvage.",
+  originEssence: "本源精华 (Origin Essence) — drawn from 文明本源 ('civilization's origin'), the source novel's term for it. Earned only from tougher fights. Pays for Whisper's ascension to her next hull class, and for reforging into the sibling frame at her current tier.",
+  insight: "Earned from story and exploration. Spend it to reroll one chosen trait on a module — always into a different one it doesn't already carry.",
 };
 const RESOURCE_INFO_ZH: Record<ResourceType, string> = {
   salvage: "来自战斗与采矿的原始废料。可在任意空间站修复船体，也可兑换合金。",
   sourcePoints: "即原著中的「源点」。用于购买新模组，以及刷新制造工坊的报价。",
-  alloy: "精炼材料。用于装备新招募的船员，短缺废料时也可兑换回废料。",
-  originEssence: "即「本源精华」，源自原著「文明本源」一词。只能从更艰难的战斗中获得——是「絮语」号进阶为下一级舰体唯一需要的资源。",
-  insight: "来自剧情与探索。花费它可以直接锁定模组特性，而不必依赖下一次随机结果。",
+  alloy: "精炼材料。用于提升已装模组的等级、装备新招募的船员，也可兑换回废料。",
+  originEssence: "即「本源精华」，源自原著「文明本源」一词。只能从更艰难的战斗中获得。用于「絮语」号进阶到下一级舰体，也用于改铸成同一层的另一副骨架。",
+  insight: "来自剧情与探索。花费它可以重掷模组上你指定的那一条词条——一定换成它还没有的另一条。",
 };
 
 export function resourceLabel(type: ResourceType): string {
