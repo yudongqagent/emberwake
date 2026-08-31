@@ -2601,7 +2601,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           <span
             className="eyebrow"
             style={{
-              flex: "none", width: 62, textAlign: "right",
+              // 宽度改成"按内容,但保底" —— 原来的 62px 是按中文「连击 ×0」量的,
+              // 英文「Combo ×0」要 75px,被切掉 13px。实测 2026-08-31。
+              flex: "none", minWidth: 62, textAlign: "right",
               fontVariantNumeric: "tabular-nums",
               visibility: comboCount > 0 ? "visible" : "hidden",
               color: comboCount >= 8 ? "var(--red)" : comboCount >= 4 ? "var(--amber)" : "var(--cyan)",
@@ -2614,7 +2616,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           </span>
           <span
             className="eyebrow"
-            style={{ flex: "none", width: 64, textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", overflow: "hidden", whiteSpace: "nowrap" }}
+            // 同上。英文「Power 256」要 89px,原来给 64px —— 被切掉四分之一,
+            // 而功率在这个游戏里是真实预算(超载会拉长武器冷却),那个数字不能缺。
+            style={{ flex: "none", minWidth: 64, textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
           >
             {t("combat.power")} {capacity}
           </span>
@@ -2821,7 +2825,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
               )}
               <span style={{ position: "relative", display: "flex", alignItems: "center", gap: "0.3em" }}>
                 {t("combat.brace")}
-                <span style={{ width: "2.6em", textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", visibility: braceCooldown > 0 ? "visible" : "hidden" }}>
+                <span style={{ minWidth: "3em", textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", visibility: braceCooldown > 0 ? "visible" : "hidden" }}>
                   {braceCooldown.toFixed(1)}s
                 </span>
               </span>
@@ -3322,7 +3326,7 @@ function AbilityButton({
         {/* Fixed slot, always present: a countdown that appears and disappears
             changes the button's width, which shuffled every neighbouring button
             each time anything came off cooldown. */}
-        <span style={{ width: "2.6em", textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", visibility: cooling ? "visible" : "hidden" }}>
+        <span style={{ minWidth: "3em", textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", visibility: cooling ? "visible" : "hidden" }}>
           {cd.toFixed(1)}s
         </span>
       </span>
@@ -3425,7 +3429,7 @@ function WeaponAutoStatus({ name, color, cd }: { name: string; color: string; cd
       {name}
       {/* Reserved slot — the dot and the countdown are different widths, so
           swapping between them resized every weapon chip on every shot. */}
-      <span style={{ width: "2.6em", textAlign: "right", opacity: 0.75, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ minWidth: "3em", textAlign: "right", opacity: 0.75, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
         {ready ? t("combat.autoFireReady") : `${cd.toFixed(1)}s`}
       </span>
     </div>

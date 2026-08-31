@@ -353,6 +353,11 @@ function StandingPriceNote() {
         color,
         fontSize: "0.7rem",
         fontWeight: 600,
+        // 这条横幅在两种语言下都会被容器切掉(英文缺 42px、中文缺 21px)。
+        // 派系名长度差很多(「洋紫荆公国」/「Bauhinia Principality」),而它是
+        // 一行不换行的文字。允许换行 + 放宽行距,比给它挑一个"刚好够"的宽度可靠。
+        lineHeight: 1.5,
+        overflowWrap: "anywhere",
       }}
     >
       {t(up ? "rep.priceNote" : "rep.priceNoteDiscount", { faction: t(`faction.${owner}`), pct })}
