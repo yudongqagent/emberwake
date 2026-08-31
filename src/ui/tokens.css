@@ -168,6 +168,17 @@ h1, h2, h3 {
    drop-shadow doesn't), and a scanning top-edge highlight so it reads as a lit
    control surface, not a rounded div. */
 .btn {
+  /* 触摸目标的保底高度。
+   *
+   * 实测(2026-08-31,/loop 第 16 轮,375x812):**20 个可点元素低于 WCAG 的
+   * 24x24 下限**,而且都在要害位置——战斗里的反应堆通道(火力/护盾/引擎)只有
+   * 98x20,那是战斗中最常按的实时决策;舰桥上的刻印购买按钮 24x21,按错就永久
+   * 花掉一笔货币。
+   *
+   * 放在 .btn 上而不是逐个界面修:这样以后新加的按钮自动达标。24px 是 WCAG
+   * 2.5.8 的 AA 下限;推荐值是 44,但那会把战斗界面的密度撑散——密度本身也是
+   * 可用性。所以基础保底 24,几个最要害的单独提到 32 以上。 */
+  min-height: 24px;
   --btn-notch: 7px;
   font-family: var(--font-display);
   font-weight: 700;

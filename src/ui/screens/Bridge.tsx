@@ -333,7 +333,9 @@ function SigilPanel() {
               ) : (
                 <button
                   className="btn ghost"
-                  style={{ fontSize: "0.66rem", padding: "0.3em 0.6em", flex: "none" }}
+                  // 价格是一两位数,按钮就只有 22px 宽 —— 而按错这个按钮是永久
+                  // 花掉一笔刻印。给它一个不依赖内容长度的最小尺寸。
+                  style={{ fontSize: "0.66rem", padding: "0.3em 0.6em", flex: "none", minWidth: 40 }}
                   disabled={!affordable}
                   onClick={() => buySigilRank(node.id)}
                 >
