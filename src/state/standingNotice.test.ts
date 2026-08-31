@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { CHOICE_REPUTATION, repTier } from "../data/reputation";
-import { completeScene, pendingStandingChange, replaceState, STORY_SCENES } from "./store";
+import { adjustReputation, completeScene, pendingStandingChange, replaceState, state, STORY_SCENES } from "./store";
+import { ENCOUNTER_DEFS, BOUNTY_ENCOUNTER_DEFS } from "../data/encounters";
 import { createInitialState } from "../engine/save";
 import APP_SRC from "../App.tsx?raw";
 
@@ -91,6 +92,32 @@ describe("立场变化必须看得见", () => {
     expect(plain).toBeTruthy();
     completeScene(plain!);
     expect(pendingStandingChange.value.standings, "没有声望变化却弹了卡").toEqual([]);
+  });
+
+  it("战斗漂移:没跨档时不吭声——每场仗弹一次是噪音", () => {
+    adjustReputation("reavers", -3);
+    expect(state.value.reputation.reavers, "声望没有变").toBe(-3);
+    expect(pendingStandingChange.value.standings, "只掉了 3 点就弹卡,每场仗都要弹").toEqual([]);
+  });
+
+  it("战斗漂移:跨档的那一刻必须说", () => {
+    // 中立 → 冷淡的阈值是 −15。
+    adjustReputation("reavers", -20);
+    const hit = pendingStandingChange.value.standings.find((s) => s.faction === "reavers");
+    expect(hit, "跨过分档却一个字都没说").toBeTruthy();
+    expect(hit!.tierChanged).toBe(true);
+  });
+
+  it("可重复刷的悬赏真的能把玩家刷到敌对——这条卡存在的理由", () => {
+    const DIP = new Set(["bauhinia", "lionsheart", "swanreach", "reavers"]);
+    const farmable = [...ENCOUNTER_DEFS, ...BOUNTY_ENCOUNTER_DEFS].filter(
+      (e) => e.id.startsWith("bounty") && DIP.has(e.faction),
+    );
+    expect(farmable.length, "没有可外交派系的悬赏,那漂移咬不到人").toBeGreaterThan(3);
+    // 敌对是 −50;单次清掉 3 × 敌人数。
+    const worst = Math.max(...farmable.map((e) => e.enemies.length));
+    const clears = Math.ceil(50 / (3 * worst));
+    expect(clears, `要刷 ${clears} 次才到敌对——太远的话这条提示没必要`).toBeLessThan(20);
   });
 
   it("App 里接上了这张卡,而且会点出跨档", () => {

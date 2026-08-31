@@ -346,11 +346,35 @@ export function effectsFor(faction: FactionId): RepEffects {
 }
 
 /** 改动声望并存盘。delta 可正可负。 */
+/** 战斗带来的声望漂移。
+ *
+ * 漂移本身是设计(REP_PER_KILL 的注释:「一次遭遇不该毁掉一段关系,但一路杀过去
+ * 应该」)。问题是它**在咬人之前完全看不见**——2026-08-31(/loop 第 43 轮)实测:
+ *
+ *   7 个可重复刷的悬赏属于可外交派系。刷 bountyReaverRemnants(2 艘)每次 −6,
+ *   **九次**就把掠夺者从中立推到敌对——而敌对意味着他们的巡逻队会来找你、
+ *   市场对你关闭(repEffects,第 37 轮验过全部真的生效)。
+ *
+ * 悬赏是游戏自己设计来反复刷的(它们有 respawnSeconds)。于是玩家照着游戏的指引
+ * 刷资源,某一刻突然被追杀,而中间没有任何一步提示过他。
+ *
+ * 所以不是每次都吭声——每场仗弹一次是噪音——而是**跨档的那一刻**才说。那正是
+ * 价格、盟友、猎杀队真正切换的时刻。 */
 export function adjustReputation(faction: FactionId, delta: number): void {
   if (!isDiplomatic(faction) || delta === 0) return;
   const rep = { ...state.value.reputation };
-  rep[faction] = clampRep((rep[faction] ?? 0) + delta);
+  const before = rep[faction] ?? 0;
+  const after = clampRep(before + delta);
+  rep[faction] = after;
   state.value = { ...state.value, reputation: rep };
+  if (repTier(before) !== repTier(after)) {
+    // 同一次结算里可能有多个派系变档(遭遇自带的 reputation 表),所以是累加不是覆盖。
+    const prev = pendingStandingChange.value;
+    pendingStandingChange.value = {
+      standings: [...prev.standings, { faction, delta, before, after, tierChanged: true }],
+      crew: prev.crew,
+    };
+  }
   persist();
 }
 
