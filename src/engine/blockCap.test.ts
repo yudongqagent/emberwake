@@ -37,15 +37,21 @@ describe("格挡不能把游戏变成打不输", () => {
     expect(r.damageDealt).toBeGreaterThan(1);
   });
 
-  it("一件练满的装甲不该超过全游戏最重的一击太多——但即便超过也不再等于无敌", () => {
+  it("一件装甲不该独自挡下全游戏最重的一击", () => {
+    // 第 21 轮写这条时,断言的是 `best > maxEnemyDamage` —— 那是把当时的病钉下来:
+    // 单件 mk5 满级装甲 158 格挡,而全游戏最重一击只有 132。第 22 轮按星区威胁
+    // 重算了敌人数值(tools/genEnemyScale.py),最重一击变成 1177,于是这条断言
+    // 反过来了。方向反过来正是修好的样子,所以这里改成钉住健康的那一边。
     const armors = MODULE_DEFS.filter((d) => d.type === "armor" && d.baseBlock);
     const best = Math.max(...armors.map((d) => computeModuleBlock(armor(d.id, "mk5", moduleMaxLevel("mk5")))));
+    expect(best, "单件练满的装甲又一次盖过了全游戏最重的一击").toBeLessThan(maxEnemyDamage());
+
+    // 而且就算把装甲槽全配满,也仍然要挨到伤害——这是上限那条规则兜的底。
     const slots = Math.max(...HULL_CLASSES.map((h) => h.slots.armor));
-    // 这两个数字就是问题本身,钉下来当文档
-    expect(best, "单件 mk5 满级装甲的格挡").toBeGreaterThan(maxEnemyDamage());
-    expect(best * slots, "配满装甲的格挡量级").toBeGreaterThan(1000);
-    // 但打进来仍然要疼
-    expect(resolveAttack(maxEnemyDamage(), best * slots, 0, 1, 0.99, 0).damageDealt).toBeGreaterThan(10);
+    expect(
+      resolveAttack(maxEnemyDamage(), best * slots, 0, 1, 0.99, 0).damageDealt,
+      "配满装甲后最重的一击几乎不疼了",
+    ).toBeGreaterThan(maxEnemyDamage() * 0.2);
   });
 
   it("早期完全不受影响:格挡还没到伤害的 75% 时,行为和原来一模一样", () => {
