@@ -94,8 +94,45 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
           {t("galaxy.nextAt", { label: objective.label, system: objective.systemName })}
         </div>
       )}
-      <div style={{ flex: 1, position: "relative" }}>
-        <svg viewBox="0 0 1000 700" style={{ width: "100%", height: "100%" }}>
+      {/* minHeight: 0 + 绝对定位的 svg。
+          
+          实测(2026-08-30):这个 flex 子元素没有 minHeight: 0,而带 viewBox 的 svg
+          用 height:100% 时会按自己的宽高比撑开——在 1280x720 的窗口里它渲染成
+          1280x902,底部落在 y=1077。起始星区五个星系有两个在屏幕外,而**第一个
+          目标「茶隼歇息地」正是其中之一**:游戏让新玩家去一个他看不到也点不到
+          的地方。
+          
+          绝对定位让 svg 拿到容器的真实尺寸,preserveAspectRatio 的默认值
+          (xMidYMid meet)就会把整张图完整装进去。 */}
+      {/* 右边留出舰船控制台的宽度。
+      
+          实测(2026-08-30,手机比例):控制台是绝对定位浮在地图上的,
+          document.elementFromPoint 打在「荆棘航迹」和「寒域锚地」的节点上返回的是
+          那块 DIV 而不是 svg 的 circle —— 也就是说手机上这两个星系**点不到**,
+          而寒域锚地正是第一幕 BOSS 所在地。
+          
+          留白比"让控制台穿透点击"更对:后者能点了,但标签仍然被盖住看不清。 */}
+      <div style={{ flex: 1, position: "relative", minHeight: 0, overflow: "hidden" }}>
+        <svg
+          viewBox="0 0 1000 700"
+          style={{
+            // 宽高都写死,不留 auto。
+            //
+            // 带 viewBox 的 svg 是替换元素:只要 width 或 height 有一个是 auto,
+            // 它就按 viewBox 的宽高比从另一边反推,inset 完全管不住它。我在这上面
+            // 连错两次:
+            //   inset:0 + height:100% + width:auto → 从高度推出 796 宽,手机上横向
+            //     溢出,反而多两个星系点不到
+            //   四条 inset + 都 auto      → 从宽度推出 856 高,桌面上纵向溢出 353px,
+            //     容器明明只有 503
+            // 宽高都是确定值之后,preserveAspectRatio 的默认值(xMidYMid meet)才会
+            // 老老实实把整张图装进去。右边减掉的是舰船控制台的宽度。
+            position: "absolute",
+            top: 0, left: 0,
+            width: "calc(100% - 3.6rem - var(--safe-right))",
+            height: "100%",
+          }}
+        >
           <defs>
             <radialGradient id="galaxyBg" cx="50%" cy="45%" r="75%">
               <stop offset="0%" stopColor="#0d1526" />
