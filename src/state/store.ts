@@ -671,6 +671,30 @@ export function mineResource(poiId: string, yieldType: ResourceType, amount: num
   persist();
 }
 
+/** 事件用尽之后,残骸点还剩下什么。
+ *
+ * 2026-08-31(/loop 第 39 轮)。全图有 **19 个残骸点**,而星图事件只有 **10 个**,
+ * 完成 flag 还是全局的(event.<id>.done)。也就是说玩家探完 10 个之后,剩下 9 个
+ * 残骸点飞过去、点「查看」——`if (pool.length === 0) return;`,**什么都不会发生**。
+ * 一个点了没反应的 POI,比地图上没有它更糟。
+ *
+ * 这同时也是洞悉枯竭的一半原因(第 35 轮量到全战役只有 128 点):事件是洞悉仅有的
+ * 两个来源之一,而它会用完。
+ *
+ * 所以这里给一条兜底:拆解。数量按残骸类 POI 的既有量级(30 废料 / 3 洞悉)给,
+ * 并且跟着 POI 的重生时间走——它是一条细水,不是刷子。 */
+export function scavengeDerelict(poiId: string): Partial<Record<ResourceType, number>> {
+  const threat = currentGalaxy.value?.threat ?? 1;
+  const rewards: Partial<Record<ResourceType, number>> = {
+    salvage: 20 + threat * 10,
+    insight: 2 + Math.floor(threat / 2),
+  };
+  grant(rewards);
+  setPoiRuntime(poiId, { cleared: true, clearedAt: Date.now() });
+  persist();
+  return rewards;
+}
+
 export function collectWreck(poiId: string, rewards: Partial<Record<ResourceType, number>>) {
   grant(rewards);
   setPoiRuntime(poiId, { cleared: true, clearedAt: Date.now() });

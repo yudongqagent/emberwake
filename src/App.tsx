@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { availableScene, completeScene, currentSystem, state, replaceState, applyDraftChoice, clearSortieBoons, flagship } from "./state/store";
 import { ResourceBar } from "./ui/components/ResourceBar";
-import { SoundIcon } from "./ui/components/Icons";
+import { SoundIcon, ResourceIcon } from "./ui/components/Icons";
 import { Bridge } from "./ui/screens/Bridge";
 import { GalaxyView } from "./ui/screens/GalaxyView";
 import { SystemView } from "./ui/screens/SystemView";
@@ -24,10 +24,10 @@ import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
 import { registerRuntimeEncounter, encounterById } from "./data/encounters";
-import { grant, grantRiftDrop, bankDive, resolveEventOutcome, currentGalaxy, saveRiftRun, pendingFits, fitAll, markUnlockSeen } from "./state/store";
+import { grant, grantRiftDrop, bankDive, resolveEventOutcome, currentGalaxy, saveRiftRun, pendingFits, fitAll, markUnlockSeen, scavengeDerelict } from "./state/store";
 import { moduleDefById } from "./data/modules";
 import { hullClassById } from "./data/hullClasses";
-import { setMuted, isMuted } from "./audio/engine";
+import { setMuted, isMuted, playSfx } from "./audio/engine";
 import { setMood } from "./audio/music";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
@@ -110,6 +110,8 @@ export function App() {
   const [riftDrop, setRiftDrop] = useState<ModuleInstance | null>(null);
   const [diveResult, setDiveResult] = useState<{ earned: number; newRecord: boolean; depth: number } | null>(null);
   const [pendingEvent, setPendingEvent] = useState<{ event: GameEvent; poiId: string } | null>(null);
+  /** 事件用尽后拆解残骸的结果,用来给玩家一个回执——不能点了没反应。 */
+  const [scavenged, setScavenged] = useState<Partial<Record<ResourceType, number>> | null>(null);
   /** 这一次会话是玩家自己选的"新的开始"。用来压掉存档恢复提示——见 onNewGame。 */
   const [freshStart, setFreshStart] = useState(false);
   /** Core-loop redesign #1 — the hand of three waiting to be picked from. */
@@ -458,7 +460,13 @@ export function App() {
                   // "选择"不是选择,是刷子。
                   const pool = eventsForGalaxy(currentGalaxy.value.id)
                     .filter((e) => !state.value.flags[`event.${e.id}.done`]);
-                  if (pool.length === 0) return;
+                  // 事件用完了就拆解——原来这里是 `return`,点了什么都不会发生。
+                  // 19 个残骸点对 10 个事件,后 9 个全是哑弹(见 scavengeDerelict)。
+                  if (pool.length === 0) {
+                    setScavenged(scavengeDerelict(poiId));
+                    playSfx("mine");
+                    return;
+                  }
                   setPendingEvent({ event: pool[Math.floor(Math.random() * pool.length)], poiId });
                 }}
                 onEngage={(encounterId, poiId, victoryFlag) => {
@@ -521,10 +529,39 @@ export function App() {
           </ErrorBoundary>
         )}
         <DiveResultToast result={diveResult} onClose={() => setDiveResult(null)} />
+        <ScavengeToast rewards={scavenged} onClose={() => setScavenged(null)} />
         <CampaignCompleteCard />
         <HullUnlockToast />
         <ErrorToast />
       </div>
+    </div>
+  );
+}
+
+/** 拆解残骸的回执。事件用尽之后,残骸点原来是**点了没反应**的。 */
+function ScavengeToast({ rewards, onClose }: { rewards: Partial<Record<ResourceType, number>> | null; onClose: () => void }) {
+  useEffect(() => {
+    if (!rewards) return;
+    const id = setTimeout(onClose, 2600);
+    return () => clearTimeout(id);
+  }, [rewards]);
+  if (!rewards) return null;
+  return (
+    <div
+      style={{
+        position: "fixed", left: "50%", transform: "translateX(-50%)",
+        bottom: "calc(4.5rem + var(--safe-bottom, 0px))", zIndex: 62,
+        padding: "0.55rem 0.9rem", borderRadius: 10,
+        border: "1px solid var(--violet)", background: "rgba(6,10,16,0.94)",
+        fontSize: "0.76rem", display: "flex", gap: "0.7rem", alignItems: "center",
+      }}
+    >
+      <span style={{ color: "var(--text-mid)" }}>{t("system.scavenged")}</span>
+      {(Object.entries(rewards) as [ResourceType, number][]).map(([k, v]) => (
+        <span key={k} style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontWeight: 700 }}>
+          <ResourceIcon type={k} size={12} />+{v}
+        </span>
+      ))}
     </div>
   );
 }

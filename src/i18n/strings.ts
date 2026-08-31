@@ -388,6 +388,7 @@ const EN: StringTable = {
   // --- System / Galaxy ---
   "system.next": "▸ Next: {label} — jump to {system}",
   "system.hint": "Drag/tap to fly, or WASD / arrow keys. Approach stations, fields, wrecks, rifts, and contacts to interact.",
+  "system.scavenged": "Stripped the hulk —",
   "system.salvaging": "Salvaging {name}...",
   "system.mining": "Mining {name}...",
   "system.bountyContact": "Bounty contact — repeatable",
@@ -988,6 +989,7 @@ const ZH: StringTable = {
   // --- 星域 / 星系 ---
   "system.next": "▸ 下一步：{label}——跳转至{system}",
   "system.hint": "拖动/点击以飞行，或使用WASD/方向键。靠近空间站、矿场、残骸、裂隙和目标以进行交互。",
+  "system.scavenged": "拆解了这具残骸——",
   "system.salvaging": "正在打捞{name}...",
   "system.mining": "正在开采{name}...",
   "system.bountyContact": "悬赏目标——可重复挑战",
