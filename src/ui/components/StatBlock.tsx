@@ -10,14 +10,17 @@ export function StatReadout({
   value,
   label,
   color,
+  title,
 }: {
   icon: ComponentChildren;
   value: string | number | ComponentChildren;
   label: string;
   color?: string;
+  /** 悬停说明。数值本身说不清"它到底做什么"的时候用。 */
+  title?: string;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }} title={title}>
       <span style={{ color: color ?? "var(--text-mid)", flex: "none" }}>{icon}</span>
       <div style={{ lineHeight: 1.15 }}>
         <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.95rem", color: "var(--text-hi)" }}>

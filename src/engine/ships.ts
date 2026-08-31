@@ -45,7 +45,11 @@ export function createWhisper(): ShipInstance {
     id: "whisper",
     hullClass,
     rarity,
-    aptitude: null,
+    // 资质在**建船时**就定下来(见 createWhisper),扫描只是把它读出来。原来是"扫描时才掷"——
+    // 而界面在扫描前显示的是「??」,那本来就是"已经存在、只是没看见"的写法。
+    // 更要紧的是:资质一旦真的有作用(见 applyXp),"扫描时才掷"就变成一个陷阱
+    // ——不扫是 B(1.0),扫了有 45% 概率掷出 C 或 D,把自己的船变差。
+    aptitude: weightedPick(APTITUDE_WEIGHTS),
     scanned: false,
     name: "Whisper",
     level: 1,
@@ -109,9 +113,11 @@ export function reforgeShip(ship: ShipInstance, targetHullClass: HullClassId): S
   return { ...ascended, ascendedFrom: ship.ascendedFrom };
 }
 
+/** 扫描只**揭示**资质,不掷它——见 createStarterShip 里的说明。
+ * `?? weightedPick` 只是老存档的兜底:第 50 轮之前建的船 aptitude 是 null。 */
 export function scanShip(ship: ShipInstance): ShipInstance {
   if (ship.scanned) return ship;
-  return { ...ship, scanned: true, aptitude: weightedPick(APTITUDE_WEIGHTS) };
+  return { ...ship, scanned: true, aptitude: ship.aptitude ?? weightedPick(APTITUDE_WEIGHTS) };
 }
 
 export function computeMaxHull(ship: Pick<ShipInstance, "hullClass" | "rarity" | "level"> & Partial<Pick<ShipInstance, "rolls">>): number {
@@ -170,16 +176,36 @@ export function xpToNextLevel(level: number): number {
   return 40 + level * 25;
 }
 
+/** 资质决定这条船**学得多快**。
+ *
+ * 2026-08-31(/loop 第 50 轮)。在这之前,APTITUDE_GROWTH 唯一的作用是升级时把
+ * 最大船体的增量按倍率补进当前血量——而 computeMaxHull **根本不看资质**。也就是说
+ * S 资质和 D 资质的船,每一级的数值完全相同;唯一的差别是升级那一瞬间多回十几点血,
+ * 而且满血时连这点差别都没有(那行有 Math.min 封顶)。
+ *
+ * 可界面上,资质是舰桥五个头号数值之一,还专门有个"扫描"动作把它揭出来,S 的
+ * 权重只有 3%。玩家扫出一个 S,以为拿到了什么;实际拿到的是每级多回约 15 点血。
+ *
+ * 按名字直译成"成长加成"(乘进 computeMaxHull 的等级项)是**错的**,试过就知道:
+ * 稀有度一档是 ×1.32,而品质带已经吃掉 ×1.27,再叠一层 1.5/0.6 的资质,低阶好船
+ * 就会超过高阶差船——那正是 design-principles.md 的 Player-Tested Anti-Patterns #6
+ * 明令禁止、并且由 ships.test.ts 守着的那条阶梯。
+ *
+ * 改成**经验倍率**:等级相同则数值分毫不变(阶梯完好),但一条 S 的船在同样的战斗
+ * 里升得更快、整场战役都走在前面。这也正是"资质"这个词本来的意思——学得快,
+ * 不是天生更壮。 */
 export function applyXp(ship: ShipInstance, xp: number): ShipInstance {
   let { level, xp: curXp } = ship;
-  curXp += xp;
-  const growthMult = ship.aptitude ? APTITUDE_GROWTH[ship.aptitude] : APTITUDE_GROWTH.B;
+  const aptitudeMult = ship.aptitude ? APTITUDE_GROWTH[ship.aptitude] : APTITUDE_GROWTH.B;
+  curXp += Math.round(xp * aptitudeMult);
   while (curXp >= xpToNextLevel(level)) {
     curXp -= xpToNextLevel(level);
     level += 1;
   }
   const leveled = { ...ship, level, xp: curXp };
   const newMax = computeMaxHull(leveled);
-  const grown = Math.round((newMax - computeMaxHull(ship)) * growthMult);
-  return { ...leveled, currentHp: Math.min(newMax, ship.currentHp + Math.max(0, grown)) };
+  // 升级把长出来的那截船体补满——所有资质一视同仁。资质的含义现在只有一个
+  // (学得快),一个数值只表达一件事。
+  const grown = Math.max(0, newMax - computeMaxHull(ship));
+  return { ...leveled, currentHp: Math.min(newMax, ship.currentHp + grown) };
 }

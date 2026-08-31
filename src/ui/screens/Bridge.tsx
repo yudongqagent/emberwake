@@ -10,6 +10,7 @@ import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, AptitudeIcon, LevelIcon, LocationIcon, CrewRoleIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
 import { StatReadout, Bar, hullBarKind, AnimatedFraction } from "../components/StatBlock";
 import { BridgeViewscreen } from "../components/BridgeViewscreen";
+import { APTITUDE_GROWTH } from "../../data/hullClasses";
 import { t } from "../../i18n/strings";
 import { localizedCrewName, localizedHullClassDisplay, localizedSystemName, localizedGalaxyName } from "../../i18n/data";
 
@@ -249,7 +250,7 @@ export function Bridge({ onNavigate, onEnterRift }: { onNavigate: (screen: strin
             <StatReadout icon={<EvasionIcon size={18} />} value={`${Math.round(computeBaseEvasion(ship) * 100)}%`} label={t("bridge.stat.evasion")} color="var(--green)" />
             <StatReadout icon={<CritIcon size={18} />} value={`${Math.round(computeBaseCritChance(ship) * 100)}%`} label={t("bridge.stat.crit")} color="var(--red)" />
             <StatReadout icon={<LevelIcon size={18} />} value={ship.level} label={t("bridge.stat.level")} color="var(--violet)" />
-            <StatReadout icon={<AptitudeIcon size={18} />} value={ship.scanned ? ship.aptitude! : "??"} label={t("bridge.stat.aptitude")} color="var(--green)" />
+            <StatReadout icon={<AptitudeIcon size={18} />} value={ship.scanned && ship.aptitude ? `${ship.aptitude} ×${APTITUDE_GROWTH[ship.aptitude].toFixed(2).replace(/0$/, "")}` : "??"} label={t("bridge.stat.aptitude")} color="var(--green)" title={t("bridge.stat.aptitudeTitle")} />
           </div>
         </div>
       )}

@@ -6,6 +6,7 @@ import { ShipRarityTag } from "../components/RarityTag";
 import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, SlotsIcon, AptitudeIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
 import { StatReadout, Bar, hullBarKind, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
+import { APTITUDE_GROWTH } from "../../data/hullClasses";
 import { t } from "../../i18n/strings";
 import { localizedNamedShipActive, localizedNamedShipFlavor, localizedHullClassDisplay } from "../../i18n/data";
 
@@ -70,7 +71,7 @@ export function Fleet() {
           <StatReadout icon={<EvasionIcon size={16} />} value={`${Math.round(computeBaseEvasion(ship) * 100)}%`} label={t("bridge.stat.evasion")} color="var(--green)" />
           <StatReadout icon={<CritIcon size={16} />} value={`${Math.round(computeBaseCritChance(ship) * 100)}%`} label={t("bridge.stat.crit")} color="var(--red)" />
           <StatReadout icon={<SlotsIcon size={16} />} value={totalSlots} label={t("fleet.stat.slots")} color="var(--violet)" />
-          <StatReadout icon={<AptitudeIcon size={16} />} value={ship.scanned ? ship.aptitude! : "??"} label={t("bridge.stat.aptitude")} color="var(--green)" />
+          <StatReadout icon={<AptitudeIcon size={16} />} value={ship.scanned && ship.aptitude ? `${ship.aptitude} ×${APTITUDE_GROWTH[ship.aptitude].toFixed(2).replace(/0$/, "")}` : "??"} label={t("bridge.stat.aptitude")} color="var(--green)" title={t("bridge.stat.aptitudeTitle")} />
         </div>
 
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.7rem" }}>
