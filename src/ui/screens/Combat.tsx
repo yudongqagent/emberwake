@@ -119,12 +119,37 @@ const FACTION_PREFERRED_RANGE: Partial<Record<FactionId, RangeBand>> = {
  * H): the player no longer flies the ship — range is a discrete tug-of-war (see
  * advanceRangeBand) advanced once per combatTick (150ms), not a per-frame physics
  * simulation. BASE_CLOSE_SECONDS is how long closing one band takes at a
- * "reference" ship speed (see the playerRate derivation below) — order-of-
- * magnitude longer than the old ~1.6s so range/positioning is a real tactical
- * resource held over time, not something that resolves instantly. */
-const BASE_CLOSE_SECONDS = 16;
+ * "reference" ship speed (see the playerRate derivation below).
+ *
+ * ---
+ * 2026-08-31(/loop 第 51 轮)。原来这两个数是 16 秒和 1/18,选它们的理由写在上面
+ * ——"要比原来的 1.6 秒长一个数量级,让阵位成为一种要花时间守住的战术资源"。
+ * 方向是对的,但**没有对照过一场仗到底有多长**。实测:
+ *
+ *     今天全部战斗的时长   6.4 / 7.9 / 8.6 / 11.5 / 11.6 / 12.1 / 12.6 / 12.7 / 13.2 秒
+ *     中位 11.6 秒,**最长的一场也只有 13.2 秒**
+ *
+ * 也就是说屏幕正中那排永远摆着的舵手指令,在一场普通战斗里来不及生效一次。
+ * 浏览器实拍确认过:下达「接近」后每 0.5 秒采样,**25 秒里档位全程「中距」**,
+ * 一次都没变。
+ *
+ * 被拉扯的时候更荒唐:玩家 1/16 减敌方 1/18,净速率是 1/144——**争夺一个档位
+ * 要 144 秒**。第 47 轮我给武器补上了"擅长远距/近距"的显示,当时拍不到它变色,
+ * 以为是运气;其实那就是这个 bug。
+ *
+ * 第一版改成了 5 秒 / 1÷9,实测还是不够:构装体偏好远距,所以「接近」是被正面
+ * 顶着的,净速率 1/5.1 − 1/9 ≈ 11.8 秒,而那场仗只打了 **8.8 秒**——方向对了,
+ * 幅度没到。**被顶着的那一档才是常态**,它必须也塞得进一场仗。
+ *
+ * 按"被顶着也要能完成"反解:
+ *
+ *     无人争夺        约 4 秒   —— 花掉三分之一场仗,是笔真开销
+ *     被敌方顶着      约 8 秒   —— 几乎整场,但做得到
+ *     自己不动手      约 8 秒   —— 对方把你拖走("保持"也有代价)
+ */
+const BASE_CLOSE_SECONDS = 4;
 const REFERENCE_SHIP_SPEED = 220;
-const ENEMY_RANGE_RATE = 1 / 18;
+const ENEMY_RANGE_RATE = 1 / 8;
 /** Fixed screen-space x-anchor per range band — replaces continuous position.
  * The player's ship anchor never moves; only the enemy formation's anchor shifts
  * with the current band (see arena-update in the render loop), interpolated
@@ -1366,9 +1391,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       // Square-rooted, not linear: hull speeds became monotonic on 2026-08-24 (see
       // hullClasses.ts), so an endgame hull is now ~2.8x the starting corvette's
       // speed instead of slower than it. Linear scaling would have collapsed a
-      // band transition from ~16s to under 6s and undone the whole point of the
-      // real-timescale rework — sqrt keeps speed a genuine, felt advantage
-      // (~16s → ~10s) without erasing range as a tactical resource.
+      // band transition too far — sqrt keeps speed a genuine, felt advantage
+      // (~5s → ~3s for an endgame hull) without collapsing range into a
+      // free action.
       const playerRate = (1 / BASE_CLOSE_SECONDS)
         * Math.sqrt(shipSpeed / REFERENCE_SHIP_SPEED)
         * enginesRateMultiplier(reactorRef.current.engines)
