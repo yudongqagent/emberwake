@@ -15,6 +15,16 @@ import { ACT6_SCENES_ZH } from "./act6";
 import { STANDING_SCENES_ZH } from "./standing";
 import { localizedScene } from "./index";
 import { language } from "../language";
+import { SYSTEM_NAMES_ZH, GALAXY_NAMES_ZH } from "../data/places";
+const PLACE_NAMES_ZH: Record<string, string> = { ...GALAXY_NAMES_ZH, ...SYSTEM_NAMES_ZH };
+import ACT1_ZH_SRC from "./act1.ts?raw";
+import ACT2_ZH_SRC from "./act2.ts?raw";
+import ACT3_ZH_SRC from "./act3.ts?raw";
+import ACT4_ZH_SRC from "./act4.ts?raw";
+import ACT5_ZH_SRC from "./act5.ts?raw";
+import ACT6_ZH_SRC from "./act6.ts?raw";
+import STANDING_ZH_SRC from "./standing.ts?raw";
+import PROSE_SRC from "../../data/story/prose.ts?raw";
 
 const ACTS = [
   { en: ACT1_SCENES, zh: ACT1_SCENES_ZH, name: "act1" },
@@ -151,5 +161,52 @@ describe("Chinese script uses Chinese names", () => {
         }
       }
     }
+  });
+});
+
+// 2026-08-31(/loop 第 14 轮):通关存档上,目标提示写着「跳转至铁境关」,而剧情和
+// 散文里那个地方一直叫「铁门星域」。逐个核对之后,**九个星系/星区在地图上和剧情里
+// 是两个名字**:
+//
+//   狮心扩域 / 狮心疆域    天鹅礁联合体 / 天鹅域商会   铁境关 / 铁门星域
+//   空巢船坞 / 空壳船坞    浮游市集 / 漂流集市        帷幕之缘 / 帷幕边缘
+//   蛹壳广域 / 蛹化星域    合唱门阶 / 合唱门槛        戴森合唱环 / 戴森合唱
+//
+// 玩家读到"去帷幕边缘",然后在写着"帷幕之缘"的地图上找。
+describe("地图上的地名和剧情里的地名必须是同一个", () => {
+  const STORY_TEXT = [
+    ACT1_ZH_SRC, ACT2_ZH_SRC, ACT3_ZH_SRC, ACT4_ZH_SRC, ACT5_ZH_SRC, ACT6_ZH_SRC,
+    STANDING_ZH_SRC, PROSE_SRC,
+  ].join("\n");
+
+  it("每个星系/星区的中文名都能在剧情文本里找到", () => {
+    // 只查星系和星区——矿点、残骸这类 POI 剧情本来就不会点名。
+    const SYSTEMS = [
+      "bauhiniaReach", "lionsheartExpanse", "swanreachCombine", "fracturedVeil",
+      "deepOrigin", "umbralLine", "chorusDeep",
+      "amaranthBelt", "bauhiniaPrime", "kestrelsRest", "thornwake", "coldreachAnchorage",
+      "ferrousGate", "ashenvale", "hollowFleetYard", "meridianExchange", "driftmarket",
+      "veilsEdge", "chrysalisExpanse", "queenspire", "choirsThreshold", "dysonChoir",
+    ];
+    const missing: string[] = [];
+    for (const id of SYSTEMS) {
+      const name = PLACE_NAMES_ZH[id];
+      if (!name) continue;
+      // 允许包含关系:剧情里说「联合体」,地图上写「天鹅域联合体」是同一个东西的
+      // 全称,不算对不上。真正的问题是**两个不同的词**(铁境关 vs 铁门星域)。
+      const ok = STORY_TEXT.includes(name)
+        || [2, 3, 4].some((n) => {
+          for (let i = 0; i + n <= name.length; i++) {
+            const part = name.slice(i, i + n);
+            if (part.length >= 3 && STORY_TEXT.includes(part)) return true;
+          }
+          return false;
+        });
+      if (!ok) missing.push(`${id} = 「${name}」`);
+    }
+    expect(
+      missing,
+      `这些地名只存在于地图上,剧情里叫的是别的:\n${missing.join("\n")}`,
+    ).toEqual([]);
   });
 });
