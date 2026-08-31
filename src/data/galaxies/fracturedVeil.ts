@@ -152,7 +152,7 @@ export const FRACTURED_VEIL: GalaxyDef = {
           y: 460,
           radius: 60,
           requiresFlag: "act3.queenspire.cleared",
-          data: { rewards: { alloy: 60, originEssence: 40 }, respawnSeconds: 160 },
+          data: { rewards: { alloy: 240, originEssence: 40 }, respawnSeconds: 160 },
         },
       ],
     },

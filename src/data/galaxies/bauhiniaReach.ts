@@ -214,7 +214,7 @@ export const BAUHINIA_REACH: GalaxyDef = {
           y: 460,
           radius: 55,
           requiresFlag: "act1.static.cleared",
-          data: { rewards: { alloy: 25, insight: 5 }, respawnSeconds: 120 },
+          data: { rewards: { alloy: 18, insight: 5 }, respawnSeconds: 120 },
         },
       ],
     },
