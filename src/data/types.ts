@@ -298,6 +298,15 @@ export interface StoryChoiceOption {
 
 export interface StoryScene {
   id: string;
+  /** 这一幕的台词收在一条"去做某件事"的指令上,而它指向的是这个 POI。
+   *
+   * 2026-08-31 实测(/loop 第 25 轮):开场幕的最后一句是「先干活。前面星带里有一片
+   * 残骸,能拆的都拆回来。」——而同一屏最显眼的目标条写的是「▸ 下一步:迎战求救
+   * 信号——跳转至茶隼歇息地」,指向**另一个星系**。新玩家在游戏第一分钟同时收到
+   * 两条互相矛盾的指令,而那正是最容易流失的一分钟。
+   *
+   * 有了这个字段,目标条会先跟着叙事走,等那件事做完再指向下一幕。 */
+  pointsAtPoi?: string;
   chapter: string;
   chapterTitle: string;
   systemId: string;

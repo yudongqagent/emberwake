@@ -30,6 +30,9 @@ export const ACT1_SCENES: StoryScene[] = [
       { speaker: "The Cinder", text: "Later. Right now you're aboard Whisper, she's a salvage-grade corvette, and she is the only thing standing between you and that ending happening again." },
       { speaker: "The Cinder", text: "So fly. There's wreckage in the belt ahead. Take what's in it." },
     ],
+    // 最后一句台词指的就是它(「前面星带里有一片残骸」)。目标条跟着这句走,
+    // 否则玩家第一分钟就会收到两条互相矛盾的指令。
+    pointsAtPoi: "amaranthBeltDerelict",
     onCompleteFlags: ["act1.coldWake.cleared"],
   },
   {

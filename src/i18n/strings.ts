@@ -394,6 +394,8 @@ const EN: StringTable = {
   "galaxy.jumpTo": "Jump to {system}",
   "galaxy.nextAt": "▸ Next: {label} at {system}",
   "objective.engage": "Engage {poi}",
+  "objective.salvage": "Strip {poi}",
+  "objective.goto": "Reach {poi}",
   "galaxy.hintMulti": "Tap any discovered system to jump there directly.",
   "galaxy.hintSingle": "More galaxies open as the campaign progresses.",
 
@@ -972,6 +974,8 @@ const ZH: StringTable = {
   "galaxy.jumpTo": "跳转至{system}",
   "galaxy.nextAt": "▸ 下一步：{label}，位于{system}",
   "objective.engage": "迎战{poi}",
+  "objective.salvage": "拆解{poi}",
+  "objective.goto": "前往{poi}",
   "galaxy.hintMulti": "点击任意已发现的星系即可直接跳转。",
   "galaxy.hintSingle": "随着战役推进将解锁更多星系。",
 

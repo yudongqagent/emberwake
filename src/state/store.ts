@@ -926,7 +926,42 @@ function findPoiByVictoryFlag(flag: string): { system: SystemDef; poiId: string;
   return null;
 }
 
+function findPoiById(poiId: string): { system: SystemDef; poi: Poi } | null {
+  for (const galaxy of GALAXIES) {
+    for (const system of galaxy.systems) {
+      for (const poi of system.pois) {
+        if (poi.id === poiId) return { system, poi };
+      }
+    }
+  }
+  return null;
+}
+
+/** 路标上的动词得对得上那个地方是什么。残骸是**拆**的,不是打的——第一版直接
+ * 套了战斗用的「迎战{poi}」,于是开场变成「迎战漂流信号」。 */
+function objectiveVerb(kind: Poi["kind"]): "objective.engage" | "objective.salvage" | "objective.goto" {
+  if (kind === "patrol") return "objective.engage";
+  if (kind === "derelict" || kind === "asteroidField") return "objective.salvage";
+  return "objective.goto";
+}
+
 export function getNextObjective(): Objective | null {
+  // 叙事先于路标。一幕如果用台词把玩家指向了某个 POI(StoryScene.pointsAtPoi),
+  // 在那件事做完之前,目标条就跟着那句台词走。
+  //
+  // 2026-08-31 实测:开场幕说「前面星带里有一片残骸,能拆的都拆回来」,而目标条
+  // 同时写着「跳转至茶隼歇息地」——游戏的第一分钟给出两条互相矛盾的指令。
+  for (const scene of STORY_SCENES) {
+    if (!scene.pointsAtPoi || !hasFlag(scene.hiddenAfterFlag)) continue;
+    const found = findPoiById(scene.pointsAtPoi);
+    if (!found || poiRuntime(found.poi.id).cleared) continue;
+    return {
+      label: t(objectiveVerb(found.poi.kind), { poi: localizedPoiName(found.poi) }),
+      systemId: found.system.id,
+      systemName: localizedSystemName(found.system),
+      poiId: found.poi.id,
+    };
+  }
   for (const scene of STORY_SCENES) {
     if (hasFlag(scene.hiddenAfterFlag)) continue;
     // Open-world redesign: never point the player at a beat their ship isn't
