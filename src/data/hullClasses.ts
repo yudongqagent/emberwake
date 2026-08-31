@@ -25,7 +25,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 6,
     unlockFlag: "act1.tigersReach.cleared",
     essenceCost: 40,
-    minLevel: 4,
+    minLevel: 3,
   },
   {
     id: "interceptor",
@@ -41,7 +41,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 8,
     unlockFlag: "act1.tigersReach.cleared",
     essenceCost: 40,
-    minLevel: 4,
+    minLevel: 3,
   },
   {
     id: "cruiser",
@@ -54,7 +54,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 8,
     unlockFlag: "act1.emberRising.cleared",
     essenceCost: 90,
-    minLevel: 10,
+    minLevel: 4,
   },
   {
     id: "vanguard",
@@ -69,7 +69,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 9,
     unlockFlag: "act1.emberRising.cleared",
     essenceCost: 90,
-    minLevel: 10,
+    minLevel: 4,
   },
   {
     id: "battleship",
@@ -82,7 +82,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 9,
     unlockFlag: "act2.reachOpens.cleared",
     essenceCost: 160,
-    minLevel: 18,
+    minLevel: 7,
   },
   {
     id: "bulwark",
@@ -97,7 +97,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 9,
     unlockFlag: "act2.reachOpens.cleared",
     essenceCost: 160,
-    minLevel: 18,
+    minLevel: 7,
   },
   {
     id: "dreadnought",
@@ -110,7 +110,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 10,
     unlockFlag: "act3.originTide.cleared",
     essenceCost: 260,
-    minLevel: 28,
+    minLevel: 10,
   },
   {
     id: "corsair",
@@ -129,7 +129,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 12,
     unlockFlag: "act3.originTide.cleared",
     essenceCost: 260,
-    minLevel: 28,
+    minLevel: 10,
   },
   {
     id: "sovereign",
@@ -142,7 +142,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 12,
     unlockFlag: "act4.deepOrigin.cleared",
     essenceCost: 420,
-    minLevel: 40,
+    minLevel: 12,
   },
   {
     id: "aegis",
@@ -157,7 +157,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 12,
     unlockFlag: "act4.deepOrigin.cleared",
     essenceCost: 420,
-    minLevel: 40,
+    minLevel: 12,
   },
   {
     id: "anthem",
@@ -173,7 +173,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 14,
     unlockFlag: "act6.civilizationDisqualified.cleared",
     essenceCost: 620,
-    minLevel: 55,
+    minLevel: 18,
   },
   {
     id: "sanctum",
@@ -188,7 +188,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseSpeed: 13,
     unlockFlag: "act6.civilizationDisqualified.cleared",
     essenceCost: 620,
-    minLevel: 55,
+    minLevel: 18,
   },
 ];
 
@@ -214,6 +214,29 @@ export const RARITY_MULTIPLIER: Record<ShipRarity, number> = {
   ascendant: 4.01,
 };
 
+/** minLevel 是**地板**,不是墙。
+ *
+ * 2026-08-31(/loop 第 54 轮)。原来是 4 / 10 / 18 / 28 / 40 / 55。按每个 POI 打一遍
+ * 的口径量了一次战役的经验总量:
+ *
+ *     威胁1 累计   354 → 4 级      威胁5 累计 2,320 → 12 级
+ *     威胁2 累计   896 → 7 级      威胁6 累计 4,391 → 17 级
+ *     威胁3 累计 1,180 → 8 级      威胁7 累计 8,656 → **25 级**
+ *     威胁4 累计 1,579 → 10 级
+ *
+ * 也就是说**打完整个战役是 25 级**,而升到 55 级要 39,285 经验——还差 4.5 个战役。
+ * 六级阶梯的上面三级(无畏、主权、圣颂)在一周目里**永远够不到**,而标题屏幕上
+ * 写的正是"它不会被替换——只会被一级一级地重铸"。
+ *
+ * 而剧情门(unlockFlag)的节奏本来是对的:一幕开一级。真正卡住人的是等级——
+ * 剧情说"可以进阶了",等级门槛说不行,差距还是 40 对 12、55 对 25。那不是
+ * "去挣一挣",那是"永远不行"。
+ *
+ * 现在按玩家在那个剧情点上**实际有的等级**定:3 / 4 / 7 / 10 / 12 / 18。门槛仍在
+ * (赶剧情不打仗的人会被拦一会儿),而且仍然递增,但一周目走完六级都够得到。
+ *
+ * 刻意**没有**反过来把经验放大 4.5 倍:那会把玩家的等级成长(船体 8%/级)
+ * 推到 difficultyRamp.test.ts 假设之外——那条守卫是按舰级算预期船体的,不是按等级。 */
 export const APTITUDE_GROWTH: Record<Aptitude, number> = {
   S: 1.5,
   A: 1.25,
