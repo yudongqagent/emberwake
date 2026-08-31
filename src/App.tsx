@@ -24,7 +24,9 @@ import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
 import { registerRuntimeEncounter, encounterById } from "./data/encounters";
-import { grant, grantRiftDrop, bankDive, resolveEventOutcome, currentGalaxy, saveRiftRun } from "./state/store";
+import { grant, grantRiftDrop, bankDive, resolveEventOutcome, currentGalaxy, saveRiftRun, pendingFits, fitAll } from "./state/store";
+import { moduleDefById } from "./data/modules";
+import { hullClassById } from "./data/hullClasses";
 import { setMuted, isMuted } from "./audio/engine";
 import { setMood } from "./audio/music";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
@@ -69,10 +71,11 @@ interface PendingStoryEncounter {
   encounterId: string;
 }
 
-/** An in-progress Extradimensional Battlefield run (see data/rift.ts). Held in
- * component state, not the save: a run is a single sitting, and its haul is
- * explicitly provisional until extraction — persisting a half-finished dive
- * across reloads would quietly hand players a way to bank a losing run. */
+/** An in-progress Extradimensional Battlefield run (see data/rift.ts).
+ *
+ * 存进存档(GameState.riftRun),但**只在两波之间**存——那是玩家已经清掉一波、
+ * 正在决定推进还是撤离的时刻。战斗中途刷新会退回那一波开始前重打,所以"打输了
+ * 读档把收获捞回来"这条路依然不通;而崩溃或误刷新不再毁掉一整趟深潜。 */
 interface RiftRun {
   depth: number;
   haul: Partial<Record<ResourceType, number>>;
@@ -421,6 +424,14 @@ export function App() {
       <SaveRecovery current={state.value} onRestore={replaceState} suppressed={freshStart} />
       {settingsOpen && <SettingsScreen onClose={() => setSettingsOpen(false)} />}
       {navBar}
+      {/* 只在"玩家能去改配装"的时刻提醒。战斗、剧情、抉择进行中拉他去看装备,
+          是把提醒变成打扰。
+          排在外层 flex 列里、跟着文档流走,而不是浮在底部:第一版做成 fixed
+          底部横幅,375 宽下**正好盖住底部的目标列表**——那是玩家点进战斗的
+          入口,等于一边说"你没武器"一边挡住他要去的地方。 */}
+      {!docked && !scene && !combat && !draft && !sortie && !riftRun && !pendingEvent && panel !== "modules" && (
+        <LoadoutWarning onOpen={() => setPanel("modules")} />
+      )}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {/* The world view. It stays mounted under every console panel — opening
             a ship system no longer swaps the page out from under the player. */}
@@ -465,6 +476,7 @@ export function App() {
           <ShipConsole active={panel} onSelect={(id) => setPanel(panel === id ? null : id)} />
         )}
 
+
         {panel && (
           <ErrorBoundary label={t(PANEL_TITLE[panel])}>
             <ConsoleOverlay
@@ -508,6 +520,62 @@ export function App() {
         <HullUnlockToast />
         <ErrorToast />
       </div>
+    </div>
+  );
+}
+
+/** 「你的船没装武器」的横幅。
+ *
+ * 2026-08-31(/loop 第 18 轮)。55 级存档:武器槽 ×10 全空,功率 3/256,库存里
+ * 三把 MK5 武器。游戏从头到尾一个字都没说——舰桥没提,星系图没提,开打前也没提。
+ * 上一轮我在裂隙里看到敌人打不死,以为是相位偏移的锅,其实是这艘船没有炮。
+ *
+ * 放在 App 这一层而不是舰桥或星系图里,是上几轮反复吃亏换来的:同一条规则接进
+ * N 个界面,就会有 N-1 个界面漏掉。挂在最外层,玩家在哪个界面都看得见。
+ *
+ * 只在两种情况出现,而且都给一键修复,不给"知道了":
+ *   红 — 一件武器都没装(这时候战斗根本赢不了)
+ *   琥珀 — 有空槽,而库存里正好有装得进去的
+ * 战斗/剧情/事件进行时不显示,那些时刻玩家不该被拉走注意力。 */
+function LoadoutWarning({ onOpen }: { onOpen: () => void }) {
+  const ship = flagship.value;
+  if (!ship) return null;
+  const equippedIds = new Set(state.value.ships.flatMap((s) => s.equipped).filter(Boolean) as string[]);
+  const inventory = state.value.modules.filter((m) => !equippedIds.has(m.id));
+  const fits = pendingFits(ship, inventory);
+  const weaponCount = ship.equipped.filter(
+    (id) => id && moduleDefById(state.value.modules.find((m) => m.id === id)!.defId).type === "weapon",
+  ).length;
+  const unarmed = weaponCount === 0;
+  if (!unarmed && fits.length === 0) return null;
+
+  const accent = unarmed ? "var(--red)" : "var(--amber)";
+  const s = hullClassById(ship.hullClass).slots;
+  const emptySlots = s.weapon + s.armor + s.engine + s.utility - ship.equipped.filter(Boolean).length;
+  return (
+    <div
+      style={{
+        flex: "none", margin: "0 0.8rem 0.5rem",
+        display: "flex", alignItems: "center", gap: "0.6rem",
+        padding: "0.6rem 0.75rem", borderRadius: 10,
+        border: `1px solid ${accent}`, background: "rgba(6,10,16,0.94)",
+        boxShadow: `0 0 18px ${unarmed ? "rgba(255,92,92,0.25)" : "rgba(255,184,77,0.2)"}`,
+      }}
+    >
+      <div style={{ fontSize: "0.74rem", lineHeight: 1.45, color: "var(--text-mid)", minWidth: 0 }}>
+        {unarmed ? (
+          <b style={{ color: accent }}>{t("modules.unarmed", { name: ship.name })}</b>
+        ) : (
+          t("modules.emptySlots", { count: emptySlots, stowed: fits.length })
+        )}
+      </div>
+      <button
+        className="btn primary"
+        style={{ marginLeft: "auto", flex: "none", fontSize: "0.7rem", padding: "0.4em 0.7em" }}
+        onClick={() => (fits.length > 0 ? fitAll(ship.id) : onOpen())}
+      >
+        {fits.length > 0 ? t("modules.unarmedFix", { count: fits.length }) : t("nav.modules")}
+      </button>
     </div>
   );
 }

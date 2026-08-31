@@ -1,8 +1,8 @@
 import { signal, computed } from "@preact/signals";
 import type { GameState } from "../engine/save";
 import { createInitialState, loadGame, saveGame } from "../engine/save";
-import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, HullClassId, HullClassDef, ShipInstance, FactionId } from "../data/types";
-import { fabricatorCost, MARKET_MAX_RARITY, moduleDefById } from "../data/modules";
+import type { ResourceType, StoryScene, GalaxyDef, SystemDef, Poi, ModuleInstance, ModuleType, HullClassId, HullClassDef, ShipInstance, FactionId } from "../data/types";
+import { fabricatorCost, MARKET_MAX_RARITY, moduleDefById, MODULE_RARITY_ORDER } from "../data/modules";
 import { hullClassById, ascensionRequirementsMet, HULL_CLASSES } from "../data/hullClasses";
 import { BAUHINIA_REACH } from "../data/galaxies/bauhiniaReach";
 import { LIONSHEART_EXPANSE } from "../data/galaxies/lionsheartExpanse";
@@ -552,6 +552,75 @@ export function autoEquip(ship: ShipInstance, mod: ModuleInstance): ShipInstance
     }
   }
   return ship;
+}
+
+/** 库存里**能直接装进空槽**的模组,按"最好的先装"排序,返回 {模组 id → 槽位号}。
+ *
+ * 2026-08-31 实测(/loop 第 18 轮)。55 级存档打开模组页:
+ *
+ *     功率负载 3/256      武器 ×10 全空      装甲 ×8 全空
+ *     库存——8 件未装备    3 把 MK5 武器 / 2 件 MK5 装甲 躺在包里
+ *     一键出售 4 件重复模组 — +1700   ← 面板最显眼的动作
+ *
+ * 也就是说:玩家一门炮都没装,而游戏唯一主动建议他做的事是**把 MK5 卖掉**。
+ * 库存列表里每件模组旁边只有「出售」一个按钮,压根没有「装配」——要装得自己
+ * 去槽位那边一个个点。上一轮我看到裂隙里打不死敌人,归因给了相位偏移;真实
+ * 原因是这艘船没有武器。
+ *
+ * 这条只填**空槽**,永不顶掉已装备的东西——换掉在装的那件牵涉词条、门派套装、
+ * 功率预算,是有取舍的决定,和 autoEquip 同一条原则。同一个设计不会装两次
+ * (equipModule 本来就按设计去重),所以批内也要记账。 */
+export function pendingFits(ship: ShipInstance, inventory: ModuleInstance[]): { moduleId: string; slotIndex: number }[] {
+  const layout = hullClassById(ship.hullClass).slots;
+  const slotType: ModuleType[] = [];
+  for (const type of ["weapon", "armor", "engine", "utility"] as const) {
+    for (let i = 0; i < layout[type]; i++) slotType.push(type);
+  }
+  const taken = new Set<number>();
+  const designs = new Set<string>();
+  ship.equipped.forEach((id, i) => {
+    if (!id) return;
+    taken.add(i);
+    const d = state.value.modules.find((m) => m.id === id)?.defId;
+    if (d) designs.add(d);
+  });
+
+  // 好的先装:同类型只有有限的空槽,不能让一件 MK1 抢在 MK5 前面。
+  const ranked = [...inventory].sort((a, b) => {
+    const r = MODULE_RARITY_ORDER.indexOf(b.rarity) - MODULE_RARITY_ORDER.indexOf(a.rarity);
+    return r !== 0 ? r : b.quality - a.quality;
+  });
+
+  const fits: { moduleId: string; slotIndex: number }[] = [];
+  for (const mod of ranked) {
+    const def = moduleDefById(mod.defId);
+    if (designs.has(mod.defId)) continue;
+    const slot = slotType.findIndex((type, i) => type === def.type && !taken.has(i));
+    if (slot === -1) continue;
+    taken.add(slot);
+    designs.add(mod.defId);
+    fits.push({ moduleId: mod.id, slotIndex: slot });
+  }
+  return fits;
+}
+
+/** 把 pendingFits 算出来的那批一次装上。 */
+export function fitAll(shipId: string): number {
+  const ship = state.value.ships.find((s) => s.id === shipId);
+  if (!ship) return 0;
+  const equippedIds = new Set(state.value.ships.flatMap((s) => s.equipped).filter(Boolean) as string[]);
+  const fits = pendingFits(ship, state.value.modules.filter((m) => !equippedIds.has(m.id)));
+  if (fits.length === 0) return 0;
+  const equipped = [...ship.equipped];
+  for (const f of fits) equipped[f.slotIndex] = f.moduleId;
+  // 空槽在数组末尾时可能是 undefined(旧存档的数组比船体槽位短),补成 null。
+  for (let i = 0; i < equipped.length; i++) if (equipped[i] === undefined) equipped[i] = null;
+  state.value = {
+    ...state.value,
+    ships: state.value.ships.map((s) => (s.id === shipId ? { ...s, equipped } : s)),
+  };
+  persist();
+  return fits.length;
 }
 
 /** 存下正在进行的深潜,或清掉它。

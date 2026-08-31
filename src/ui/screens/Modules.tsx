@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { state, flagship, equipModule, spend, canAfford, sellModule, upgradeModule, isDesignEquipped } from "../../state/store";
+import { state, flagship, equipModule, spend, canAfford, sellModule, upgradeModule, isDesignEquipped, pendingFits, fitAll } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
 import { powerStrainMultiplier } from "../../engine/combat";
 import { computePowerCapacity } from "../../engine/ships";
@@ -13,7 +13,7 @@ import { ModuleStats } from "../components/ModuleStats";
 import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon, ResourceIcon } from "../components/Icons";
 import { Bar, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 import { LoadoutDiagram } from "../components/LoadoutDiagram";
-import type { ModuleType, ModuleInstance } from "../../data/types";
+import type { ModuleType, ModuleInstance, ShipInstance } from "../../data/types";
 import { t } from "../../i18n/strings";
 import { localizedModuleInstanceName, localizedTrait, localizedEvolutionName } from "../../i18n/data";
 import { evolutionForFamily, evolutionBlocker } from "../../data/evolutions";
@@ -168,7 +168,7 @@ export function Modules() {
         })}
       </div>
 
-      <InventoryPanel inventory={inventory} />
+      <InventoryPanel inventory={inventory} ship={ship} />
 
       {pickerSlot !== null && (
         <PickerModal
@@ -191,10 +191,14 @@ export function Modules() {
  * scale with content volume. More rarities and more Fabricator draws means modules
  * pile up fast — this keeps the best copy of each archetype and clears the rest in
  * one click, instead of forcing manual cleanup one item at a time. */
-function InventoryPanel({ inventory }: { inventory: ModuleInstance[] }) {
+function InventoryPanel({ inventory, ship }: { inventory: ModuleInstance[]; ship: ShipInstance }) {
   const [lastSale, setLastSale] = useState<{ count: number; refund: number } | null>(null);
 
-  const duplicateIdsToSell = findDuplicatesToSell(inventory);
+  // 能直接装进空槽的那些。它们**不进出售名单**——18 个空槽位旁边建议玩家把
+  // MK5 卖掉,是这个面板原来干的事。
+  const fits = pendingFits(ship, inventory);
+  const fittable = new Map(fits.map((f) => [f.moduleId, f.slotIndex]));
+  const duplicateIdsToSell = findDuplicatesToSell(inventory).filter((id) => !fittable.has(id));
   const duplicateRefund = duplicateIdsToSell.reduce((sum, id) => {
     const mod = inventory.find((m) => m.id === id);
     return sum + (mod ? Math.round(fabricatorCost(mod.rarity) * 0.4) : 0);
@@ -206,6 +210,15 @@ function InventoryPanel({ inventory }: { inventory: ModuleInstance[] }) {
     <div className="panel" style={{ padding: "0.9rem 1rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span className="eyebrow">{t("modules.inventory", { count: inventory.length })}</span>
+        {fits.length > 0 && (
+          <button
+            className="btn primary"
+            style={{ fontSize: "0.68rem", padding: "0.35em 0.65em", marginLeft: "auto", marginRight: "0.4rem" }}
+            onClick={() => fitAll(ship.id)}
+          >
+            {t("modules.fitAll", { count: fits.length })}
+          </button>
+        )}
         {duplicateIdsToSell.length > 0 && (
           <button
             className="btn ghost"
@@ -236,16 +249,27 @@ function InventoryPanel({ inventory }: { inventory: ModuleInstance[] }) {
                   <span style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleInstanceName(m)}</span>
                   <ModuleRarityTag rarity={m.rarity} />
                 </div>
-                <button
-                  className="btn ghost"
-                  style={{ fontSize: "0.66rem", padding: "0.3em 0.55em", flex: "none" }}
-                  onClick={() => {
-                    sellModule(m.id);
-                    setLastSale({ count: 1, refund });
-                  }}
-                >
-                  {t("modules.sellPlus", { value: refund })}
-                </button>
+                <div style={{ display: "flex", gap: "0.3rem", flex: "none" }}>
+                  {fittable.has(m.id) && (
+                    <button
+                      className="btn primary"
+                      style={{ fontSize: "0.66rem", padding: "0.3em 0.55em", flex: "none" }}
+                      onClick={() => equipModule(ship.id, fittable.get(m.id)!, m.id)}
+                    >
+                      {t("modules.fit")}
+                    </button>
+                  )}
+                  <button
+                    className="btn ghost"
+                    style={{ fontSize: "0.66rem", padding: "0.3em 0.55em", flex: "none" }}
+                    onClick={() => {
+                      sellModule(m.id);
+                      setLastSale({ count: 1, refund });
+                    }}
+                  >
+                    {t("modules.sellPlus", { value: refund })}
+                  </button>
+                </div>
               </div>
             );
           })}
