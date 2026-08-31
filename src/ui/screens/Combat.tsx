@@ -4,7 +4,7 @@ import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSignature, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
+import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
@@ -1058,7 +1058,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     // Kaan Ferrous: "+10% evasion when at Long range" — only when he's assigned to the flagship.
     // enemyAttack 同样在冻结的闭包里,所以这里也走 ref 镜像,而不是直接读 crewPassive。
     const kaanBonus = band === "long" ? 0.1 * crewPassiveRef.current("kaanFerrous") : 0;
-    const evasion = Math.min(0.75, (baseEvasion + kaanBonus) * pactsRef.current.evasionMult);
+    // 边际收益递减,不是硬上限(见 engine/combat.ts 的 effectiveEvasion)。
+    // 随手一套终局装备的裸闪避是 94.5%,硬上限 0.75 被打满还富余——那条属性在
+    // 后期等于不存在。
+    const evasion = effectiveEvasion((baseEvasion + kaanBonus) * pactsRef.current.evasionMult);
     // Iron Verdict's Fortify: armor block doubles for its duration.
     const fortifyMult = fortifySecRef.current > 0 ? 2 : 1;
     // Bulwark: plating bites harder the closer Whisper is to going down — a

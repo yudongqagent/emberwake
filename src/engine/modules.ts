@@ -117,15 +117,28 @@ export function computeModuleBlock(mod: ModuleInstance): number {
 
 /** 装备提供的闪避点数(1 ≈ 1%)。
  *
- * 和格挡走同一条曲线,因为它们是同一份"减伤预算"的两种花法(见 tools/genGear.py):
- * 狮心的重甲把预算全押在格挡上,掠夺者的轻甲几乎不挡、全押闪避。 */
+ * 曲线比格挡缓得多——和推力同一个道理,而我当初把它写成了和格挡一样。
+ *
+ * 格挡是**减法**:它对上一发 915 伤害的攻击值多少钱,和它的绝对值成正比,所以它
+ * 必须跟着敌人数值一起涨。闪避是**概率**:它的价值不随敌人数值变化,乘上稀有度
+ * 和等级只会让它撞到天花板。
+ *
+ * 2026-08-31 实测(/loop 第 24 轮),随手装备(每类填一半槽位,不刻意挑闪避):
+ *
+ *     阶梯0  2.6%    阶梯3   9.6–12.1%
+ *     阶梯4 30.1%    阶梯5  37.5–43.2%
+ *     阶梯6 81.4–94.5%      ← 战斗里的硬上限是 75%
+ *
+ * 也就是说最后三分之一的游戏里,玩家**永远处在满闪避**:多装一件不涨,少装一件
+ * 不掉,每一条闪避词条、每一次引擎取舍全是废的。computeModuleThrust 的注释里
+ * 已经写过一模一样的教训(「推力是门派取向,不是数值预算」),我在闪避上又踩了一次。 */
 export function computeModuleEvasion(mod: ModuleInstance): number {
   const def = moduleDefById(mod.defId);
   const base = def.baseEvasion ?? 0;
   if (base === 0) return 0;
-  const rarityMult = MODULE_RARITY_MULTIPLIER[mod.rarity];
-  const levelMult = 1 + (mod.level - 1) * 0.12;
-  return base * rarityMult * levelMult * qualityMultiplier(mod.quality ?? 0.5);
+  const tierMult = 1 + 0.10 * MODULE_RARITY_ORDER.indexOf(mod.rarity);
+  const levelMult = 1 + (mod.level - 1) * 0.04;
+  return base * tierMult * levelMult * qualityMultiplier(mod.quality ?? 0.5);
 }
 
 /** 装备对航速的修正(百分比,可负)。

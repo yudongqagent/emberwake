@@ -43,6 +43,25 @@ export const CRIT_MULTIPLIER = 1.75;
  * 原来永远只有 1 点,现在是 5 点。 */
 export const MAX_BLOCK_FRACTION = 0.75;
 
+/** 闪避的边际收益递减。
+ *
+ * 2026-08-31(/loop 第 24 轮)。原来是一刀切的 `Math.min(0.75, raw)`,而随手一套
+ * 终局装备的裸闪避是 **94.5%** —— 上限被打满还富余一大截。硬上限的坏处正在这里:
+ * 一旦越过,再多的投入不涨,减一件也不掉,这条属性连同它所有的词条一起变成死数。
+ *
+ * 搜到的共识是宁可用递减也别用硬顶,而且闪避超过 30–50% 之后战斗会变成"大量的
+ * 空挥和等待"。所以:30% 以内原样(早期完全不受影响),超出的部分只按四分之一计,
+ * 再压一个 60% 的绝对天花板——要摸到它需要 150% 的裸闪避,那是一整套押上去的
+ * 专精build 才有的数字,而不是随手装出来的。 */
+export const EVASION_SOFT_CAP = 0.30;
+export const EVASION_HARD_CAP = 0.60;
+export const EVASION_OVERFLOW_RATE = 0.25;
+
+export function effectiveEvasion(raw: number): number {
+  if (raw <= EVASION_SOFT_CAP) return Math.max(0, raw);
+  return Math.min(EVASION_HARD_CAP, EVASION_SOFT_CAP + (raw - EVASION_SOFT_CAP) * EVASION_OVERFLOW_RATE);
+}
+
 /** Deterministic given supplied rolls, so combat math is unit-testable without RNG.
  * critChance defaults to 0 (never crits) so existing callers are unaffected. */
 export function resolveAttack(

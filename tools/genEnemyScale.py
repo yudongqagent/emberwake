@@ -77,10 +77,101 @@ def encounter_threat():
     return out
 
 
-# 一击该占玩家血量的比例:从新手村的 11% 缓降到终局的 5.5%。
-# 降而不平,是因为"变强"必须能被感觉到;不降到 0,是因为游戏必须还能输。
+# 一次攻击**真正打掉**的血量,应占玩家该阶段血量的比例。
+#
+# 关键在"真正打掉":第 23 轮量的是裸伤害,没算玩家的减伤,而减伤本身也在随进度
+# 增长。当时中段实测是通过的(22 级打威胁 4,承受 66% 血),因为那个阶段闪避才 5%,
+# 裸伤害约等于真伤害。但终局的闪避那时是**实际 75%**(裸 94.5% 撞硬上限),等于
+# 给后期偷偷套了一层四分之一的减伤,而曲线对此一无所知。
+#
+# 第 24 轮把闪避改成递减、遮蔽消失之后,同一场终局战从「承受 0」翻成
+# 「13 秒内承受 23461 / 17241 血,战败」——曲线一直是错的,只是之前被闪避盖住了。
+#
+# 所以现在把格挡和闪避一起建进模型,曲线管的是**落到船体上的那个数**。
 def target_fraction(threat):
     return 0.11 - (0.11 - 0.055) * ((threat - 1) / 6)
+
+
+# ── 玩家在各阶梯的减伤(和火力同一套"随手装"模型)────────────────────────────
+RARITY_MULT_FULL = {"mk1": 1.0, "mk2": 1.32, "mk3": 1.74, "mk4": 2.3, "mk5": 3.04}
+EVASION_SOFT_CAP, EVASION_HARD_CAP, EVASION_OVERFLOW = 0.30, 0.60, 0.25
+MAX_BLOCK_FRACTION = 0.75
+
+
+def effective_evasion(raw):
+    if raw <= EVASION_SOFT_CAP:
+        return max(0.0, raw)
+    return min(EVASION_HARD_CAP, EVASION_SOFT_CAP + (raw - EVASION_SOFT_CAP) * EVASION_OVERFLOW)
+
+
+def expected_mitigation_by_tier():
+    """随手装一半装甲槽+一半引擎槽,算出该阶梯的总格挡和总闪避。"""
+    hulls = open("src/data/hullClasses.ts").read()
+    mods = open("src/data/moduleDefs.ts").read()
+    entries = []
+    for block in re.findall(r'\{[^{}]*?id: "\w+",[\s\S]*?type: "\w+"[\s\S]*?\}', mods):
+        t = re.search(r'type: "(\w+)"', block)
+        b = re.search(r'baseBlock: (\d+)', block)
+        e = re.search(r'baseEvasion: ([\d.]+)', block)
+        if t:
+            entries.append((t.group(1), int(b.group(1)) if b else 0, float(e.group(1)) if e else 0.0))
+    out = {}
+    for block in re.findall(r'\{[^{}]*?id: "\w+",[\s\S]*?baseHull: \d+[\s\S]*?\}', hulls):
+        o = re.search(r'order: (\d+)', block)
+        l = re.search(r'minLevel: (\d+)', block)
+        if not (o and l):
+            continue
+        tier, level = int(o.group(1)), max(1, round(int(l.group(1)) / 3))
+        rarity = TIER_RARITY[min(tier, len(TIER_RARITY) - 1)]
+        blk = ev = 0.0
+        for kind in ("armor", "engine"):
+            m = re.search(r'%s: (\d+)' % kind, block)
+            n = max(1, round(int(m.group(1)) / 2)) if m else 1
+            pool = [x for x in entries if x[0] == kind][:n]
+            for _, bb, ee in pool:
+                blk += bb * RARITY_MULT_FULL[rarity] * (1 + (level - 1) * 0.12)
+                ev += ee * (1 + 0.10 * list(RARITY_MULT_FULL).index(rarity)) * (1 + (level - 1) * 0.04)
+        prev = out.get(tier)
+        cur = (blk, effective_evasion(ev / 100.0))
+        if prev is None or cur[0] > prev[0]:
+            out[tier] = cur
+    return out
+
+
+# 战斗会在基础伤害之上再乘一层:蓄力重击 ×2、狂暴 ×1.4、攻城倍率、母巢加成。
+# 模型只看 encounters.ts 里写的基础值,看不到这些。
+#
+# 实测(2026-08-31,55 级满配打威胁 7):模型算出"一次攻击实落 378",而战斗日志里
+# 出现了单发 **4156**——那是一记蓄力的攻城射击。同一场 10.3 秒承受 15782 / 17241,
+# 战败。
+#
+# 这层放大随威胁升高而变重,因为余烬负荷在高威胁星区会请来炮击和支援角色
+# (data/emberLoad.ts 的 SUPPORT_AT / ARTILLERY_LOAD)。所以按威胁线性给余量。
+def combat_amplification(threat):
+    # 这个余量还兜着模型没建的另一半:模型算的是**单次攻击落多少**,而实际战场上是
+    # 三艘以上敌舰的齐射频率(日志里出现过「同时出击,共造成4163点伤害」),外加余烬
+    # 负荷在高威胁星区额外塞进来的敌舰。系数是按实测缺口反推的,不是推导出来的——
+    # 真要做对,得把模型换成 DPS 而不是单发。留在注释里,免得下次又当成推导结果。
+    # 系数是按**两个实测锚点**反推的,不是推导出来的:
+    #   威胁4 裸伤害 146 → 22 级零操作承受 66% 血(第 23 轮验过,是个好数)
+    #   威胁7 裸伤害 513 → 55 级带操作胜、承受 49%;零操作战败(这轮验的)
+    #   (中途试过 747:带操作只剩 2 点船体险胜,太紧了)
+    # 于是中段不需要余量,余量只从威胁 5 起随负荷带来的敌舰数量爬升。
+    # 真要做对,模型得从"单发落多少"换成 DPS。留在注释里,免得下次当成推导结果。
+    return 1 + 0.8 * max(0, threat - 4)
+
+
+def raw_damage_for(target_landed, block, evasion):
+    """反解:要让一次攻击**平均落下** target_landed 点,裸伤害得是多少。"""
+    lo, hi = 1.0, max(10.0, target_landed * 40 + block * 4)
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        landed = (1 - evasion) * max(1.0, mid - min(block, mid * MAX_BLOCK_FRACTION))
+        if landed < target_landed:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
 
 
 # ── 玩家在各阶梯的**每轮齐射伤害**(从 moduleDefs.ts + hullClasses.ts 读)──────
@@ -218,12 +309,15 @@ def main():
     cur_hull = {t: median(v) for t, v in cur_hull.items()}
     offense = expected_offense_by_tier()
     base_t = min(cur_dmg)
-    dmg_target = {
-        t: cur_dmg[base_t]
-           * (target_fraction(t) * tiers[min(max(t - 1, 0), max(tiers))])
-           / (target_fraction(base_t) * tiers[min(max(base_t - 1, 0), max(tiers))])
-        for t in sorted(cur_dmg)
-    }
+    mitigation = expected_mitigation_by_tier()
+
+    def raw_target(t):
+        tier = min(max(t - 1, 0), max(tiers))
+        blk, ev = mitigation[tier]
+        return raw_damage_for(target_fraction(t) * tiers[tier] / combat_amplification(t), blk, ev)
+
+    # 归一到威胁 1:新手村是基准,不能被自己重算一遍。
+    dmg_target = {t: cur_dmg[base_t] * raw_target(t) / raw_target(base_t) for t in sorted(cur_dmg)}
     hull_target = hull_targets(cur_hull, offense)
     dmg_scale = multipliers(cur_dmg, dmg_target)
     hull_scale = multipliers(cur_hull, hull_target)
@@ -233,7 +327,10 @@ def main():
         nd = round(cur_dmg[t] * dmg_scale[t])
         nh = round(cur_hull[t] * hull_scale[t])
         hp = round(tiers[min(max(t - 1, 0), max(tiers))])
-        print(f"  威胁{t}  伤害 {cur_dmg[t]:>4} ×{dmg_scale[t]:.2f} → {nd:>5} (占预期血 {hp:>6} 的 {nd/hp*100:.1f}%)"
+        blk, ev = mitigation[min(max(t - 1, 0), max(tiers))]
+        landed = (1 - ev) * max(1.0, nd - min(blk, nd * MAX_BLOCK_FRACTION))
+        print(f"  威胁{t}  裸伤害 {cur_dmg[t]:>4} ×{dmg_scale[t]:.2f} → {nd:>5}"
+              f" (格挡{round(blk):>4} 闪避{ev*100:>4.0f}% → 实落 {round(landed):>5},占预期血 {hp:>6} 的 {landed/hp*100:.1f}%)"
               f"   |  血量中位 {cur_hull[t]:>4} ×{hull_scale[t]:.2f} → {nh:>6}"
               f" (每轮齐射约 {round(offense[min(max(t-1,0),max(offense))]):>5} → {nh/offense[min(max(t-1,0),max(offense))]:.1f} 轮)")
 
