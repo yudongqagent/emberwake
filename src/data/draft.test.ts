@@ -3,6 +3,8 @@ import { generateDraft, draftTierFor } from "./draft";
 import { moduleDefById } from "./modules";
 import { moduleEffectById } from "./moduleEffects";
 import { drawModule, moduleMaxLevel } from "../engine/modules";
+import { autoEquip } from "../state/store";
+import { MODULE_DEFS } from "./moduleDefs";
 import type { ModuleInstance } from "./types";
 
 function owned(n: number, level = 1): ModuleInstance[] {
@@ -117,5 +119,45 @@ describe("Refit Draft", () => {
       if (up) picks.add(up.targetModuleId!);
     }
     expect([...picks], "upgrade offers should deepen the build, not scatter").toEqual(["high"]);
+  });
+});
+
+// 2026-08-30 实测(/loop 第 8 轮):抉择给你一件装备,**下一屏就是"继续推进还是
+// 撤离"**,中间没有任何装配的机会——那件装备在这次出击里完全是死的。
+//
+// 搜到的原则:「奖励应当立即兑现,否则玩家会觉得刚才做的事没有意义」。杀戮尖塔
+// 的牌进牌库立刻能抽到,哈迪斯的祝福当场生效。
+describe("抽到的模组要立刻能用", () => {
+  const shipWith = (equipped: (string | null)[]) => ({
+    id: "s", hullClass: "corvette" as const, rarity: "salvage" as const, aptitude: null,
+    scanned: true, name: "Whisper", level: 1, xp: 0, equipped, currentHp: 100,
+    rolls: { hull: 0.5, power: 0.5, speed: 0.5, evasion: 0.5, crit: 0.5 }, ascendedFrom: [],
+  });
+
+  it("有对应空槽时,自动装上", () => {
+    // 护卫舰是 weapon/armor/engine/utility 各一格,开局占了武器和护甲
+    // ——引擎和辅助是空的。
+    const engine = MODULE_DEFS.find((d) => d.type === "engine")!;
+    const mod = { ...drawModule(engine.id), id: "newEngine" };
+    const before = shipWith(["w", "a", null, null]);
+    const after = autoEquip(before, mod);
+    expect(after.equipped[2], "引擎槽是空的,却没有自动装上").toBe("newEngine");
+  });
+
+  it("对应槽位已占用时,不动它", () => {
+    // 换掉已装备的那件是有取舍的决定(词条、门派套装、功率),不该由游戏替玩家做。
+    const weapon = MODULE_DEFS.find((d) => d.type === "weapon")!;
+    const mod = { ...drawModule(weapon.id), id: "newWeapon" };
+    const before = shipWith(["w", "a", null, null]);
+    const after = autoEquip(before, mod);
+    expect(after.equipped[0], "把玩家已经装着的武器换掉了").toBe("w");
+    expect(after.equipped).not.toContain("newWeapon");
+  });
+
+  it("只填第一个空槽,不会一次占两格", () => {
+    const engine = MODULE_DEFS.find((d) => d.type === "engine")!;
+    const mod = { ...drawModule(engine.id), id: "e1" };
+    const after = autoEquip(shipWith([null, null, null, null]), mod);
+    expect(after.equipped.filter((x) => x === "e1")).toHaveLength(1);
   });
 });

@@ -66,6 +66,20 @@ export function applyDraftChoice(opt: DraftOption): void {
   const next = { ...state.value };
   if (opt.kind === "module" && opt.module) {
     next.modules = [...next.modules, opt.module];
+    // 抽到的模组如果有对应的空槽,直接装上。
+    //
+    // 实测(2026-08-30):抉择给你一件装备,**下一屏就是"继续推进还是撤离"**,中间
+    // 没有任何装配的机会——于是那件装备在这次出击里完全是死的。搜到的原则是
+    // 「奖励应当立即兑现,否则玩家会觉得刚才做的事没有意义」:杀戮尖塔的牌进牌库
+    // 立刻能抽到,哈迪斯的祝福当场生效。
+    //
+    // 只填**空槽**。换掉已装备的那件是有取舍的决定(词条、门派套装、功率),
+    // 不该由游戏替玩家做——那种情况留给出击间隙新加的配装入口。
+    const ship = next.ships.find((sh) => sh.id === next.flagshipId);
+    if (ship) {
+      const fitted = autoEquip(ship, opt.module);
+      if (fitted !== ship) next.ships = next.ships.map((sh) => (sh.id === ship.id ? fitted : sh));
+    }
     if (opt.hullCost) {
       // The greedy option's price. Never lethal — a bruise, not a gamble with
       // the run, since the fight is already won by the time this is offered.
@@ -516,6 +530,27 @@ export function markUnlockSeen(id: string): void {
   if (state.value.flags[key]) return;
   state.value = { ...state.value, flags: { ...state.value.flags, [key]: true } };
   persist();
+}
+
+/** 把一件模组装进**对应类型的第一个空槽**;没有空槽就原样返回。
+ *
+ * 拆成纯函数是为了能测:这条规则有两半,而两半都容易写错——"有空槽要装上"和
+ * "槽位占着就别动"。后者尤其重要:换掉已装备的那件是有取舍的决定(词条、门派套装、
+ * 功率),不该由游戏替玩家做。 */
+export function autoEquip(ship: ShipInstance, mod: ModuleInstance): ShipInstance {
+  const def = moduleDefById(mod.defId);
+  const layout = hullClassById(ship.hullClass).slots;
+  let idx = 0;
+  for (const type of ["weapon", "armor", "engine", "utility"] as const) {
+    for (let i = 0; i < layout[type]; i++, idx++) {
+      if (type === def.type && !ship.equipped[idx]) {
+        const equipped = [...ship.equipped];
+        equipped[idx] = mod.id;
+        return { ...ship, equipped };
+      }
+    }
+  }
+  return ship;
 }
 
 /** How many equipped modules on the flagship carry an effect (signature counts). */

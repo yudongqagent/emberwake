@@ -311,7 +311,21 @@ export function App() {
             setCombat({ encounterId: sortie.encounterId, poiId: sortie.poiId, victoryFlag: sortie.victoryFlag });
           }}
           onWithdraw={() => setSortie(null)}
+          onLoadout={() => setPanel("modules")}
         />
+        {/* 出击间隙的配装入口。抉择刚给了一件装备,而下一步就是"继续推进还是撤离"
+            ——中间没有装配的机会,那件装备在这次出击里就是死的。 */}
+        {panel === "modules" && (
+          <ErrorBoundary label={t(PANEL_TITLE.modules)}>
+            <ConsoleOverlay
+              title={t(PANEL_TITLE.modules)}
+              accent={PANEL_ACCENT.modules}
+              onClose={() => setPanel(null)}
+            >
+              <Modules />
+            </ConsoleOverlay>
+          </ErrorBoundary>
+        )}
         <ErrorToast />
       </ErrorBoundary>
     );

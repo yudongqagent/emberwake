@@ -18,11 +18,16 @@ export function SortieInterlude({
   total,
   onPress,
   onWithdraw,
+  onLoadout,
 }: {
   wave: number;
   total: number;
   onPress: () => void;
   onWithdraw: () => void;
+  /** 打开配装。抉择刚给了你一件装备,这里必须能把它装上——否则那件装备在这次
+   * 出击里完全是死的(实测 2026-08-30)。空槽已经自动装了,这个入口是给"要换掉
+   * 已装备的那件"用的:那是有取舍的决定,不该由游戏替玩家做。 */
+  onLoadout: () => void;
 }) {
   const ship = flagship.value;
   const max = ship ? effectiveMaxHull(ship) : 1;
@@ -62,6 +67,7 @@ export function SortieInterlude({
 
       <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", justifyContent: "center" }}>
         <button className="btn ghost" onClick={onWithdraw}>{t("sortie.withdraw")}</button>
+        <button className="btn ghost" onClick={onLoadout}>{t("sortie.loadout")}</button>
         <button className="btn primary" onClick={onPress}>
           {t("sortie.press", { wave: wave + 1, total })}
         </button>
