@@ -58,6 +58,19 @@ describe("声明了的 POI 类型必须真的出现在地图上", () => {
     }
   });
 
+  it("裂隙囊必须可以反复进——它是这个游戏唯一的无尽内容", () => {
+    // 2026-08-31(第 32 轮)实测:第一次放下去的四个裂隙囊 `data: {}`,而胜利会把
+    // POI 标成 cleared、没有 respawnSeconds 就是永久消失。潜了一次浅层,回到
+    // 星系里那个点**没了**。一块"无尽内容"只能进一次,自相矛盾。
+    const pockets = ALL_POIS.filter((p) => p.kind === "riftPocket");
+    expect(pockets.length, "地图上没有裂隙囊").toBeGreaterThan(0);
+    const oneShot = pockets.filter((p) => !(p.data as { respawnSeconds?: number } | undefined)?.respawnSeconds);
+    expect(
+      oneShot.map((p) => p.id),
+      `这些裂隙囊潜一次就永久消失了:\n${oneShot.map((p) => p.id).join("\n")}`,
+    ).toEqual([]);
+  });
+
   it("裂隙囊分布在后期星区——那里正是内容最稀的地方", () => {
     const withPocket = GALAXIES.filter((g) => g.systems.some((s) => s.pois.some((p) => p.kind === "riftPocket")));
     expect(withPocket.length, "裂隙囊只放了一处或没放").toBeGreaterThan(2);

@@ -21,7 +21,11 @@ export const DEEP_ORIGIN: GalaxyDef = {
           x: 200,
           y: 460,
           radius: 90,
-          data: {},
+          // 潜完一次胜利会把 POI 标成 cleared,而裂隙囊没有 respawnSeconds 的话就是
+          // **永久消失**——第 32 轮实测:潜了一次浅层,回到星系里那个点就没了。
+          // 一块"无尽内容"只能进一次,自相矛盾。给一个很短的重开时间:打完回来,
+          // 裂口已经重新稳定。
+          data: { respawnSeconds: 20 },
         },
         {
           id: "firstFleetWreckedHull",

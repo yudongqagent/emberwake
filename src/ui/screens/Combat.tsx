@@ -1173,7 +1173,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           addPopup("player", t("combat.braced"), "#8ff3ff");
           spawnRing(arenaRef.current.player.x, arenaRef.current.player.y, "#8ff3ff", 70, 420);
         }
-        playSfx("hit");
+        // 挡下来和硬吃一发,听起来必须不一样——这是玩家判断自己按对没按对的唯一
+        // 即时信号。原来两种情况共用一个 "hit"。
+        playSfx(braced ? "braced" : "hit");
         setPlayerShakeToken((t) => t + 1);
         triggerHitStop(charged ? 100 : 45);
         hitPulseRef.current.player = performance.now();
@@ -1216,6 +1218,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           }
         }
       } else {
+        // 闪掉一发原来是**完全静音**的:只往日志里写一行。闪避流派下四分之一以上
+        // 的敌方攻击走这一支,等于战斗里最频繁的一件好事没有任何声音。
+        playSfx("evade");
         pushLog(phaseShiftBlocksThis ? t("combat.log.phaseShiftMiss", { enemy: enemy.name }) : t("combat.log.enemyMiss", { enemy: enemy.name }));
       }
       if (dealt > 0) setPlayerHull((prev) => {
@@ -1825,7 +1830,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
             recordDamage(localizedModuleName(def), result.damageDealt);
           triggerHitStop(result.crit ? 90 : 35);
           hitPulseRef.current.enemy[targetIdx] = performance.now();
-          if (result.crit) setPlayerShakeToken((t) => t + 1);
+          // 暴击原来只有画面变化(更大的爆点、更长的顿帧、屏幕抖动),声音和普通
+          // 命中一样是那一发 laser。于是"打出暴击"这件事在听感上不存在。
+          if (result.crit) { setPlayerShakeToken((t) => t + 1); playSfx("crit"); }
         }
       }, weaponWeight, weaponVfx);
       playSfx("laser");
