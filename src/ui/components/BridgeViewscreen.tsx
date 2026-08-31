@@ -106,8 +106,8 @@ export function BridgeViewscreen({ systemName, galaxyName }: { systemName: strin
       <svg viewBox="0 0 400 190" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
         <polygon points="0,190 0,140 60,110 130,132 130,190" fill="rgba(4,8,14,0.92)" />
         <polygon points="400,190 400,140 340,110 270,132 270,190" fill="rgba(4,8,14,0.92)" />
-        <polygon points="0,140 60,110 130,132 130,140" fill="none" stroke="rgba(75,232,255,0.4)" strokeWidth="1" />
-        <polygon points="400,140 340,110 270,132 270,140" fill="none" stroke="rgba(75,232,255,0.4)" strokeWidth="1" />
+        <polygon points="0,140 60,110 130,132 130,140" fill="none" stroke="rgba(75,232,255,0.4)" stroke-width="1" />
+        <polygon points="400,140 340,110 270,132 270,140" fill="none" stroke="rgba(75,232,255,0.4)" stroke-width="1" />
         <rect x="150" y="176" width="100" height="14" fill="rgba(4,8,14,0.92)" />
         <rect x="150" y="176" width="100" height="2" fill="rgba(75,232,255,0.5)" />
         <circle cx="165" cy="183" r="1.6" fill="#ffb84d" />
