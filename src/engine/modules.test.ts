@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { qualityMultiplier, drawModule, riftDropRarityFloor, moduleMaxLevel, moduleUpgradeCost, isModuleMaxed, levelUpModule, computeModuleDamage, effectPotency, computeModuleEvasion, computeModuleThrust, rerollTrait, rerollCandidates } from "./modules";
 import { MODULE_DEFS } from "../data/moduleDefs";
 import type { ModuleInstance } from "../data/types";
+import MODULES_SRC from "../ui/screens/Modules.tsx?raw";
+import STATION_SRC from "../ui/screens/StationPanel.tsx?raw";
+import DRAFT_SRC from "../ui/screens/RefitDraft.tsx?raw";
+import STATS_SRC from "../ui/components/ModuleStats.tsx?raw";
 import { MODULE_RARITY_ORDER, MODULE_RARITY_MULTIPLIER, MARKET_MAX_RARITY, fabricatorCost, moduleDefById } from "../data/modules";
 import { createInitialState, migrateForTest } from "./save";
 
@@ -254,5 +258,37 @@ describe("词条重掷", () => {
     expect(rerollCandidates(mod)).toEqual([]);
     // 没得换的时候原样返回,绝不能收了钱什么都不做。
     expect(rerollTrait(mod, 0, (pool) => pool[0])).toBe(mod);
+  });
+});
+
+// 2026-08-31 实测(/loop 第 11 轮):制造工坊里引擎显示成
+//   「消隐引擎 引擎 MK1 再生 动能 20 购买」—— 一个数字都没有,
+// 而旁边的装甲显示「格挡 10」。引擎的闪避/推力我在更早的轮次加过,但只接到了
+// 模组页;制造工坊、购买展示、抉择卡三处各写各的
+// `baseDamage !== undefined ? ... : baseBlock !== undefined ? ...`,都只认伤害和格挡。
+//
+// 和"给模组的三条路径"是同一种病:规则对了,但没接全。所以这条测试钉的是
+// **结构**,不是行为——四个界面必须共用同一个数值行组件。
+describe("模组数值行只能有一处实现", () => {
+  const SCREENS = [MODULES_SRC, STATION_SRC, DRAFT_SRC];
+
+  it("没有界面再自己拼 baseDamage/baseBlock 的三元判断", () => {
+    for (const [i, src] of SCREENS.entries()) {
+      const adhoc = (src.match(/baseDamage !== undefined \? /g) ?? []).length
+        + (src.match(/def\.baseDamage \? </g) ?? []).length;
+      expect(adhoc, `第 ${i + 1} 个界面还在自己拼模组数值(会漏掉引擎的闪避/推力)`).toBe(0);
+    }
+  });
+
+  it("三个界面都用了共用组件", () => {
+    for (const [i, src] of SCREENS.entries()) {
+      expect(src.includes("<ModuleStats"), `第 ${i + 1} 个界面没有用 ModuleStats`).toBe(true);
+    }
+  });
+
+  it("共用组件认得四种数值,尤其是引擎那两种", () => {
+    for (const key of ["baseDamage", "baseBlock", "baseEvasion", "baseThrust"]) {
+      expect(STATS_SRC.includes(key), `ModuleStats 不认 ${key}`).toBe(true);
+    }
   });
 });

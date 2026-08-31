@@ -3,8 +3,9 @@ import type { ComponentChildren } from "preact";
 import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, repairFlagship, stationPrice, stationOwner } from "../../state/store";
 import { CREW_DEFS } from "../../data/crew";
 import { moduleDefById, fabricatorCost, MARKET_MAX_RARITY } from "../../data/modules";
-import { computeModuleDamage, computeModuleBlock, drawModule } from "../../engine/modules";
+import { drawModule, primaryStat } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
+import { ModuleStats } from "../components/ModuleStats";
 import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon, HullIcon } from "../components/Icons";
 import { RollQualityBadge } from "../components/StatBlock";
 import type { ModuleInstance } from "../../data/types";
@@ -77,15 +78,12 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
               .map((id) => state.value.modules.find((m) => m.id === id))
               .find((m): m is NonNullable<typeof m> => !!m && moduleDefById(m.defId).type === def.type)
           : null;
-        const statLabel = def.baseDamage !== undefined ? t("station.stat.damage") : def.baseBlock !== undefined ? t("station.stat.block") : null;
-        const newStat = def.baseDamage !== undefined ? computeModuleDamage(drawnModule) : def.baseBlock !== undefined ? computeModuleBlock(drawnModule) : null;
-        const curStat = equippedSameType
-          ? def.baseDamage !== undefined
-            ? computeModuleDamage(equippedSameType)
-            : def.baseBlock !== undefined
-              ? computeModuleBlock(equippedSameType)
-              : null
-          : null;
+        // 主数值走 engine/modules 的 primaryStat:它认得引擎的闪避,而原来这里
+        // 写死的三元判断只认伤害和格挡——买一台引擎时整段对比是空的。
+        const primary = primaryStat(drawnModule);
+        const statLabel = primary ? t(`station.stat.${primary.key}`) : null;
+        const newStat = primary ? primary.value : null;
+        const curStat = equippedSameType ? (primaryStat(equippedSameType)?.value ?? null) : null;
         return (
           <DrawReveal title={t("station.moduleAcquired")} accent="var(--cyan)" onClose={() => setDrawnModule(null)}>
             <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>{localizedModuleName(def)}</div>
@@ -94,6 +92,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
             <div style={{ marginTop: "0.5rem" }}>
               <RollQualityBadge roll={drawnModule.quality} />
             </div>
+            <div style={{ marginTop: "0.6rem" }}><ModuleStats mod={drawnModule} /></div>
             {drawnModule.traits.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", justifyContent: "center", marginTop: "0.6rem" }}>
                 {drawnModule.traits.map((traitId, i) => (
@@ -257,8 +256,7 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
               <ModuleRarityTag rarity={candidate.rarity} />
             </div>
             <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.5rem", flexWrap: "wrap" }}>
-              {def.baseDamage !== undefined && <span style={{ color: "var(--red)" }}>{t("modules.dmg", { value: computeModuleDamage(candidate) })}</span>}
-              {def.baseBlock !== undefined && <span style={{ color: "var(--cyan)" }}>{t("modules.block", { value: computeModuleBlock(candidate) })}</span>}
+              <ModuleStats mod={candidate} />
               {candidate.traits.map((traitId, ti) => (
                 <span key={ti} style={{ fontSize: "0.68rem", padding: "0.1em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
                   {localizedTrait(def, traitId).label}

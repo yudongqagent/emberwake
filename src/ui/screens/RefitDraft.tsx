@@ -1,8 +1,9 @@
 import { moduleDefById } from "../../data/modules";
 import { moduleEffectById } from "../../data/moduleEffects";
-import { computeModuleDamage, computeModuleBlock, moduleMaxLevel } from "../../engine/modules";
+import { moduleMaxLevel, primaryStat } from "../../engine/modules";
 import { localizedModuleName, localizedTrait } from "../../i18n/data";
 import { t } from "../../i18n/strings";
+import { ModuleStats } from "../components/ModuleStats";
 
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, HullIcon } from "../components/Icons";
@@ -77,8 +78,7 @@ function DraftCard({
           <ModuleRarityTag rarity={opt.module.rarity} />
         </div>
         <div style={{ fontSize: "0.74rem", color: "var(--text-mid)", marginTop: "0.35rem" }}>
-          {def.baseDamage !== undefined && t("modules.dmg", { value: computeModuleDamage(opt.module) })}
-          {def.baseBlock !== undefined && t("modules.block", { value: computeModuleBlock(opt.module) })}
+          <ModuleStats mod={opt.module} size="inherit" />
           {def.cooldown ? ` · ${t("draft.cycle", { secs: (def.cooldown * 2.4).toFixed(1) })}` : null}
         </div>
         {eff && (
@@ -93,8 +93,10 @@ function DraftCard({
     if (!mod) return null;
     const def = moduleDefById(mod.defId);
     const next = { ...mod, level: mod.level + 1 };
-    const before = def.baseDamage !== undefined ? computeModuleDamage(mod) : def.baseBlock !== undefined ? computeModuleBlock(mod) : null;
-    const after = def.baseDamage !== undefined ? computeModuleDamage(next) : def.baseBlock !== undefined ? computeModuleBlock(next) : null;
+    // 升级预览也走 primaryStat:写死的三元判断只认伤害和格挡,于是"免费升级一台
+    // 引擎"这个选项在卡面上完全看不出升了什么。
+    const before = primaryStat(mod)?.value ?? null;
+    const after = primaryStat(next)?.value ?? null;
     heading = localizedModuleName(def);
     body = (
       <>

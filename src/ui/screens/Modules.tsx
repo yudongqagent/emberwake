@@ -6,9 +6,10 @@ import { computePowerCapacity } from "../../engine/ships";
 import { moduleDefById, fabricatorCost, MODULE_RARITY_ORDER } from "../../data/modules";
 import { moduleEffectById } from "../../data/moduleEffects";
 import { setProgress, SET_TWO, SET_FOUR } from "../../data/setBonuses";
-import { computeModuleDamage, computeModuleBlock, rerollTrait, rerollCandidates, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
+import { computeModuleDamage, computeModuleBlock, rerollTrait, rerollCandidates, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel, effectPotency } from "../../engine/modules";
 import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
+import { ModuleStats } from "../components/ModuleStats";
 import { ModuleTypeIcon, MODULE_TYPE_COLOR, PowerIcon, ResourceIcon } from "../components/Icons";
 import { Bar, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 import { LoadoutDiagram } from "../components/LoadoutDiagram";
@@ -129,16 +130,10 @@ export function Modules() {
                   <div style={{ display: "flex", gap: "0.9rem", fontSize: "0.76rem", color: "var(--text-mid)", margin: "0.45rem 0" }}>
                     <span>{t("modules.pwr", { value: def.powerDraw })}</span>
                     <span>{t("modules.cd", { value: def.cooldown ?? "—" })}</span>
-                    {def.baseDamage ? <span style={{ color: "var(--red)" }}>{t("modules.dmg", { value: computeModuleDamage(mod) })}</span> : null}
-                    {def.baseBlock ? <span style={{ color: "var(--cyan)" }}>{t("modules.block", { value: computeModuleBlock(mod) })}</span> : null}
-                    {/* 装备的闪避和推力(2026-08-30)。不显示出来的话,引擎又会回到
-                        "看不出它做了什么"的状态——那正是审计 #11 的一半病因。 */}
-                    {def.baseEvasion ? <span style={{ color: "var(--green)" }}>{t("modules.eva", { value: computeModuleEvasion(mod).toFixed(1) })}</span> : null}
-                    {def.baseThrust ? (
-                      <span style={{ color: computeModuleThrust(mod) >= 0 ? "var(--amber)" : "var(--red)" }}>
-                        {t("modules.thrust", { value: `${computeModuleThrust(mod) >= 0 ? "+" : ""}${Math.round(computeModuleThrust(mod) * 100)}` })}
-                      </span>
-                    ) : null}
+                    {/* 四个界面共用同一个数值行(components/ModuleStats.tsx)。
+                        各写各的时候,制造工坊和抉择卡都只认伤害和格挡,引擎在那两处
+                        一个数字都没有。 */}
+                    <ModuleStats mod={mod} size="inherit" gap="0.9rem" />
                   </div>
                   {(def.baseDamage !== undefined || def.baseBlock !== undefined) && (
                     <div style={{ marginBottom: "0.5rem" }}>

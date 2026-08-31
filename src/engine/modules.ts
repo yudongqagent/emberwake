@@ -145,6 +145,20 @@ export function computeModuleThrust(mod: ModuleInstance): number {
   return base * tierMult * levelMult * qualityMultiplier(mod.quality ?? 0.5);
 }
 
+/** 一件模组的"主数值":拿来和同槽位已装备的那件比较用的那一个。
+ *
+ * 2026-08-31:购买展示里那段对比只认伤害和格挡,于是买一台引擎时它什么都不显示
+ * ——而"这件比我身上那件好多少"正是玩家在商店里唯一想知道的事。
+ *
+ * 引擎取闪避:推力是门派取向(轻甲快、重甲慢),而闪避是引擎之间可比的那条轴。 */
+export function primaryStat(mod: ModuleInstance): { key: "damage" | "block" | "evasion"; value: number } | null {
+  const def = moduleDefById(mod.defId);
+  if (def.baseDamage !== undefined) return { key: "damage", value: computeModuleDamage(mod) };
+  if (def.baseBlock !== undefined) return { key: "block", value: computeModuleBlock(mod) };
+  if (def.baseEvasion) return { key: "evasion", value: Math.round(computeModuleEvasion(mod) * 10) / 10 };
+  return null;
+}
+
 /** 一个模组把它的效果打出多重。
  *
  * 2026-08-30,修 docs/module-system-audit-round2.md 的 #13——也是 #11 和 #12 的
