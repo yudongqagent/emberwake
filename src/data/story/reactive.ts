@@ -164,9 +164,15 @@ export const REACTIVE_LINES: Record<string, ReactiveInsert[]> = {
       ],
     },
   ],
-  originTide: [
+  /** 这条原来挂在 originTide(第三幕)上——而 cinderTrust 唯一的来源是**第四幕**的
+   * 身世揭露,所以在第三幕它必然是 0,这条插入的两个变体一个都到不了,整条永远不触发。
+   *
+   * 台词本身也说明它属于揭露之后:「自打研究院之后,我告诉你的比告诉任何人的都多」
+   * ——在她还瞒着最大那件事的第三幕说这句,是自相矛盾的。挪到揭露的下一幕(最后的
+   * 船坞),接在她那句「把低语开进去」后面收尾。 */
+  lastShipyard: [
     {
-      after: 2,
+      after: 3,
       speaker: CINDER,
       variants: [
         {

@@ -29,7 +29,7 @@ import { applyXp, computeMaxHull, ascendShip, reforgeShip } from "../engine/ship
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor } from "../engine/modules";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
-import { CHOICE_REPUTATION, clampRep, repEffects, repTier, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
+import { CHOICE_REPUTATION, CHOICE_CINDER_TRUST, clampRep, repEffects, repTier, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
 import { canEvolve, evolveModule, evolutionPartnerMatch } from "../data/evolutions";
 import { sigilBonus, sigilUpgradeCost, sigilsForDive, type SigilNodeId } from "../data/sigils";
 import { setPermanentBonusSource } from "../engine/permanent";
@@ -247,6 +247,7 @@ function setFlags(flags: string[]) {
   // 声望:剧情选择在这里兑现。这是那 16 个"死 flag"复活的地方——它们一直被写进
   // 存档,只是从前没有任何代码读。
   applyChoiceReputation(flags);
+  applyChoiceCinderTrust(flags);
   checkNamedCrewUnlocks();
 }
 
@@ -376,6 +377,17 @@ export function adjustReputation(faction: FactionId, delta: number): void {
     };
   }
   persist();
+}
+
+/** 把剧情选择里改余烬信任的那部分结算掉(data/reputation.ts 的 CHOICE_CINDER_TRUST)。
+ *
+ * **刻意不弹卡。** 声望和船员支持度必须摆出来,因为它们改的是价格、猎杀队、被动
+ * 强度——玩家不看见就没法推理。而余烬信任只改她说什么话:它的回报本来就是"她
+ * 对你说话的方式变了",把它变成一个数字弹在屏幕上,反而把这件事说小了。 */
+function applyChoiceCinderTrust(flags: string[]) {
+  let delta = 0;
+  for (const f of flags) delta += CHOICE_CINDER_TRUST[f] ?? 0;
+  if (delta !== 0) adjustCinderTrust(delta);
 }
 
 /** 面对余烬身世的三种反应,改的是余烬对你的信任,不是外部势力。 */

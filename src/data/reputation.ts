@@ -96,7 +96,26 @@ export const CHOICE_REPUTATION: Record<string, Partial<Record<FactionId, number>
   "arthaineResolution.exposed": { bauhinia: -30, reavers: 15 },
 
   // 面对余烬的身世——这三个不改变外部势力，它们改变的是余烬本身，
-  // 由 cinderTrust 单独承载（见 store.ts）。声望表留空是刻意的。
+  // 由 cinderTrust 单独承载（见下面的 CHOICE_CINDER_TRUST）。声望表留空是刻意的。
+};
+
+/** 面对余烬身世时的三种反应 -> 余烬对你的信任。
+ *
+ * 2026-08-31（/loop 第 44 轮）。上面那句注释把这三个选择留给了 cinderTrust，而
+ * **承接它的那条路从来没接上**：
+ *
+ *   - adjustCinderTrust 存在，但全代码库 **零调用点**
+ *   - cinderTrust 初始 0，因此永远是 0
+ *   - reactive.ts 里有三段台词门控在 `>= 2` 或 `<= -1` 上，**全部永久不可达**
+ *     （其中一段在战役终局：「这份答卷里属于我的那部分，是我自愿给的」）
+ *
+ * 门槛是 >= 2 和 <= -1，所以数值按门槛反推：接纳够到暖的那一档，愤怒够到冷的
+ * 那一档，务实（"晚点再说，那个洞里还在出什么？"）两边都够不到——三条路各自
+ * 有各自的收尾，这正是三选一该有的样子。 */
+export const CHOICE_CINDER_TRUST: Record<string, number> = {
+  "cinderReveal.acceptance": 2,
+  "cinderReveal.focus": 1,
+  "cinderReveal.anger": -2,
 };
 
 /** 打掉一艘某派系的船，对方会记住。数值很小——一次遭遇不该毁掉一段关系，
