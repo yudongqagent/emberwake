@@ -807,6 +807,14 @@ export function equipModule(shipId: string, slotIndex: number, moduleId: string 
   persist();
 }
 
+/** 玩家手上(装备的或库存里的)是否已经有这个设计。
+ *
+ * 和 isDesignEquipped 的区别:那条只看旗舰的槽位,这条看全部家当——抉择卡要回答的
+ * 是"这对我来说是新东西吗",而不是"这一件此刻装着吗"。 */
+export function ownsDesign(defId: string): boolean {
+  return state.value.modules.some((m) => m.defId === defId);
+}
+
 /** Whether this module's design is already fitted somewhere on the ship (other
  * than `exceptSlot`). Drives the picker's "already fitted" state. */
 export function isDesignEquipped(shipId: string, defId: string, exceptSlot?: number): boolean {

@@ -4,7 +4,7 @@ import { moduleMaxLevel, primaryStat } from "../../engine/modules";
 import { localizedModuleName, localizedTrait } from "../../i18n/data";
 import { t } from "../../i18n/strings";
 import { ModuleStats } from "../components/ModuleStats";
-import { wouldReplace } from "../../state/store";
+import { wouldReplace, ownsDesign } from "../../state/store";
 
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, HullIcon } from "../components/Icons";
@@ -74,9 +74,18 @@ function DraftCard({
     heading = localizedModuleName(def);
     body = (
       <>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.3rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.3rem", flexWrap: "wrap" }}>
           <ModuleTypeIcon type={def.type} size={13} />
           <ModuleRarityTag rarity={opt.module.rarity} />
+          {/* 一个 (族, 层) 格里正好只有 4 件(每个槽位一件),所以同族同层拿第二次
+              必然是同一个设计。实测一整趟战役里**一半以上**的收获是重复设计——
+              那不是 bug,是矩阵型词库的必然。但玩家有权知道自己拿的是新东西还是
+              一次词条重掷:数值行已经给了差值,这里补上"为什么会有差值"。 */}
+          {ownsDesign(opt.module.defId) && (
+            <span className="eyebrow" style={{ color: "var(--text-dim)", border: "1px solid var(--line)", borderRadius: 4, padding: "0.1em 0.4em" }}>
+              {t("draft.reroll")}
+            </span>
+          )}
         </div>
         <div style={{ fontSize: "0.74rem", color: "var(--text-mid)", marginTop: "0.35rem" }}>
           {/* 冷却排在数值行**前面**:数值行末尾挂着「对比同类最强」那句说明,

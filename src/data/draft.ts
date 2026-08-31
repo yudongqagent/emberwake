@@ -80,9 +80,35 @@ export function draftTierFor(shipLevel: number, greedy: boolean): ModuleRarity {
   return TIER_ORDER[idx];
 }
 
-function moduleOfFamily(family: string, tier: ModuleRarity): ModuleInstance {
-  const candidates = MODULE_DEFS.filter((m) => m.family === family && m.baseRarity === tier);
-  const def = candidates.length ? pickOne(candidates) : pickOne(MODULE_DEFS.filter((m) => m.baseRarity === tier));
+/** 抽一件该技术族、该层的模组,**优先给玩家还没有的设计**。
+ *
+ * 2026-08-31 实测(/loop 第 27 轮)。原来是在候选里均匀抽,不看玩家已经有什么。
+ * 而一个 (族, 层) 格里正好只有 4 件(武器/装甲/引擎/辅助各一),于是模拟一整趟
+ * 80 场仗的战役:
+ *
+ *     160 个模组选项里,已经拥有同设计的  44 (28%)
+ *     拿到手的 80 件里,重复设计          44 (55%)
+ *     一整趟战役见过的不同设计           36 / 200  (18%)
+ *
+ * 也就是说玩家打完整个战役只见过五分之一不到的模组,而每次抉择递到手里的东西
+ * 一半以上是他已经有的。搜到的说法很直接:「物品种类少,实验的空间就被压掉了,
+ * 可重玩性跟着一起没」。
+ *
+ * 排除已有设计,不是禁止——四件全有了就还是从全部里抽(那时它是一次词条重掷,
+ * 见 RefitDraft 上的标注)。`exclude` 让同一手牌里的两张不撞车。 */
+function moduleOfFamily(
+  family: string,
+  tier: ModuleRarity,
+  owned: ModuleInstance[],
+  exclude: Set<string>,
+): ModuleInstance {
+  const cell = MODULE_DEFS.filter((m) => m.family === family && m.baseRarity === tier);
+  const pool = cell.length ? cell : MODULE_DEFS.filter((m) => m.baseRarity === tier);
+  const ownedDefs = new Set(owned.map((m) => m.defId));
+  const fresh = pool.filter((m) => !ownedDefs.has(m.id) && !exclude.has(m.id));
+  const usable = fresh.length ? fresh : pool.filter((m) => !exclude.has(m.id));
+  const def = pickOne(usable.length ? usable : pool);
+  exclude.add(def.id);
   return drawModule(def.id, { minRarity: tier, maxRarity: tier });
 }
 
@@ -99,19 +125,21 @@ export function generateDraft(opts: {
   const { faction, shipLevel, owned, activeBoons, activePacts = [] } = opts;
   const family = FAMILY_FOR_FACTION[faction] ?? "bauhinia";
   const out: DraftOption[] = [];
+  // 同一手牌里的两张模组不能是同一个设计。
+  const offered = new Set<string>();
 
   // 1. Safe: a module from the region's own tech line, at the plain tier.
   out.push({
     id: "opt-safe",
     kind: "module",
-    module: moduleOfFamily(family, draftTierFor(shipLevel, false)),
+    module: moduleOfFamily(family, draftTierFor(shipLevel, false), owned, offered),
   });
 
   // 2. Greedy: a tier above, paid for in hull.
   out.push({
     id: "opt-greedy",
     kind: "module",
-    module: moduleOfFamily(family, draftTierFor(shipLevel, true)),
+    module: moduleOfFamily(family, draftTierFor(shipLevel, true), owned, offered),
     hullCost: 12 + shipLevel * 2,
   });
 
@@ -138,7 +166,7 @@ export function generateDraft(opts: {
     out.push({
       id: "opt-third",
       kind: "module",
-      module: moduleOfFamily(family, draftTierFor(shipLevel, false)),
+      module: moduleOfFamily(family, draftTierFor(shipLevel, false), owned, offered),
     });
   }
 
