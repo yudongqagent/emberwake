@@ -31,8 +31,8 @@ import { setMuted, isMuted, playSfx } from "./audio/engine";
 import { setMood } from "./audio/music";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
-import { pendingHullUnlocks } from "./state/store";
-import { localizedHullClassDisplay } from "./i18n/data";
+import { pendingHullUnlocks, pendingCrewUnlocks } from "./state/store";
+import { localizedHullClassDisplay, localizedCrewName, localizedCrewPassive } from "./i18n/data";
 import { SaveRecovery } from "./ui/components/SaveRecovery";
 import { hasExistingSave, createInitialState } from "./engine/save";
 import { t } from "./i18n/strings";
@@ -530,9 +530,56 @@ export function App() {
         )}
         <DiveResultToast result={diveResult} onClose={() => setDiveResult(null)} />
         <ScavengeToast rewards={scavenged} onClose={() => setScavenged(null)} />
+        <CrewJoinedToast onOpenCrew={() => setPanel("crew")} />
         <CampaignCompleteCard />
         <HullUnlockToast />
         <ErrorToast />
+      </div>
+    </div>
+  );
+}
+
+/** 新船员入列。
+ *
+ * 2026-08-31(第 41 轮):具名船员原来是**静悄悄**加进名册的,而新舰级解锁却有整屏
+ * 提示卡——同一类事件,两种待遇。而且新人默认不上岗(第 40 轮),支持度冻在 50,
+ * 被动只发挥 100%,所以这张卡必须把"去上岗"这一步一起说出来。 */
+function CrewJoinedToast({ onOpenCrew }: { onOpenCrew: () => void }) {
+  const joined = pendingCrewUnlocks.value;
+  if (joined.length === 0) return null;
+  const dismiss = () => { pendingCrewUnlocks.value = []; };
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 72, display: "flex",
+        alignItems: "center", justifyContent: "center", padding: "1rem",
+        background: "rgba(3,5,9,0.8)", backdropFilter: "blur(3px)",
+      }}
+      onClick={dismiss}
+    >
+      <div className="panel pop-in" style={{ width: "min(420px, 100%)", padding: "1.4rem", border: "1px solid var(--violet)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="eyebrow" style={{ color: "var(--violet)" }}>{t("crewJoin.title")}</div>
+        <div style={{ margin: "0.7rem 0 0.5rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+          {joined.map((c) => (
+            <div key={c.id}>
+              <div style={{ fontSize: "1.05rem", fontWeight: 700, fontFamily: "var(--font-display)" }}>
+                {localizedCrewName(c)}
+              </div>
+              <div style={{ fontSize: "0.74rem", color: "var(--text-mid)", lineHeight: 1.45 }}>
+                {localizedCrewPassive(c)}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: "0.76rem", color: "var(--amber)", lineHeight: 1.5, margin: "0.5rem 0 1rem" }}>
+          {t("crewJoin.station")}
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button className="btn ghost" style={{ flex: 1 }} onClick={dismiss}>{t("common.close")}</button>
+          <button className="btn primary" style={{ flex: 1 }} onClick={() => { dismiss(); onOpenCrew(); }}>
+            {t("crewJoin.open")}
+          </button>
+        </div>
       </div>
     </div>
   );

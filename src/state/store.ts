@@ -326,6 +326,17 @@ export function adjustCinderTrust(delta: number): void {
   persist();
 }
 
+/** 刚入列、还没告诉玩家的具名船员。
+ *
+ * 2026-08-31(/loop 第 41 轮)。具名船员(7 人,含全部 3 名传奇)在剧情 flag 满足时
+ * **静悄悄**加进名册——没有任何提示。而新舰级解锁是有整屏提示卡的
+ * (pendingHullUnlocks / HullUnlockToast),同一类事件,两种待遇。
+ *
+ * 再叠上第 40 轮查出来的那条:新入列的人默认**不上岗**,支持度因此冻在 50,被动
+ * 停在 ×1.0。于是一个传奇船员可以从入列到通关全程躺在名册里,玩家既不知道他来了,
+ * 也不知道要把他放上岗位。 */
+export const pendingCrewUnlocks = signal<typeof CREW_DEFS>([]);
+
 function checkNamedCrewUnlocks() {
   const existing = new Set(state.value.crew.map((c) => c.defId));
   const toAdd = CREW_DEFS.filter(
@@ -337,6 +348,7 @@ function checkNamedCrewUnlocks() {
     ...toAdd.map((c) => ({ id: randomId("crew"), defId: c.id, approval: 50, assignedShipId: null })),
   ];
   state.value = { ...state.value, crew };
+  pendingCrewUnlocks.value = toAdd;
 }
 
 export function travelToSystem(systemId: string) {
