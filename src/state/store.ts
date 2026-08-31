@@ -30,7 +30,7 @@ import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isMo
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
 import { CHOICE_REPUTATION, clampRep, repEffects, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
-import { canEvolve, evolveModule } from "../data/evolutions";
+import { canEvolve, evolveModule, evolutionPartnerMatch } from "../data/evolutions";
 import { sigilBonus, sigilUpgradeCost, sigilsForDive, type SigilNodeId } from "../data/sigils";
 import { setPermanentBonusSource } from "../engine/permanent";
 import { CREW_ALLEGIANCE, APPROVAL_FROM_REPUTATION, APPROVAL_PER_WIN, APPROVAL_PER_LOSS, clampApproval, approvalEffects, type ApprovalEffects } from "../data/crewApproval";
@@ -832,6 +832,11 @@ export function equipModule(shipId: string, slotIndex: number, moduleId: string 
  *
  * 和 isDesignEquipped 的区别:那条只看旗舰的槽位,这条看全部家当——抉择卡要回答的
  * 是"这对我来说是新东西吗",而不是"这一件此刻装着吗"。 */
+/** 这件候选模组会不会补上某把武器进化所缺的搭档?界面层只调这一个。 */
+export function evolutionHintFor(mod: ModuleInstance) {
+  return evolutionPartnerMatch(mod, state.value.modules);
+}
+
 export function ownsDesign(defId: string): boolean {
   return state.value.modules.some((m) => m.defId === defId);
 }

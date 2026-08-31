@@ -6,12 +6,12 @@ import { moduleDefById, fabricatorCost, MARKET_MAX_RARITY } from "../../data/mod
 import { drawModule, primaryStat } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleStats } from "../components/ModuleStats";
-import { wouldReplace } from "../../state/store";
+import { wouldReplace, evolutionHintFor } from "../../state/store";
 import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon, HullIcon } from "../components/Icons";
 import { RollQualityBadge } from "../components/StatBlock";
 import type { ModuleInstance } from "../../data/types";
 import { t } from "../../i18n/strings";
-import { localizedModuleName, localizedTrait, localizedCrewName, localizedCrewPassive } from "../../i18n/data";
+import { localizedModuleName, localizedTrait, localizedCrewName, localizedCrewPassive, localizedEvolutionName } from "../../i18n/data";
 type Tab = "trade" | "fabricator" | "recruit";
 
 const TAB_META: { id: Tab; labelKey: string; icon: preact.ComponentChildren }[] = [
@@ -258,6 +258,15 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
             </div>
             <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.5rem", flexWrap: "wrap" }}>
               <ModuleStats mod={candidate} compareTo={wouldReplace(candidate)} />
+              {(() => {
+                const hint = evolutionHintFor(candidate);
+                if (!hint) return null;
+                return (
+                  <div style={{ fontSize: "0.68rem", color: "var(--violet)", marginTop: "0.25rem", fontWeight: 700 }}>
+                    {t(hint.state === "ready" ? "draft.evolveReady" : "draft.evolvePartner", { name: localizedEvolutionName(hint.evo.family) })}
+                  </div>
+                );
+              })()}
               {candidate.traits.map((traitId, ti) => (
                 <span key={ti} style={{ fontSize: "0.68rem", padding: "0.1em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
                   {localizedTrait(def, traitId).label}

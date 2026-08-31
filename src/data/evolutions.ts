@@ -98,6 +98,38 @@ export function evolutionBlocker(
   return null;
 }
 
+/** 这件候选模组,是不是某把武器进化所缺的那个搭档?
+ *
+ * 2026-08-31(/loop 第 38 轮)。这套系统自己的设计注释写着:
+ *
+ *     The important half is not the reward, it's the *visibility*. An evolution
+ *     you can see three fights away changes what you take from a Refit Draft —
+ *     you start picking the partner module deliberately.
+ *
+ * 而实测下来:**整备抉择卡和商店都完全不知道进化这回事**。玩家手里有一把练满的
+ * 洋紫荆武器等着 mark 搭档,抉择递上来一件正好带 mark 的模组,卡面一个字都不提——
+ * 他没有任何理由不去选伤害更高的那张。这套东西声明的用途,恰恰是唯一没接上的。
+ *
+ * 返回 "ready" 表示那把武器已经练满、只差这个搭档;"pending" 表示搭档对得上,
+ * 但武器还没到等级上限——后者是"提前三场仗看见"的那一半,不能说成马上能进化。 */
+export function evolutionPartnerMatch(
+  candidate: ModuleInstance,
+  owned: ModuleInstance[],
+): { evo: Evolution; state: "ready" | "pending" } | null {
+  let pending: Evolution | null = null;
+  for (const weapon of owned) {
+    const def = moduleDefById(weapon.defId);
+    if (def.type !== "weapon" || weapon.evolved) continue;
+    const evo = evolutionForFamily(def.family);
+    if (!evo || !providesEffect(candidate, evo.partnerEffect)) continue;
+    // 已经有别的搭档在位了,这件就不是"所缺的那个"。
+    if (owned.some((m) => m.id !== weapon.id && m.id !== candidate.id && providesEffect(m, evo.partnerEffect))) continue;
+    if (weapon.level >= moduleMaxLevel(weapon.rarity)) return { evo, state: "ready" };
+    pending = evo;
+  }
+  return pending ? { evo: pending, state: "pending" } : null;
+}
+
 export function evolveModule(weapon: ModuleInstance): ModuleInstance {
   const def = moduleDefById(weapon.defId);
   const evo = evolutionForFamily(def.family);

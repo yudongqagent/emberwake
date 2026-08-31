@@ -4,7 +4,8 @@ import { moduleMaxLevel, primaryStat } from "../../engine/modules";
 import { localizedModuleName, localizedTrait } from "../../i18n/data";
 import { t } from "../../i18n/strings";
 import { ModuleStats } from "../components/ModuleStats";
-import { wouldReplace, ownsDesign } from "../../state/store";
+import { wouldReplace, ownsDesign, evolutionHintFor } from "../../state/store";
+import { localizedEvolutionName } from "../../i18n/data";
 
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, HullIcon } from "../components/Icons";
@@ -100,6 +101,21 @@ function DraftCard({
             <b>{localizedTrait(def, def.signature).label}</b> — {localizedTrait(def, def.signature).description}
           </div>
         )}
+        {/* 武器进化的搭档提示。
+        
+            进化那套东西自己的设计注释写着"重要的一半是**可见性**——你能提前三场仗
+            看见它,才会开始有意识地挑搭档模组"。而实测(第 38 轮):抉择卡和商店
+            完全不知道进化这回事。声明的用途,恰恰是唯一没接上的地方。 */}
+        {(() => {
+          const hint = evolutionHintFor(opt.module!);
+          if (!hint) return null;
+          const name = localizedEvolutionName(hint.evo.family);
+          return (
+            <div style={{ fontSize: "0.7rem", color: "var(--violet)", marginTop: "0.3rem", fontWeight: 700 }}>
+              {t(hint.state === "ready" ? "draft.evolveReady" : "draft.evolvePartner", { name })}
+            </div>
+          );
+        })()}
       </>
     );
   } else if (opt.kind === "upgrade") {
