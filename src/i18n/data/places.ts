@@ -50,6 +50,13 @@ export const POI_NAMES_ZH: Record<string, string> = {
   meridianExchangeDerelict: "漂流信号",
   originTideRiftDerelict: "漂流信号",
   queenspireDerelict: "漂流信号",
+  // 裂隙囊(riftPocket)。这个 POI 类型在 types.ts 里声明了、SystemView 里完整
+  // 实现了(接近逻辑、三档下潜面板、专门的漩涡画法),但七个星区里**一个实例都没有**
+  // ——而系统视图的提示文字一直写着"靠近……裂隙……以进行交互"(第 31 轮实测)。
+  veilTearPocket: "帷幕裂口",
+  originWellPocket: "本源之井",
+  umbralRiftPocket: "不燃之隙",
+  chorusRiftPocket: "第四乐章",
   umbralLineDerelict: "漂流信号",
   veilsEdgeDerelict: "漂流信号",
 

@@ -15,6 +15,15 @@ export const UMBRAL_LINE: GalaxyDef = {
       controllingFaction: "hollow",
       pois: [
         {
+          id: "umbralRiftPocket",
+          kind: "riftPocket",
+          name: "the Unlit Aperture",
+          x: 420,
+          y: 470,
+          radius: 90,
+          data: {},
+        },
+        {
           id: "umbralLineDerelict",
           kind: "derelict",
           name: "Drifting Signal",

@@ -15,6 +15,15 @@ export const DEEP_ORIGIN: GalaxyDef = {
       controllingFaction: null,
       pois: [
         {
+          id: "originWellPocket",
+          kind: "riftPocket",
+          name: "the Origin Well",
+          x: 200,
+          y: 460,
+          radius: 90,
+          data: {},
+        },
+        {
           id: "firstFleetWreckedHull",
           kind: "derelict",
           name: "Wrecked First Fleet Hull",

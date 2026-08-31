@@ -15,6 +15,17 @@ export const FRACTURED_VEIL: GalaxyDef = {
       controllingFaction: null,
       pois: [
         {
+          // 破碎帷幕是裂隙最先撕开的地方——第一个裂隙囊放在这里,
+          // 既是叙事上的对位,也是玩家第一次在地图上遇见它。
+          id: "veilTearPocket",
+          kind: "riftPocket",
+          name: "the Veil Tear",
+          x: 760,
+          y: 180,
+          radius: 90,
+          data: {},
+        },
+        {
           id: "veilsEdgeDerelict",
           kind: "derelict",
           name: "Drifting Signal",

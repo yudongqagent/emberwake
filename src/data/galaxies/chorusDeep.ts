@@ -19,6 +19,15 @@ export const CHORUS_DEEP: GalaxyDef = {
       controllingFaction: "choir",
       pois: [
         {
+          id: "chorusRiftPocket",
+          kind: "riftPocket",
+          name: "the Fourth Movement",
+          x: 700,
+          y: 480,
+          radius: 90,
+          data: {},
+        },
+        {
           id: "choirsThresholdDerelict",
           kind: "derelict",
           name: "Drifting Signal",
