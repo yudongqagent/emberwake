@@ -15,6 +15,15 @@ export const BAUHINIA_REACH: GalaxyDef = {
       controllingFaction: "bauhinia",
       pois: [
         {
+          id: "amaranthBeltDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 379,
+          y: 385,
+          radius: 80,
+          data: {},
+        },
+        {
           id: "amaranthFieldA",
           kind: "asteroidField",
           name: "Amaranth Belt Field",
@@ -52,6 +61,15 @@ export const BAUHINIA_REACH: GalaxyDef = {
       y: 340,
       controllingFaction: "bauhinia",
       pois: [
+        {
+          id: "bauhiniaPrimeDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 726,
+          y: 378,
+          radius: 80,
+          data: {},
+        },
         {
           id: "bauhiniaPrimeExchange",
           kind: "station",
@@ -99,6 +117,15 @@ export const BAUHINIA_REACH: GalaxyDef = {
       y: 520,
       controllingFaction: "bauhinia",
       pois: [
+        {
+          id: "kestrelsRestDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 323,
+          y: 291,
+          radius: 80,
+          data: {},
+        },
         {
           id: "kestrelsRestOutpost",
           kind: "station",
@@ -199,6 +226,15 @@ export const BAUHINIA_REACH: GalaxyDef = {
       y: 520,
       controllingFaction: "reavers",
       pois: [
+        {
+          id: "coldreachAnchorageDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 469,
+          y: 248,
+          radius: 80,
+          data: {},
+        },
         {
           id: "coldreachBoss",
           kind: "patrol",

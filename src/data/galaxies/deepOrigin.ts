@@ -53,6 +53,15 @@ export const DEEP_ORIGIN: GalaxyDef = {
       controllingFaction: "constructs",
       pois: [
         {
+          id: "constructAnchorZeroDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 728,
+          y: 459,
+          radius: 80,
+          data: {},
+        },
+        {
           id: "anchorZeroDebrisRing",
           kind: "asteroidField",
           name: "Anchor Zero Debris Ring",

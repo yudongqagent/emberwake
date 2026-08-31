@@ -36,6 +36,23 @@ export const SYSTEM_NAMES_ZH: Record<string, string> = {
 };
 
 export const POI_NAMES_ZH: Record<string, string> = {
+  amaranthBeltDerelict: "漂流信号",
+  ashenvaleDerelict: "漂流信号",
+  bauhiniaPrimeDerelict: "漂流信号",
+  choirsThresholdDerelict: "漂流信号",
+  coldreachAnchorageDerelict: "漂流信号",
+  constructAnchorZeroDerelict: "漂流信号",
+  driftmarketDerelict: "漂流信号",
+  dysonChoirDerelict: "漂流信号",
+  ferrousGateDerelict: "漂流信号",
+  hollowFleetYardDerelict: "漂流信号",
+  kestrelsRestDerelict: "漂流信号",
+  meridianExchangeDerelict: "漂流信号",
+  originTideRiftDerelict: "漂流信号",
+  queenspireDerelict: "漂流信号",
+  umbralLineDerelict: "漂流信号",
+  veilsEdgeDerelict: "漂流信号",
+
   hollowMarkedConvoyBounty: "掠夺者悬红:商会运输队",
   // Bauhinia Reach
   amaranthFieldA: "苋红星带矿场",

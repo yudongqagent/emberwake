@@ -466,6 +466,50 @@ export function buySigilRank(id: SigilNodeId): boolean {
   return true;
 }
 
+/** 结算一个星图事件的结果(data/events.ts)。
+ *
+ * 集中在 store 里,而不是让 App 去拼 setFlags + setPoiRuntime + grant + 改船体
+ * 四件事:那样每加一种结果类型都要改两个地方,而两个地方迟早对不上。 */
+export function resolveEventOutcome(
+  eventId: string,
+  poiId: string,
+  outcome: {
+    resources?: Partial<Record<ResourceType, number>>;
+    hull?: number;
+    reputation?: Partial<Record<FactionId, number>>;
+  },
+): void {
+  // 同一个事件只发生一次。可以反复刷的"选择"不是选择,是刷子。
+  setFlags([`event.${eventId}.done`]);
+  setPoiRuntime(poiId, { cleared: true, clearedAt: Date.now() });
+  if (outcome.resources) {
+    const gain: Partial<Record<ResourceType, number>> = {};
+    const cost: Partial<Record<ResourceType, number>> = {};
+    for (const [k, v] of Object.entries(outcome.resources)) {
+      if (!v) continue;
+      if (v > 0) gain[k as ResourceType] = v;
+      // 扣不出来就扣到零为止——事件不该把玩家推进负数。
+      else cost[k as ResourceType] = Math.min(-v, state.value.resources[k as ResourceType]);
+    }
+    if (Object.keys(gain).length) grant(gain);
+    if (Object.keys(cost).length) spend(cost);
+  }
+  if (outcome.hull) {
+    const ship = flagship.value;
+    if (ship) {
+      const next = Math.max(1, Math.min(effectiveMaxHull(ship), ship.currentHp + outcome.hull));
+      state.value = {
+        ...state.value,
+        ships: state.value.ships.map((sh) => (sh.id === ship.id ? { ...sh, currentHp: next } : sh)),
+      };
+    }
+  }
+  if (outcome.reputation) {
+    for (const [f, v] of Object.entries(outcome.reputation)) adjustReputation(f as FactionId, v!);
+  }
+  persist();
+}
+
 /** How many equipped modules on the flagship carry an effect (signature counts). */
 export function equippedEffectStacks(effectId: string): number {
   const ship = flagship.value;

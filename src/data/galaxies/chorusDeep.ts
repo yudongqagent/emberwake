@@ -19,6 +19,15 @@ export const CHORUS_DEEP: GalaxyDef = {
       controllingFaction: "choir",
       pois: [
         {
+          id: "choirsThresholdDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 685,
+          y: 392,
+          radius: 80,
+          data: {},
+        },
+        {
           id: "thresholdDebrisField",
           kind: "asteroidField",
           name: "Threshold Debris Field",
@@ -59,6 +68,15 @@ export const CHORUS_DEEP: GalaxyDef = {
       y: 340,
       controllingFaction: "choir",
       pois: [
+        {
+          id: "dysonChoirDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 330,
+          y: 279,
+          radius: 80,
+          data: {},
+        },
         {
           id: "choirDefenseGridPoi",
           kind: "patrol",

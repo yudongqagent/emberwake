@@ -15,6 +15,15 @@ export const FRACTURED_VEIL: GalaxyDef = {
       controllingFaction: null,
       pois: [
         {
+          id: "veilsEdgeDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 272,
+          y: 239,
+          radius: 80,
+          data: {},
+        },
+        {
           id: "veilsEdgeOutpost",
           kind: "station",
           name: "Veil's Edge Outpost",
@@ -92,6 +101,15 @@ export const FRACTURED_VEIL: GalaxyDef = {
       controllingFaction: "swarm",
       pois: [
         {
+          id: "queenspireDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 649,
+          y: 194,
+          radius: 80,
+          data: {},
+        },
+        {
           id: "queenspireHollowBelt",
           kind: "asteroidField",
           name: "Queenspire Hollow Belt",
@@ -121,6 +139,15 @@ export const FRACTURED_VEIL: GalaxyDef = {
       y: 340,
       controllingFaction: null,
       pois: [
+        {
+          id: "originTideRiftDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 235,
+          y: 376,
+          radius: 80,
+          data: {},
+        },
         {
           id: "originTideDeepCache",
           kind: "wreck",

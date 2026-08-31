@@ -15,6 +15,15 @@ export const SWANREACH_COMBINE: GalaxyDef = {
       controllingFaction: "swanreach",
       pois: [
         {
+          id: "meridianExchangeDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 292,
+          y: 435,
+          radius: 80,
+          data: {},
+        },
+        {
           id: "meridianExchangeHub",
           kind: "station",
           name: "Meridian Exchange",
@@ -51,6 +60,15 @@ export const SWANREACH_COMBINE: GalaxyDef = {
       y: 420,
       controllingFaction: "swanreach",
       pois: [
+        {
+          id: "driftmarketDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 389,
+          y: 250,
+          radius: 80,
+          data: {},
+        },
         {
           id: "driftmarketConcourse",
           kind: "station",

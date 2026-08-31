@@ -15,6 +15,15 @@ export const UMBRAL_LINE: GalaxyDef = {
       controllingFaction: "hollow",
       pois: [
         {
+          id: "umbralLineDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 387,
+          y: 218,
+          radius: 80,
+          data: {},
+        },
+        {
           id: "umbralDebrisDrift",
           kind: "asteroidField",
           name: "Umbral Debris Drift",

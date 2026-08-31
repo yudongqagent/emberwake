@@ -15,6 +15,15 @@ export const LIONSHEART_EXPANSE: GalaxyDef = {
       controllingFaction: "lionsheart",
       pois: [
         {
+          id: "ferrousGateDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 207,
+          y: 385,
+          radius: 80,
+          data: {},
+        },
+        {
           id: "ferrousGateCheckpoint",
           kind: "station",
           name: "Ferrous Gate Checkpoint",
@@ -74,6 +83,15 @@ export const LIONSHEART_EXPANSE: GalaxyDef = {
       controllingFaction: "lionsheart",
       pois: [
         {
+          id: "ashenvaleDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 239,
+          y: 263,
+          radius: 80,
+          data: {},
+        },
+        {
           id: "ashenvaleConcordHall",
           kind: "station",
           name: "Ashenvale Concord Hall",
@@ -101,6 +119,15 @@ export const LIONSHEART_EXPANSE: GalaxyDef = {
       y: 540,
       controllingFaction: "reavers",
       pois: [
+        {
+          id: "hollowFleetYardDerelict",
+          kind: "derelict",
+          name: "Drifting Signal",
+          x: 733,
+          y: 456,
+          radius: 80,
+          data: {},
+        },
         {
           id: "hollowFleetYardBossPoi",
           kind: "patrol",

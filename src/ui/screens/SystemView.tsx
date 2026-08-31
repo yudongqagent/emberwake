@@ -49,6 +49,8 @@ interface Props {
   onNavigate: (screen: string) => void;
   onDock: (poiId: string) => void;
   onEngage: (encounterId: string, poiId: string, victoryFlag?: string) => void;
+  /** 废弃船:开一个星图事件。 */
+  onInvestigate: (poiId: string) => void;
 }
 
 interface Particle {
@@ -76,7 +78,7 @@ function wanderOffset(poi: Poi, now: number): { x: number; y: number } {
   return { x: Math.cos(t * 0.18 + seed) * 46, y: Math.sin(t * 0.14 + seed * 1.7) * 30 };
 }
 
-export function SystemView({ onNavigate, onDock, onEngage }: Props) {
+export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [nearPoi, setNearPoi] = useState<Poi | null>(null);
   /** Set by the contacts panel to order a course for a POI. The canvas effect
@@ -512,6 +514,15 @@ export function SystemView({ onNavigate, onDock, onEngage }: Props) {
           ref={canvasRef}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", touchAction: "none", cursor: "crosshair" }}
         />
+        {/* 废弃船:靠近之后它会问你一个问题(data/events.ts)。
+            在此之前这三个点只画了美术、没有任何交互代码——星图上 61 个点,
+            0 个会给玩家一个选择。 */}
+        {nearPoi && nearPoi.kind === "derelict" && (
+          <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", display: "flex", gap: "0.75rem", alignItems: "center" }}>
+            <span>{localizedPoiName(nearPoi)}</span>
+            <button className="btn primary" onClick={() => onInvestigate(nearPoi.id)}>{t("event.investigate")}</button>
+          </div>
+        )}
         {nearPoi && nearPoi.kind === "station" && (
           <div className="panel" style={{ position: "absolute", left: "50%", bottom: 20, transform: "translateX(-50%)", padding: "0.75rem 1rem", display: "flex", gap: "0.75rem", alignItems: "center" }}>
             <span>{localizedPoiName(nearPoi)}</span>

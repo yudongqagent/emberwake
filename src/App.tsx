@@ -11,6 +11,8 @@ import { Modules } from "./ui/screens/Modules";
 import { Crew } from "./ui/screens/Crew";
 import { Ascension } from "./ui/screens/Ascension";
 import { StoryOverlay } from "./ui/screens/StoryOverlay";
+import { EventOverlay } from "./ui/screens/EventOverlay";
+import { eventsForGalaxy, type GameEvent } from "./data/events";
 import { Combat } from "./ui/screens/Combat";
 import { RiftInterlude } from "./ui/screens/RiftInterlude";
 import { RiftDropReveal } from "./ui/screens/RiftDropReveal";
@@ -22,7 +24,7 @@ import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
 import { registerRuntimeEncounter, encounterById } from "./data/encounters";
-import { grant, grantRiftDrop, bankDive } from "./state/store";
+import { grant, grantRiftDrop, bankDive, resolveEventOutcome, currentGalaxy } from "./state/store";
 import { setMuted, isMuted } from "./audio/engine";
 import { setMood } from "./audio/music";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
@@ -99,6 +101,7 @@ export function App() {
   const [riftRun, setRiftRun] = useState<RiftRun | null>(null);
   const [riftDrop, setRiftDrop] = useState<ModuleInstance | null>(null);
   const [diveResult, setDiveResult] = useState<{ earned: number; newRecord: boolean; depth: number } | null>(null);
+  const [pendingEvent, setPendingEvent] = useState<{ event: GameEvent; poiId: string } | null>(null);
   /** Core-loop redesign #1 — the hand of three waiting to be picked from. */
   const [draft, setDraft] = useState<DraftOption[] | null>(null);
   /** Core-loop redesign #5 — an in-progress sortie. The rift's push-your-luck
@@ -228,6 +231,27 @@ export function App() {
     return (
       <ErrorBoundary label={t("rift.title")}>
         <RiftDropReveal drop={riftDrop} onClose={() => setRiftDrop(null)} />
+        <ErrorToast />
+      </ErrorBoundary>
+    );
+  }
+
+  // 星图事件。放在这里(战斗之外的全屏覆盖层)是因为它可能**开一场仗**——
+  // 结算完之后再把控制权交回去。
+  if (pendingEvent) {
+    return (
+      <ErrorBoundary label={t("event.title")}>
+        <EventOverlay
+          event={pendingEvent.event}
+          onResolve={(outcome) => {
+            const { event, poiId } = pendingEvent;
+            resolveEventOutcome(event.id, poiId, outcome);
+            setPendingEvent(null);
+            if (outcome.kind === "combat" && outcome.encounterId) {
+              setCombat({ encounterId: outcome.encounterId });
+            }
+          }}
+        />
         <ErrorToast />
       </ErrorBoundary>
     );
@@ -379,6 +403,15 @@ export function App() {
                   // rather than a free reset.
                   clearSortieBoons();
                   setDocked(true);
+                }}
+                onInvestigate={(poiId) => {
+                  // 星图事件(data/events.ts):废弃船靠近之后会问你一个问题。
+                  // 事件按星区筛,同一个 POI 只触发一次——一个可以反复刷的
+                  // "选择"不是选择,是刷子。
+                  const pool = eventsForGalaxy(currentGalaxy.value.id)
+                    .filter((e) => !state.value.flags[`event.${e.id}.done`]);
+                  if (pool.length === 0) return;
+                  setPendingEvent({ event: pool[Math.floor(Math.random() * pool.length)], poiId });
                 }}
                 onEngage={(encounterId, poiId, victoryFlag) => {
                   const enc = encounterById(encounterId);
