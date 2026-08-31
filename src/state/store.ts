@@ -853,6 +853,21 @@ export function assignCrew(crewId: string, shipId: string | null) {
 
 /** Whether a scene's progress gates are met (open-world redesign). A scene with
  * neither gate set behaves exactly as before, so this is additive. */
+/** 某个 flag 是哪一幕给的?返回那一幕的本地化章节名。
+ *
+ * 2026-08-31(/loop 第 33 轮)实测:进阶熔炉里的条件行写的是裸标签「剧情进度 ○」,
+ * 不说是**哪一段**剧情。第 26 轮我刚把目标条修成会说"去进阶",玩家照着来到这个
+ * 面板,撞上第二道墙,依然不知道自己缺什么。
+ *
+ * 而 unlockFlag(如 act1.tigersReach.cleared)和它对应那一幕的章节名都在数据里
+ * 躺着,只是没人把它们接起来。 */
+export function sceneTitleForFlag(flag: string): string | null {
+  const scene = STORY_SCENES.find(
+    (s) => s.hiddenAfterFlag === flag || (s.onCompleteFlags ?? []).includes(flag),
+  );
+  return scene ? localizedScene(scene).chapterTitle : null;
+}
+
 export function sceneProgressMet(sc: StoryScene): boolean {
   const ship = flagship.value;
   if (sc.requiresAscensions !== undefined && (ship?.ascendedFrom.length ?? 0) < sc.requiresAscensions) return false;

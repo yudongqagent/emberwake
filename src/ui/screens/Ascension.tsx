@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { state, flagship, ascendShipAction } from "../../state/store";
+import { state, flagship, ascendShipAction, sceneTitleForFlag } from "../../state/store";
 import { hullClassById, nextHullClassOptions, ascensionRequirementsMet } from "../../data/hullClasses";
 import { hullClassAbility } from "../../data/namedShips";
 import { ascendShip, computeMaxHull, computePowerCapacity, computeSpeed, xpToNextLevel } from "../../engine/ships";
@@ -224,7 +224,17 @@ function AscensionOption({
           icon={<ResourceIcon type="originEssence" size={12} />}
           detail={req.essence ? undefined : t("ascension.shortBy", { amount: target.essenceCost - essence })}
         />
-        {target.unlockFlag !== null && <Requirement met={req.flag} label={t("station.reqStory")} />}
+        {target.unlockFlag !== null && (() => {
+          // 说清楚是**哪一段**剧情。裸标签「剧情进度」等于把玩家挡在门外还不给
+          // 门牌号——章节名就在数据里,只是原来没接起来。
+          const chapter = sceneTitleForFlag(target.unlockFlag);
+          return (
+            <Requirement
+              met={req.flag}
+              label={chapter ? t("station.reqStoryNamed", { chapter }) : t("station.reqStory")}
+            />
+          );
+        })()}
       </div>
 
       <button
