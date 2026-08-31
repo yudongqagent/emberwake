@@ -26,7 +26,8 @@ import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
 import { applyXp, computeMaxHull, ascendShip, reforgeShip } from "../engine/ships";
-import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor } from "../engine/modules";
+import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor, computeModuleBlock } from "../engine/modules";
+import { MAX_BLOCK_FRACTION } from "../engine/combat";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
 import { CHOICE_REPUTATION, CHOICE_CINDER_TRUST, clampRep, repEffects, repTier, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
@@ -1434,6 +1435,45 @@ export function upgradeModule(moduleId: string): boolean {
   playSfx("levelUp");
   persist();
   return true;
+}
+
+/** 交战前该知道的那点事:里面有几艘船,最重的一击能拿走你多大一块船体。
+ *
+ * 2026-08-31(/loop 第 49 轮)。搜同类游戏搜到的一句是:"自由要有意义,玩家得先有
+ * 足够的信息判断后果;盲目的决定带来的是挫败,不是掌控感"——以及 Into the Breach
+ * 的作者复盘 FTL 时说,很多人觉得那个 BOSS 的难度"来得毫无预兆"。
+ *
+ * 而 Emberwake 在这一轮之前:联络人卡上只有**名字和距离**,而靠近巡逻点 400ms
+ * 后**自动开打**(SystemView 的 onEngage),没有预览、没有确认、没有退路。玩家
+ * 判断"这仗该不该打"的全部依据是一个地名。
+ *
+ * 刻意给**事实而不是结论**:不写"困难/普通",写"3 艘 · 单发最重占你船体 18%"。
+ * 判断留给玩家——这和模组卡不给"这是升级"徽章是同一条立场。分母用当前船体
+ * 而不是满血,因为带伤进场时这个数才是玩家真正要问的那个。
+ *
+ * 分子走**真实结算**:减去自己的装甲格挡,并且套上 resolveAttack 那条 75% 封顶
+ * (MAX_BLOCK_FRACTION)。第一版只用敌人的原始伤害,读出来是"占船体 162%",
+ * 比实际重——一个吓唬人的数字和一个没有的数字一样没用。 */
+export function encounterThreatRead(encounterId: string): { enemies: number; worstHitFraction: number } | null {
+  const ship = flagship.value;
+  if (!ship) return null;
+  let enc;
+  try {
+    enc = encounterById(encounterId);
+  } catch {
+    return null;
+  }
+  if (!enc || enc.enemies.length === 0) return null;
+  const worst = Math.max(...enc.enemies.map((e) => e.damage));
+  const block = ship.equipped.reduce((sum, id) => {
+    const m = id ? state.value.modules.find((x) => x.id === id) : undefined;
+    if (!m || moduleDefById(m.defId).baseBlock === undefined) return sum;
+    return sum + computeModuleBlock(m);
+  }, 0);
+  const absorbed = Math.min(block, worst * MAX_BLOCK_FRACTION);
+  const landed = Math.max(1, Math.round(worst - absorbed));
+  const hull = Math.max(1, ship.currentHp);
+  return { enemies: enc.enemies.length, worstHitFraction: landed / hull };
 }
 
 export function repairFlagship() {

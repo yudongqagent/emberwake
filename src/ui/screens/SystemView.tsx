@@ -10,6 +10,7 @@ import {
   effectiveRemaining,
   getNextObjective,
   effectiveMaxHull,
+  encounterThreatRead,
 } from "../../state/store";
 import type { Poi, ResourceType } from "../../data/types";
 import { playSfx } from "../../audio/engine";
@@ -659,6 +660,9 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
                   <span style={{ fontSize: "0.6rem", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>
                     {isNear ? t("system.inRange") : `${d}u`}
                   </span>
+                  {/* 第 49 轮:这张卡原来只有名字和距离,而靠近巡逻点就直接开打。
+                      玩家判断"这仗该不该打"的全部依据是一个地名。 */}
+                  <ThreatRead poi={poi} />
                 </button>
               );
             })}
@@ -669,6 +673,30 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
         </div>
       </div>
     </div>
+  );
+}
+
+/** 交战前的扫描读数——几艘船,以及最重的一击占你当前船体多少。
+ *
+ * 给事实不给结论:不写"困难/普通",写"3 艘 · 单发最重占船体 18%"。判断留给玩家,
+ * 和模组卡不给"这是升级"徽章是同一条立场。25% 这条线不是拍的——难度曲线守卫
+ * (difficultyRamp.test.ts)本来就用"最重一击不得超过预期船体 25%"当上限,
+ * 超过它就是这个星区本来不该出现的强度,红色是名副其实的。 */
+function ThreatRead({ poi }: { poi: Poi }) {
+  if (poi.kind !== "patrol") return null;
+  const encounterId = poi.data?.encounterId as string | undefined;
+  if (!encounterId) return null;
+  const read = encounterThreatRead(encounterId);
+  if (!read) return null;
+  const pct = Math.round(read.worstHitFraction * 100);
+  const color = pct >= 25 ? "var(--red)" : pct >= 10 ? "var(--amber)" : "var(--green)";
+  return (
+    <span
+      style={{ fontSize: "0.58rem", color, fontVariantNumeric: "tabular-nums" }}
+      title={t("system.threatReadTitle")}
+    >
+      {t("system.threatRead", { count: read.enemies, pct })}
+    </span>
   );
 }
 

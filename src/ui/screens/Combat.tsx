@@ -384,9 +384,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     + sortieBoons.filter((b) => b === id).length
     + setBonusEffects.filter((e) => e === id).length;
 
+  // 2026-08-31(/loop 第 49 轮):这里原来加的是 `def.baseBlock` **原始值**,
+  // 而所有显示路径(模组页、抉择卡、掉落展示、ModuleStats)用的都是
+  // computeModuleBlock——它乘了稀有度 × 等级 × 品质。于是:
+  //
+  //     纹章护盾 MK2 5 级   界面写「格挡 22」   战斗实际用 11
+  //     格挡装甲 MK2 5 级   界面写「格挡 26」   战斗实际用 13
+  //
+  // 玩家看到的格挡是实际的两倍,而且**给装甲升级,显示的数字在涨、战斗里的值
+  // 纹丝不动**——1 级和 7 级的同一块装甲,挨打时一模一样。
+  //
+  // 这和 engine/modules.ts 里 effectPotency 那条注释说的是同一件事(一块 mk1
+  // 的偏转板和一块 mk5 满级的偏转板完全一样),当时修了**效果**,漏了格挡这个
+  // 数值本身。十一处引用里只有这一处没接上。
   const armorBlock = Math.round(equippedModuleList
     .filter((m) => moduleDefById(m.defId).baseBlock !== undefined)
-    .reduce((sum, m) => sum + (moduleDefById(m.defId).baseBlock ?? 0), 0) * pacts.blockMult);
+    .reduce((sum, m) => sum + computeModuleBlock(m), 0) * pacts.blockMult);
   const evasionTraitCount = effectStacks("evasion");
   // 2026-08-30:装备第一次给出真正的闪避和推力数值(见 tools/genGear.py)。
   // 从前引擎一个数值都没有,所以"升级引擎"是纯粹的骗钱,而 mk5 引擎因为耗电更多,
