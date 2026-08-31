@@ -31,8 +31,10 @@ import { setMuted, isMuted, playSfx } from "./audio/engine";
 import { setMood } from "./audio/music";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { ErrorToast } from "./ui/components/ErrorToast";
-import { pendingHullUnlocks, pendingCrewUnlocks } from "./state/store";
+import { pendingHullUnlocks, pendingCrewUnlocks, pendingStandingChange } from "./state/store";
+import { repTier } from "./data/reputation";
 import { localizedHullClassDisplay, localizedCrewName, localizedCrewPassive } from "./i18n/data";
+import { crewDefById } from "./data/crew";
 import { SaveRecovery } from "./ui/components/SaveRecovery";
 import { hasExistingSave, createInitialState } from "./engine/save";
 import { t } from "./i18n/strings";
@@ -530,10 +532,73 @@ export function App() {
         )}
         <DiveResultToast result={diveResult} onClose={() => setDiveResult(null)} />
         <ScavengeToast rewards={scavenged} onClose={() => setScavenged(null)} />
+        <StandingChangeCard />
         <CrewJoinedToast onOpenCrew={() => setPanel("crew")} />
         <CampaignCompleteCard />
         <HullUnlockToast />
         <ErrorToast />
+      </div>
+    </div>
+  );
+}
+
+/** 立场变了。
+ *
+ * 2026-08-31(第 42 轮):剧情选择会改声望**和船员支持度**,而这件事原来完全静默。
+ * 而这些选择很重——arthaineResolution.formal 一次是洋紫荆 −40,敌对阈值是 −50。
+ * 一个对话选项就能把你推到"巡逻队追杀 + 市场关闭"的边上,玩家事后完全不知道。
+ *
+ * 分档变了单独点出来:那才是价格、盟友、猎杀队真正切换的时刻。 */
+function StandingChangeCard() {
+  const { standings, crew } = pendingStandingChange.value;
+  if (standings.length === 0) return null;
+  const dismiss = () => { pendingStandingChange.value = { standings: [], crew: [] }; };
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 73, display: "flex",
+        alignItems: "center", justifyContent: "center", padding: "1rem",
+        background: "rgba(3,5,9,0.8)", backdropFilter: "blur(3px)",
+      }}
+      onClick={dismiss}
+    >
+      <div className="panel pop-in" style={{ width: "min(420px, 100%)", padding: "1.4rem", border: "1px solid var(--cyan)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="eyebrow" style={{ color: "var(--cyan)" }}>{t("standing.title")}</div>
+        <div style={{ margin: "0.8rem 0", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {standings.map((s) => (
+            <div key={s.faction}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" }}>
+                <span style={{ fontSize: "0.86rem" }}>{t(`faction.${s.faction}`)}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, color: s.delta > 0 ? "var(--green)" : "var(--red)" }}>
+                  {s.delta > 0 ? "+" : ""}{s.delta}
+                </span>
+              </div>
+              {s.tierChanged && (
+                <div style={{ fontSize: "0.74rem", color: "var(--amber)", fontWeight: 700, marginTop: "0.15rem" }}>
+                  {t("standing.tierMoved", {
+                    from: t(`rep.tier.${repTier(s.before)}`),
+                    to: t(`rep.tier.${repTier(s.after)}`),
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        {crew.length > 0 && (
+          <div style={{ fontSize: "0.76rem", color: "var(--text-mid)", lineHeight: 1.5, marginBottom: "0.9rem" }}>
+            {t("standing.crewMoved")}{" "}
+            {crew.map((c, i) => (
+              <span key={c.defId}>
+                {i > 0 && "、"}
+                {localizedCrewName(crewDefById(c.defId))}
+                <span style={{ color: c.delta > 0 ? "var(--green)" : "var(--red)", fontWeight: 700 }}>
+                  {" "}{c.delta > 0 ? "+" : ""}{c.delta}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+        <button className="btn primary" style={{ width: "100%" }} onClick={dismiss}>{t("common.close")}</button>
       </div>
     </div>
   );

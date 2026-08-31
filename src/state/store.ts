@@ -29,7 +29,7 @@ import { applyXp, computeMaxHull, ascendShip, reforgeShip } from "../engine/ship
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor } from "../engine/modules";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
-import { CHOICE_REPUTATION, clampRep, repEffects, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
+import { CHOICE_REPUTATION, clampRep, repEffects, repTier, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
 import { canEvolve, evolveModule, evolutionPartnerMatch } from "../data/evolutions";
 import { sigilBonus, sigilUpgradeCost, sigilsForDive, type SigilNodeId } from "../data/sigils";
 import { setPermanentBonusSource } from "../engine/permanent";
@@ -250,6 +250,26 @@ function setFlags(flags: string[]) {
   checkNamedCrewUnlocks();
 }
 
+/** 刚发生、还没告诉玩家的立场变化。
+ *
+ * 2026-08-31(/loop 第 42 轮)。applyChoiceReputation 算出 repDelta,拿它改了声望
+ * **和船员支持度**,然后把它丢掉——**一个字都不说**。
+ *
+ * 而这些选择很重:arthaineResolution.formal 一次是 **洋紫荆 −40**,而敌对的阈值
+ * 是 −50(他们的巡逻队会来找你、市场对你关闭)。一个对话选项就能把你从中立推到
+ * 敌对边上,玩家事后完全不知道发生过什么。
+ *
+ * 搜到的原话:「玩家做出一个得罪某派系的对话选择时,是在毫不知情的情况下给自己
+ * 树敌」。 */
+export interface StandingChange {
+  faction: FactionId;
+  delta: number;
+  before: number;
+  after: number;
+  tierChanged: boolean;
+}
+export const pendingStandingChange = signal<{ standings: StandingChange[]; crew: { defId: string; delta: number }[] }>({ standings: [], crew: [] });
+
 /** 把刚设置的 flag 里带声望后果的部分结算掉。 */
 function applyChoiceReputation(flags: string[]) {
   const rep = { ...state.value.reputation };
@@ -269,13 +289,27 @@ function applyChoiceReputation(flags: string[]) {
   // 船员就在你船上,他们知道你为他们那一派做了什么、又卖了什么。
   // 直接从声望变化换算,而不是再维护一张平行的表——两张表迟早会对不上,
   // 而那种不一致不报错,只会让玩家觉得游戏的反应莫名其妙。
+  const crewMoved: { defId: string; delta: number }[] = [];
   const crew = state.value.crew.map((c) => {
     const side = CREW_ALLEGIANCE[c.defId];
     const d = side ? repDelta[side] : undefined;
     if (!d) return c;
-    return { ...c, approval: clampApproval(c.approval + d * APPROVAL_FROM_REPUTATION) };
+    const next = clampApproval(c.approval + d * APPROVAL_FROM_REPUTATION);
+    if (next !== c.approval) crewMoved.push({ defId: c.defId, delta: next - c.approval });
+    return { ...c, approval: next };
   });
   state.value = { ...state.value, reputation: rep, crew };
+
+  // 把这次变动摆到玩家面前。分档变了要单独点出来——那才是价格、盟友、猎杀队
+  // 真正切换的时刻。
+  const standings: StandingChange[] = (Object.entries(repDelta) as [FactionId, number][])
+    .filter(([, d]) => d !== 0)
+    .map(([faction, delta]) => {
+      const after = rep[faction] ?? 0;
+      const before = after - delta;
+      return { faction, delta, before, after, tierChanged: repTier(before) !== repTier(after) };
+    });
+  if (standings.length > 0) pendingStandingChange.value = { standings, crew: crewMoved };
 }
 
 /** 支持度:带着谁打赢,谁就更信你;打输了,信任掉得比涨得快。
