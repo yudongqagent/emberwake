@@ -6,6 +6,7 @@ import { moduleDefById, fabricatorCost, MARKET_MAX_RARITY } from "../../data/mod
 import { drawModule, primaryStat } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleStats } from "../components/ModuleStats";
+import { wouldReplace } from "../../state/store";
 import { ResourceIcon, TradeIcon, NavIcon, CrewRoleIcon, CREW_ROLE_COLOR, ModuleTypeIcon, HullIcon } from "../components/Icons";
 import { RollQualityBadge } from "../components/StatBlock";
 import type { ModuleInstance } from "../../data/types";
@@ -92,7 +93,7 @@ export function StationPanel({ onClose }: { onClose: () => void }) {
             <div style={{ marginTop: "0.5rem" }}>
               <RollQualityBadge roll={drawnModule.quality} />
             </div>
-            <div style={{ marginTop: "0.6rem" }}><ModuleStats mod={drawnModule} /></div>
+            <div style={{ marginTop: "0.6rem" }}><ModuleStats mod={drawnModule} compareTo={wouldReplace(drawnModule)} /></div>
             {drawnModule.traits.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", justifyContent: "center", marginTop: "0.6rem" }}>
                 {drawnModule.traits.map((traitId, i) => (
@@ -256,7 +257,7 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
               <ModuleRarityTag rarity={candidate.rarity} />
             </div>
             <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.76rem", color: "var(--text-mid)", marginBottom: "0.5rem", flexWrap: "wrap" }}>
-              <ModuleStats mod={candidate} />
+              <ModuleStats mod={candidate} compareTo={wouldReplace(candidate)} />
               {candidate.traits.map((traitId, ti) => (
                 <span key={ti} style={{ fontSize: "0.68rem", padding: "0.1em 0.5em", borderRadius: 999, border: "1px solid var(--violet)", color: "var(--violet)" }}>
                   {localizedTrait(def, traitId).label}

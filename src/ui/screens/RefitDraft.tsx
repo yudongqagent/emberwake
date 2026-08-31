@@ -4,6 +4,7 @@ import { moduleMaxLevel, primaryStat } from "../../engine/modules";
 import { localizedModuleName, localizedTrait } from "../../i18n/data";
 import { t } from "../../i18n/strings";
 import { ModuleStats } from "../components/ModuleStats";
+import { wouldReplace } from "../../state/store";
 
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleTypeIcon, HullIcon } from "../components/Icons";
@@ -78,8 +79,12 @@ function DraftCard({
           <ModuleRarityTag rarity={opt.module.rarity} />
         </div>
         <div style={{ fontSize: "0.74rem", color: "var(--text-mid)", marginTop: "0.35rem" }}>
-          <ModuleStats mod={opt.module} size="inherit" />
-          {def.cooldown ? ` · ${t("draft.cycle", { secs: (def.cooldown * 2.4).toFixed(1) })}` : null}
+          {/* 冷却排在数值行**前面**:数值行末尾挂着「对比同类最强」那句说明,
+              把周期缀在它后面会读成那句话的一部分。 */}
+          {def.cooldown ? (
+            <span style={{ marginRight: "0.9rem" }}>{t("draft.cycle", { secs: (def.cooldown * 2.4).toFixed(1) })}</span>
+          ) : null}
+          <ModuleStats mod={opt.module} compareTo={wouldReplace(opt.module)} size="inherit" />
         </div>
         {eff && (
           <div style={{ fontSize: "0.72rem", color: accent, marginTop: "0.3rem" }}>

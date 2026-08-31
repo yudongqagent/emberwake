@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { state, flagship, equipModule, spend, canAfford, sellModule, upgradeModule, isDesignEquipped, pendingFits, fitAll } from "../../state/store";
+import { state, flagship, equipModule, spend, canAfford, sellModule, upgradeModule, isDesignEquipped, pendingFits, fitAll, wouldReplace } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
 import { powerStrainMultiplier } from "../../engine/combat";
 import { computePowerCapacity } from "../../engine/ships";
@@ -248,6 +248,8 @@ function InventoryPanel({ inventory, ship }: { inventory: ModuleInstance[]; ship
                   <ModuleTypeIcon type={def.type} size={14} />
                   <span style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleInstanceName(m)}</span>
                   <ModuleRarityTag rarity={m.rarity} />
+                  {/* 库存里躺着的那件"到底比在装的强还是弱",原来这一行完全没有。 */}
+                  <ModuleStats mod={m} compareTo={wouldReplace(m)} size="0.7rem" gap="0.55rem" />
                 </div>
                 <div style={{ display: "flex", gap: "0.3rem", flex: "none" }}>
                   {fittable.has(m.id) && (

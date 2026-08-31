@@ -159,6 +159,37 @@ export function primaryStat(mod: ModuleInstance): { key: "damage" | "block" | "e
   return null;
 }
 
+/** 一件候选模组该拿谁当参照?——旗舰上**同类型里最强的那件**。
+ *
+ * 2026-08-31(/loop 第 19 轮)。整备抉择的卡面实拍:
+ *
+ *     Reaver Apotheosis   MK5   Dmg 47 · cycles 0.8s   Costs 122 hull
+ *
+ * 而玩家身上装着的那把是 Dmg 489。卡面只写绝对值,于是"该不该拿"这个每场战斗
+ * 都要做一次的决定,玩家没有做的依据——除非他记得住自己身上八件装备的数值。
+ * 同一张界面里的**升级卡**却写着 `11 → 12`:容易做对比的那半做了,每场都要做的
+ * 那半没做。
+ *
+ * 第一版写的是"它会顶掉哪一件":同类型有空槽就不比(纯赚),满了才和最弱的比。
+ * 实测下来这条规则在真机上等于**从不比较**——那艘船 10 个武器槽只填了 1 个,
+ * 永远有空槽。而这恰恰是最需要参照的时刻。
+ *
+ * 所以改成拿**最强的同类**当基准:它就是玩家心里的那把尺子("我那把打 489,
+ * 这个打 47")。空槽不空槽不影响这句话是否有用。 */
+export function benchmarkFor(
+  ship: { hullClass: string; equipped: (string | null)[] },
+  mod: ModuleInstance,
+  lookup: (id: string) => ModuleInstance | undefined,
+): ModuleInstance | null {
+  const def = moduleDefById(mod.defId);
+  const sameType = ship.equipped
+    .map((id) => (id ? lookup(id) : undefined))
+    .filter((m): m is ModuleInstance => !!m && moduleDefById(m.defId).type === def.type && m.id !== mod.id);
+  if (sameType.length === 0) return null;
+  const rank = (m: ModuleInstance) => primaryStat(m)?.value ?? computeModuleEvasion(m);
+  return sameType.reduce((best, m) => (rank(m) > rank(best) ? m : best));
+}
+
 /** 一个模组把它的效果打出多重。
  *
  * 2026-08-30,修 docs/module-system-audit-round2.md 的 #13——也是 #11 和 #12 的

@@ -26,7 +26,7 @@ import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
 import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
-import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed } from "../engine/modules";
+import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor } from "../engine/modules";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
 import { CHOICE_REPUTATION, clampRep, repEffects, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
@@ -602,6 +602,16 @@ export function pendingFits(ship: ShipInstance, inventory: ModuleInstance[]): { 
     fits.push({ moduleId: mod.id, slotIndex: slot });
   }
   return fits;
+}
+
+/** 这件候选模组的参照物:旗舰上同类型里最强的那件。身上一件同类都没有时返回 null。
+ *
+ * 界面层只调这一个东西——benchmarkFor 需要 ship 和实例查找,让每个界面各自去凑,
+ * 就是又一次"规则对了但只接了一处"。 */
+export function wouldReplace(mod: ModuleInstance): ModuleInstance | null {
+  const ship = flagship.value;
+  if (!ship) return null;
+  return benchmarkFor(ship, mod, (id) => state.value.modules.find((m) => m.id === id));
 }
 
 /** 把 pendingFits 算出来的那批一次装上。 */
