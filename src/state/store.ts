@@ -510,6 +510,14 @@ export function resolveEventOutcome(
   persist();
 }
 
+/** 记下"这个战斗控件的解锁提示已经给过了"(data/combatUnlocks.ts)。 */
+export function markUnlockSeen(id: string): void {
+  const key = `unlockSeen.${id}`;
+  if (state.value.flags[key]) return;
+  state.value = { ...state.value, flags: { ...state.value.flags, [key]: true } };
+  persist();
+}
+
 /** How many equipped modules on the flagship carry an effect (signature counts). */
 export function equippedEffectStacks(effectId: string): number {
   const ship = flagship.value;

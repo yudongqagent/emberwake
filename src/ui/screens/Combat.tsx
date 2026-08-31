@@ -5,10 +5,11 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSi
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad, effectsFor } from "../../state/store";
+import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
 import { pactModifiers } from "../../data/pacts";
+import { isUnlocked, COMBAT_UNLOCKS } from "../../data/combatUnlocks";
 import { applyEmberLoad } from "../../data/emberLoad";
 import { crewDefById } from "../../data/crew";
 import { approvalEffects } from "../../data/crewApproval";
@@ -350,6 +351,23 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // 余烬契约(data/pacts.ts):改玩法而不是改数字的那一类。它们走 sortieBoons
   // 这条已有的管线,所以生命周期(出击期间有效、回港作废)和别的增益一致。
   const pacts = pactModifiers(state.value.sortiePacts);
+  // 渐进式解锁(data/combatUnlocks.ts):控件在它开始有用的那一刻才出现。
+  // 在此之前,第一场仗就把七个控件同时摆给玩家,而那一场刻意是零输入也能赢的
+  // ——七个他一个都不需要按、也没人告诉他是干什么的按钮。
+  const unlocked = (id: Parameters<typeof isUnlocked>[0]) => isUnlocked(id, state.value.flags, ship.level);
+  // 一个新控件冒出来而没人说一句,玩家不会注意到界面上多了个按钮。第一次解锁时
+  // 提示一次,然后记进存档不再重复。
+  const [newUnlock, setNewUnlock] = useState<string | null>(null);
+  useEffect(() => {
+    for (const u of COMBAT_UNLOCKS) {
+      if (unlocked(u.id) && !state.value.flags[`unlockSeen.${u.id}`]) {
+        markUnlockSeen(u.id);
+        setNewUnlock(u.id);
+        return;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const setBonusEffects = activeSetBonuses(equippedModuleList).flatMap((s) => s.effects);
   for (const e of setBonusEffects) shipEffects.add(e);
   const hasEffect = (id: string) => shipEffects.has(id);
@@ -2634,11 +2652,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         {/* Core-loop redesign #2 — the reactor split. Sits in the vitals block
             rather than the console because it's a standing tuning decision, not
             a one-shot order like the stance buttons. */}
-        <ReactorBar
+        {unlocked("reactor") && <ReactorBar
           alloc={reactor}
           disabled={status !== "active"}
           onShift={(ch) => { setReactor((a) => shiftReactor(a, ch)); playSfx("click"); }}
-        />
+        />}
       </div>
 
       {/* ---- VIEWSCREEN ---- */}
@@ -2738,10 +2756,26 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         )}
       </div>
 
+      {newUnlock && (
+        <div
+          onClick={() => setNewUnlock(null)}
+          style={{
+            margin: "0 1rem", padding: "0.5rem 0.75rem", borderRadius: 6, cursor: "pointer",
+            border: "1px solid var(--cyan)", background: "rgba(93,214,255,0.12)",
+            fontSize: "0.74rem", lineHeight: 1.5, color: "var(--text-hi)",
+          }}
+        >
+          <span style={{ color: "var(--cyan)", fontWeight: 700 }}>{t("unlock.new")} </span>
+          <span style={{ fontWeight: 700 }}>{t(`unlock.${newUnlock}`)}</span>
+          {" — "}
+          <span style={{ color: "var(--text-mid)" }}>{t(`unlock.${newUnlock}.desc`)}</span>
+        </div>
+      )}
+
       {/* ---- COMMAND CONSOLE ---- */}
       <div style={{ borderTop: "1px solid var(--line)", background: "rgba(5,8,16,0.72)", padding: "0.5rem 1rem 0.6rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        <ConsoleZone label={t("combat.zone.helm")}>
-          <div style={{ display: "flex", gap: "0.35rem" }} role="group" aria-label={t("combat.stanceLabel")}>
+        {(unlocked("stance") || unlocked("brace")) && <ConsoleZone label={t("combat.zone.helm")}>
+          {unlocked("stance") && <div style={{ display: "flex", gap: "0.35rem" }} role="group" aria-label={t("combat.stanceLabel")}>
             {(["close", "hold", "retreat"] as StanceOrder[]).map((order) => {
               const OrderIcon = order === "close" ? CloseOrderIcon : order === "hold" ? HoldOrderIcon : RetreatOrderIcon;
               const active = stanceOrder === order;
@@ -2759,10 +2793,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
                 </button>
               );
             })}
-            {/* Brace (UI audit #4) — the reaction that gives the long auto-firing
-                stretches something to actually decide. Always present so its
-                place is learned, but it only lights up while something is about
-                to hit, and spending it early wastes the cooldown. */}
+          </div>}
+          {/* Brace (UI audit #4) — the reaction that gives the long auto-firing
+              stretches something to actually decide. It only lights up while
+              something is about to hit, and spending it early wastes the cooldown.
+              渐进式解锁:从第二场戏开始给,而第二场正好是那门会蓄力的炮台。 */}
+          {unlocked("brace") && <div style={{ display: "flex", gap: "0.35rem", marginTop: unlocked("stance") ? "0.35rem" : 0 }}>
             <button
               className={`btn ${bracing ? "primary" : imminent && braceCooldown <= 0 ? "danger" : "ghost"}`}
               style={{
@@ -2807,8 +2843,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
                 </span>
               </button>
             )}
-          </div>
-        </ConsoleZone>
+          </div>}
+        </ConsoleZone>}
 
         {autoFireWeapons.length > 0 && (
           <ConsoleZone label={t("combat.zone.weapons")} hint={t("combat.zone.weaponsHint")}>
@@ -2823,7 +2859,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
 
         <ConsoleZone label={t("combat.zone.abilities")}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-            <button
+            {unlocked("overcharge") && <button
               className={`btn ${overcharged ? "danger" : "ghost"}`}
               style={{ fontSize: "0.68rem", padding: "0.45em 0.7em" }}
               disabled={status !== "active"}
@@ -2831,7 +2867,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
               title={t("combat.overchargeTitle")}
             >
               {overcharged ? t("combat.overcharged") : t("combat.overcharge")}
-            </button>
+            </button>}
             {manualModules.map((mod) => {
               const def = moduleDefById(mod.defId);
               const cd = cooldowns[mod.id] ?? 0;
