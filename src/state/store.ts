@@ -961,8 +961,17 @@ export function getNextObjective(): Objective | null {
   //
   // 2026-08-31 实测:开场幕说「前面星带里有一片残骸,能拆的都拆回来」,而目标条
   // 同时写着「跳转至茶隼歇息地」——游戏的第一分钟给出两条互相矛盾的指令。
-  for (const scene of STORY_SCENES) {
-    if (!scene.pointsAtPoi || !hasFlag(scene.hiddenAfterFlag)) continue;
+  // 只认**最近演完的那一幕**的指向。
+  //
+  // 第 25 轮我加这段时忘了给它时效:任何演完的幕,只要它指的 POI 还没清掉,就会
+  // 一直霸占目标条。而开场那片残骸是可以不去的——不去的玩家会被"拆解漂流信号"
+  // 指着走完整局,真正的下一步被它盖住。(2026-08-31 模拟:全部剧情打完之后,
+  // 目标条写的还是「拆解漂流信号 @ 苋红星带」。)
+  //
+  // 演完下一幕就说明玩家已经走过去了,老指向该闭嘴。
+  const lastCleared = [...STORY_SCENES].reverse().find((s) => hasFlag(s.hiddenAfterFlag));
+  for (const scene of lastCleared ? [lastCleared] : []) {
+    if (!scene.pointsAtPoi) continue;
     const found = findPoiById(scene.pointsAtPoi);
     if (!found || poiRuntime(found.poi.id).cleared) continue;
     return {

@@ -24,7 +24,7 @@ import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
 import { registerRuntimeEncounter, encounterById } from "./data/encounters";
-import { grant, grantRiftDrop, bankDive, resolveEventOutcome, currentGalaxy, saveRiftRun, pendingFits, fitAll } from "./state/store";
+import { grant, grantRiftDrop, bankDive, resolveEventOutcome, currentGalaxy, saveRiftRun, pendingFits, fitAll, markUnlockSeen } from "./state/store";
 import { moduleDefById } from "./data/modules";
 import { hullClassById } from "./data/hullClasses";
 import { setMuted, isMuted } from "./audio/engine";
@@ -521,8 +521,64 @@ export function App() {
           </ErrorBoundary>
         )}
         <DiveResultToast result={diveResult} onClose={() => setDiveResult(null)} />
+        <CampaignCompleteCard />
         <HullUnlockToast />
         <ErrorToast />
+      </div>
+    </div>
+  );
+}
+
+/** 战役通关。
+ *
+ * 2026-08-31 实测(/loop 第 30 轮):最后一幕的 onCompleteFlags 里写着
+ * `campaign.act6.complete`,而**全代码库没有任何地方读它**(act1/2/4/5 的同名
+ * flag 也一样)。玩家打完六幕、打赢最后一场、读完最后一句台词,然后目标条静静
+ * 消失,游戏一个字都不说。
+ *
+ * 这是"声明了却没人读"这一类里最贵的一次——它丢掉的是整局唯一的高潮。
+ *
+ * 刻意不做成"游戏结束":这是个开放世界,通关之后裂隙、悬赏、立场戏都还在。
+ * 所以这张卡是一次**确认**,不是一道门——它把这一局的样子摆出来,然后放你回去。 */
+function CampaignCompleteCard() {
+  const done = state.value.flags["campaign.act6.complete"];
+  const seen = state.value.flags["unlockSeen.campaignComplete"];
+  const ship = flagship.value;
+  if (!done || seen || !ship) return null;
+  const rows: [string, string | number][] = [
+    [t("ending.ship"), `${ship.name} · ${localizedHullClassDisplay(hullClassById(ship.hullClass))}`],
+    [t("ending.level"), ship.level],
+    [t("ending.ascensions"), ship.ascendedFrom.length],
+    [t("ending.deepestDive"), state.value.deepestDive],
+  ];
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 75, display: "flex",
+        alignItems: "center", justifyContent: "center", padding: "1rem",
+        background: "radial-gradient(circle at 50% 40%, rgba(255,184,77,0.14), rgba(3,5,9,0.94) 60%)",
+      }}
+    >
+      <div className="panel pop-in" style={{ width: "min(460px, 100%)", padding: "1.5rem", border: "1px solid var(--amber)" }}>
+        <div className="eyebrow" style={{ color: "var(--amber)" }}>{t("ending.eyebrow")}</div>
+        <div className="title" style={{ fontSize: "1.5rem", marginTop: "0.2rem" }}>{t("ending.title")}</div>
+        <div style={{ fontSize: "0.82rem", color: "var(--text-mid)", lineHeight: 1.6, margin: "0.8rem 0 1rem" }}>
+          {t("ending.body")}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginBottom: "1rem" }}>
+          {rows.map(([label, value]) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", borderBottom: "1px solid var(--line)", paddingBottom: "0.3rem" }}>
+              <span style={{ color: "var(--text-dim)" }}>{label}</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}>{value}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.55, marginBottom: "1rem" }}>
+          {t("ending.openWorld")}
+        </div>
+        <button className="btn primary" style={{ width: "100%" }} onClick={() => markUnlockSeen("campaignComplete")}>
+          {t("ending.continue")}
+        </button>
       </div>
     </div>
   );

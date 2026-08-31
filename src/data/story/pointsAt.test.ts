@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { GALAXIES, STORY_SCENES, getNextObjective, replaceState, setPoiRuntime } from "../../state/store";
 import { createInitialState } from "../../engine/save";
+import type { ShipInstance } from "../types";
 
 /** 台词说的和路标指的必须是同一件事。
  *
@@ -52,5 +53,28 @@ describe("台词指向哪,目标条就指向哪", () => {
     // 目标条只在幕**演完之后**跟着它的台词走;没演的幕不该抢在主线前面。
     const obj = getNextObjective();
     expect(obj?.poiId).not.toBe("amaranthBeltDerelict");
+  });
+
+  it("剧情往前走了之后,老指向必须闭嘴", () => {
+    // 第 25 轮加这段时我忘了给它时效:开场那片残骸是**可以不去的**,而只要它没被
+    // 清掉,「拆解漂流信号」就会一直霸占目标条,把真正的下一步盖住。
+    // 模拟当时的状态:全部剧情打完,但那片残骸从没去过。
+    const base = createInitialState();
+    const flags: Record<string, boolean> = { ...base.flags };
+    for (const s of STORY_SCENES) {
+      if (s.hiddenAfterFlag) flags[s.hiddenAfterFlag] = true;
+      for (const f of s.onCompleteFlags ?? []) flags[f] = true;
+      if (s.requiredFlag) flags[s.requiredFlag] = true;
+    }
+    replaceState({
+      ...base,
+      flags,
+      ships: base.ships.map((s, i) => (i === 0 ? { ...s, level: 60, ascendedFrom: ["corvette", "destroyer", "cruiser", "battleship", "dreadnought", "sovereign"] as ShipInstance["ascendedFrom"] } : s)),
+    });
+    const obj = getNextObjective();
+    expect(
+      obj?.poiId,
+      "整局剧情都打完了,目标条还钉在开场教学的那片残骸上",
+    ).not.toBe("amaranthBeltDerelict");
   });
 });
