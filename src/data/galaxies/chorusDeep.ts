@@ -19,6 +19,16 @@ export const CHORUS_DEEP: GalaxyDef = {
       controllingFaction: "choir",
       pois: [
         {
+          id: "thresholdAnchorVerse",
+          kind: "patrol",
+          name: "Choir Anchor Verse",
+          x: 300,
+          y: 180,
+          radius: 85,
+          requiresFlag: "act6.boldMove.cleared",
+          data: { encounterId: "bountyChoirAnchorVerse", respawnSeconds: 130, bounty: true },
+        },
+        {
           id: "chorusRiftPocket",
           kind: "riftPocket",
           name: "the Fourth Movement",
@@ -81,6 +91,16 @@ export const CHORUS_DEEP: GalaxyDef = {
       y: 340,
       controllingFaction: "choir",
       pois: [
+        {
+          id: "dysonSiegeCantor",
+          kind: "patrol",
+          name: "Choir Siege Cantor",
+          x: 250,
+          y: 470,
+          radius: 85,
+          requiresFlag: "act6.dysonSphereSystem.cleared",
+          data: { encounterId: "bountyChoirSiegeCantor", respawnSeconds: 150, bounty: true },
+        },
         {
           id: "dysonChoirDerelict",
           kind: "derelict",

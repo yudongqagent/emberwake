@@ -49,6 +49,15 @@ export const ENCOUNTER_NAMES_ZH: Record<string, string> = {
   choirDefenseGrid: "传令官的防御圣咏",
   civilizationDisqualifiedFinale: "执礼者的终章（第六幕终章）",
   bountyChoirStragglers: "圣咏散声诗节",
+  bountyCombineLedgerEscort: "联合体账册护航队",
+  bountyVeilProbeFlight: "帷幕探针编队",
+  bountyVeilSiegeCluster: "帷幕攻城簇",
+  bountyConstructAnchorGuard: "构装体锚定卫队",
+  bountyConstructSiegeArray: "构装体攻城阵列",
+  bountyHollowRevenantChoir: "虚无亡魂唱诗班",
+  bountyHollowSiegeWake: "虚无攻城余波",
+  bountyChoirAnchorVerse: "圣咏锚定诗节",
+  bountyChoirSiegeCantor: "圣咏攻城领唱",
 };
 
 export const ENEMY_NAMES_ZH: Record<string, string> = {
@@ -107,4 +116,14 @@ export const ENEMY_NAMES_ZH: Record<string, string> = {
   "Choir Cantor": "圣咏领唱者",
   "Choir Herald": "圣咏传令官",
   "The Conductor": "执礼者",
+  "Ledger Warden": "账册守吏",
+  "Combine Escort": "联合体护卫舰",
+  "Veil Probe": "帷幕探针",
+  "Veil Lance": "帷幕长矛",
+  "Veil Drone": "帷幕无人机",
+  "Construct Bulwark": "构装体壁垒",
+  "Construct Siege Node": "构装体攻城节点",
+  "Hollow Revenant": "虚无亡魂",
+  "Hollow Lance": "虚无长矛",
+  "Choir Psalmlance": "圣咏圣诗矛",
 };

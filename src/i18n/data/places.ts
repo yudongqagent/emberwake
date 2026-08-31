@@ -131,4 +131,13 @@ export const POI_NAMES_ZH: Record<string, string> = {
   dysonCoreDebrisRing: "戴森核心残骸环",
   civilizationDisqualifiedPoi: "执礼者，飞升之姿",
   choirArchiveWreck: "圣咏团的静默档案室",
+  meridianLedgerEscort: "联合体账册护航队",
+  driftmarketProbeFlight: "帷幕探针编队",
+  chrysalisSiegeCluster: "帷幕攻城簇",
+  graveyardAnchorGuard: "构装体锚定卫队",
+  anchorZeroSiegeArray: "构装体攻城阵列",
+  umbralRevenantChoir: "虚无亡魂唱诗班",
+  umbralSiegeWake: "虚无攻城余波",
+  thresholdAnchorVerse: "圣咏锚定诗节",
+  dysonSiegeCantor: "圣咏攻城领唱",
 };

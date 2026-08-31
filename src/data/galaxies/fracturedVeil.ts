@@ -77,6 +77,16 @@ export const FRACTURED_VEIL: GalaxyDef = {
       controllingFaction: "swarm",
       pois: [
         {
+          id: "chrysalisSiegeCluster",
+          kind: "patrol",
+          name: "Veil Siege Cluster",
+          x: 300,
+          y: 460,
+          radius: 85,
+          requiresFlag: "act3.intoTheVeil.cleared",
+          data: { encounterId: "bountyVeilSiegeCluster", respawnSeconds: 110, bounty: true },
+        },
+        {
           id: "chrysalisHollowedHive",
           kind: "derelict",
           name: "the Hollowed Hive",

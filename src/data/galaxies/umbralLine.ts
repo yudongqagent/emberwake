@@ -15,6 +15,26 @@ export const UMBRAL_LINE: GalaxyDef = {
       controllingFaction: "hollow",
       pois: [
         {
+          id: "umbralSiegeWake",
+          kind: "patrol",
+          name: "Hollow Siege Wake",
+          x: 280,
+          y: 340,
+          radius: 85,
+          requiresFlag: "act5.secondIgnition.cleared",
+          data: { encounterId: "bountyHollowSiegeWake", respawnSeconds: 140, bounty: true },
+        },
+        {
+          id: "umbralRevenantChoir",
+          kind: "patrol",
+          name: "Hollow Revenant Choir",
+          x: 620,
+          y: 150,
+          radius: 85,
+          requiresFlag: "act5.echoes.cleared",
+          data: { encounterId: "bountyHollowRevenantChoir", respawnSeconds: 120, bounty: true },
+        },
+        {
           id: "umbralRiftPocket",
           kind: "riftPocket",
           name: "the Unlit Aperture",

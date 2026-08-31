@@ -15,6 +15,16 @@ export const DEEP_ORIGIN: GalaxyDef = {
       controllingFaction: null,
       pois: [
         {
+          id: "graveyardAnchorGuard",
+          kind: "patrol",
+          name: "Construct Anchor Guard",
+          x: 620,
+          y: 160,
+          radius: 85,
+          requiresFlag: "act4.firstFleetRuins.cleared",
+          data: { encounterId: "bountyConstructAnchorGuard", respawnSeconds: 120, bounty: true },
+        },
+        {
           id: "originWellPocket",
           kind: "riftPocket",
           name: "the Origin Well",
@@ -65,6 +75,16 @@ export const DEEP_ORIGIN: GalaxyDef = {
       y: 350,
       controllingFaction: "constructs",
       pois: [
+        {
+          id: "anchorZeroSiegeArray",
+          kind: "patrol",
+          name: "Construct Siege Array",
+          x: 330,
+          y: 440,
+          radius: 85,
+          requiresFlag: "act4.lastShipyard.cleared",
+          data: { encounterId: "bountyConstructSiegeArray", respawnSeconds: 130, bounty: true },
+        },
         {
           id: "constructAnchorZeroDerelict",
           kind: "derelict",

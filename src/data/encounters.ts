@@ -429,7 +429,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "reavers",
     isBoss: false,
     enemies: [
-      { name: "Remnant Skiff", hull: 21, damage: 4, block: 1, evasion: 0.15, role: "artillery" },
+      { name: "Remnant Skiff", hull: 27, damage: 6, block: 1, evasion: 0.15, role: "artillery" },
       { name: "Remnant Skiff", hull: 21, damage: 4, block: 1, evasion: 0.15 },
     ],
     rewards: { salvage: 38, sourcePoints: 19, alloy: 15 },
@@ -452,7 +452,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "reavers",
     isBoss: false,
     enemies: [
-      { name: "Salvager Skiff", hull: 41, damage: 17, block: 3, evasion: 0.16, role: "artillery" },
+      { name: "Salvager Skiff", hull: 53, damage: 23, block: 3, evasion: 0.16, role: "artillery" },
       { name: "Salvager Skiff", hull: 41, damage: 17, block: 3, evasion: 0.16 },
     ],
     rewards: { salvage: 71, alloy: 28 },
@@ -534,8 +534,147 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "choir",
     isBoss: false,
     enemies: [
-      { name: "Choir Acolyte", hull: 5110, damage: 1901, block: 56, evasion: 0.15, role: "mender" },
+      { name: "Choir Acolyte", hull: 3577, damage: 1616, block: 56, evasion: 0.15, role: "mender" },
       { name: "Choir Acolyte", hull: 5110, damage: 1901, block: 56, evasion: 0.15 },
+    ],
+    rewards: { salvage: 1541, sourcePoints: 746, alloy: 597 },
+    xp: 845,
+    reputation: { bauhinia: 4, lionsheart: 4, swanreach: 4 },
+  },
+
+  // 第 45 轮补的九条。原来可反复打的仗**随威胁度倒着塌**:紫荆疆域(威胁 1)有 4 场,
+  // 而威胁 3、5、6 的星区**各只有一场**——而且都是"一个敌人、零角色"的纯血包。
+  // 玩家要在深源刷级,唯一的选择就是同一个沙包反复捶。搜到的原话是重复的中段
+  // 「就是干等着什么事发生」。
+  //
+  // 补的不是数量而是**问题**:每条都带一个角色,于是同一个星区里的三场仗问三个
+  // 不同的问题——锚定(先打谁)、修复(打得动吗)、炮击(扛还是抢)。
+  //
+  // 数值锚在**各星区现有悬赏的真实数值**上:总输出按艘数均分(编队不比单打更疼,
+  // 难度来自那个角色而不是数字),总血量按 1/sqrt(艘数) 分摊(编队更耐打,好让角色
+  // 有时间起作用)。带角色的那艘伤害 ×1.35、护卫 ×0.85——"先打谁"在数值上就该
+  // 看得出来。
+  //
+  // 刻意**没用** tools/genBounties.py:实测跑一遍它会把全部 21 条退回到一条弱得多
+  // 的曲线(走私艇伤害 135 → 16)。线上数据早被 genEnemyScale 按中位重锚过,
+  // genBounties 已经不是它的来源了——工具存在不等于工具还当家。
+  {
+    id: "bountyCombineLedgerEscort",
+    name: "Combine Ledger Escort",
+    faction: "swanreach",
+    isBoss: false,
+    enemies: [
+      { name: "Ledger Warden", hull: 250, damage: 61, block: 2, evasion: 0.18, role: "anchor" },
+      { name: "Combine Escort", hull: 188, damage: 38, block: 2, evasion: 0.18 },
+      { name: "Combine Escort", hull: 188, damage: 38, block: 2, evasion: 0.18 },
+    ],
+    rewards: { salvage: 132, alloy: 51 },
+    xp: 72,
+    reputation: { swanreach: -6, bauhinia: 5 },
+  },
+  {
+    id: "bountyVeilProbeFlight",
+    name: "Veil Probe Flight",
+    faction: "swarm",
+    isBoss: false,
+    enemies: [
+      { name: "Veil Probe", hull: 250, damage: 61, block: 2, evasion: 0.18, regen: 9, role: "mender" },
+      { name: "Veil Probe", hull: 188, damage: 38, block: 2, evasion: 0.18, regen: 7 },
+      { name: "Veil Probe", hull: 188, damage: 38, block: 2, evasion: 0.18, regen: 7 },
+    ],
+    rewards: { salvage: 150, sourcePoints: 72 },
+    xp: 80,
+    reputation: { bauhinia: 3, lionsheart: 3, swanreach: 3 },
+  },
+  {
+    id: "bountyVeilSiegeCluster",
+    name: "Veil Siege Cluster",
+    faction: "swarm",
+    isBoss: false,
+    enemies: [
+      { name: "Veil Lance", hull: 389, damage: 190, block: 6, evasion: 0.1, role: "artillery" },
+      { name: "Veil Drone", hull: 291, damage: 120, block: 6, evasion: 0.1, regen: 10 },
+    ],
+    rewards: { salvage: 243, sourcePoints: 118 },
+    xp: 133,
+    reputation: { bauhinia: 3, lionsheart: 3, swanreach: 3 },
+  },
+  {
+    id: "bountyConstructAnchorGuard",
+    name: "Construct Anchor Guard",
+    faction: "constructs",
+    isBoss: false,
+    enemies: [
+      { name: "Construct Bulwark", hull: 551, damage: 179, block: 8, evasion: 0.0, role: "anchor" },
+      { name: "Construct Outrider", hull: 414, damage: 113, block: 8, evasion: 0.0 },
+      { name: "Construct Outrider", hull: 414, damage: 113, block: 8, evasion: 0.0 },
+    ],
+    rewards: { salvage: 450, sourcePoints: 218, alloy: 174 },
+    xp: 247,
+    reputation: { lionsheart: 4, swanreach: 4 },
+  },
+  {
+    id: "bountyConstructSiegeArray",
+    name: "Construct Siege Array",
+    faction: "constructs",
+    isBoss: false,
+    enemies: [
+      { name: "Construct Siege Node", hull: 675, damage: 269, block: 12, evasion: 0.0, role: "artillery" },
+      { name: "Construct Outrider", hull: 507, damage: 169, block: 12, evasion: 0.0 },
+    ],
+    rewards: { salvage: 450, sourcePoints: 218, alloy: 174 },
+    xp: 247,
+    reputation: { lionsheart: 4, swanreach: 4 },
+  },
+  {
+    id: "bountyHollowRevenantChoir",
+    name: "Hollow Revenant Choir",
+    faction: "hollow",
+    isBoss: false,
+    enemies: [
+      { name: "Hollow Revenant", hull: 2215, damage: 433, block: 14, evasion: 0.12, role: "mender" },
+      { name: "Hollow Echo", hull: 1661, damage: 273, block: 14, evasion: 0.12 },
+      { name: "Hollow Echo", hull: 1661, damage: 273, block: 14, evasion: 0.12 },
+    ],
+    rewards: { salvage: 833, sourcePoints: 403, alloy: 322 },
+    xp: 457,
+    reputation: { bauhinia: 4, lionsheart: 4 },
+  },
+  {
+    id: "bountyHollowSiegeWake",
+    name: "Hollow Siege Wake",
+    faction: "hollow",
+    isBoss: false,
+    enemies: [
+      { name: "Hollow Lance", hull: 2713, damage: 649, block: 22, evasion: 0.12, role: "artillery" },
+      { name: "Hollow Echo", hull: 2035, damage: 409, block: 22, evasion: 0.12 },
+    ],
+    rewards: { salvage: 833, sourcePoints: 403, alloy: 322 },
+    xp: 457,
+    reputation: { bauhinia: 4, lionsheart: 4 },
+  },
+  {
+    id: "bountyChoirAnchorVerse",
+    name: "Choir Anchor Verse",
+    faction: "choir",
+    isBoss: false,
+    enemies: [
+      { name: "Choir Cantor", hull: 5006, damage: 1210, block: 26, evasion: 0.15, role: "anchor" },
+      { name: "Choir Acolyte", hull: 3755, damage: 762, block: 26, evasion: 0.15 },
+      { name: "Choir Acolyte", hull: 3755, damage: 762, block: 26, evasion: 0.15 },
+    ],
+    rewards: { salvage: 1541, sourcePoints: 746, alloy: 597 },
+    xp: 845,
+    reputation: { bauhinia: 4, lionsheart: 4, swanreach: 4 },
+  },
+  {
+    id: "bountyChoirSiegeCantor",
+    name: "Choir Siege Cantor",
+    faction: "choir",
+    isBoss: false,
+    enemies: [
+      { name: "Choir Psalmlance", hull: 6131, damage: 1814, block: 40, evasion: 0.15, role: "artillery" },
+      { name: "Choir Acolyte", hull: 4599, damage: 1142, block: 40, evasion: 0.15 },
     ],
     rewards: { salvage: 1541, sourcePoints: 746, alloy: 597 },
     xp: 845,

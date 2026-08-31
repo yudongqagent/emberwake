@@ -15,6 +15,15 @@ export const SWANREACH_COMBINE: GalaxyDef = {
       controllingFaction: "swanreach",
       pois: [
         {
+          id: "meridianLedgerEscort",
+          kind: "patrol",
+          name: "Combine Ledger Escort",
+          x: 620,
+          y: 180,
+          radius: 85,
+          data: { encounterId: "bountyCombineLedgerEscort", respawnSeconds: 100, bounty: true },
+        },
+        {
           id: "meridianExchangeDerelict",
           kind: "derelict",
           name: "Drifting Signal",
@@ -60,6 +69,16 @@ export const SWANREACH_COMBINE: GalaxyDef = {
       y: 420,
       controllingFaction: "swanreach",
       pois: [
+        {
+          id: "driftmarketProbeFlight",
+          kind: "patrol",
+          name: "Veil Probe Flight",
+          x: 620,
+          y: 440,
+          radius: 85,
+          requiresFlag: "act2.ridgeAndReach.cleared",
+          data: { encounterId: "bountyVeilProbeFlight", respawnSeconds: 110, bounty: true },
+        },
         {
           id: "driftmarketDerelict",
           kind: "derelict",
