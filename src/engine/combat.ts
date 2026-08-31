@@ -19,6 +19,30 @@ export interface AttackResult {
 
 export const CRIT_MULTIPLIER = 1.75;
 
+/** 格挡最多能吃掉一次攻击的多少。
+ *
+ * 2026-08-31 实测(/loop 第 21 轮)。格挡原本是**直接减法**,而两边的量级完全不在
+ * 一个数量级上:
+ *
+ *     全游戏 92 个敌人条目的伤害:  最小 4   中位 15   最大 132
+ *     单件 mk5 满级装甲的格挡:                        158
+ *     装甲槽上限 11 个,配满:                         1487
+ *
+ * 也就是说**一件练满的装甲就已经超过全游戏最重的一击**,之后每次挨打都落在
+ * `Math.max(1, ...)` 的地板上,吃 1 点伤害。55 级存档在威胁 7 的星区打一整场,
+ * 战后报告写的是「承受伤害 0」。
+ *
+ * 一个打不输的游戏没有张力可言。搜到的说法是玩家需要"可控的失败"——自己做错了
+ * 什么导致了失败;而这里连失败本身都不存在。
+ *
+ * 不去膨胀敌人数值(那正是余烬负荷刻意避免的失败模式),而是给减伤加个上限:
+ * 一击至少要落下 25%。早期完全不受影响(格挡 8 对伤害 15,min(8, 11.25)=8,
+ * 和原来一样),只砍掉跑飞的那一端。
+ *
+ * 同一条规则对敌人也生效,顺手修掉镜像的毛病:早期玩家伤害 20 打锚定舰的格挡 56,
+ * 原来永远只有 1 点,现在是 5 点。 */
+export const MAX_BLOCK_FRACTION = 0.75;
+
 /** Deterministic given supplied rolls, so combat math is unit-testable without RNG.
  * critChance defaults to 0 (never crits) so existing callers are unaffected. */
 export function resolveAttack(
@@ -34,7 +58,9 @@ export function resolveAttack(
     return { hit: false, damageDealt: 0, crit: false };
   }
   const crit = critRoll < critChance;
-  const raw = Math.max(1, Math.round(baseDamage * rangeMultiplier * (crit ? CRIT_MULTIPLIER : 1)) - targetBlock);
+  const incoming = Math.round(baseDamage * rangeMultiplier * (crit ? CRIT_MULTIPLIER : 1));
+  const absorbed = Math.min(targetBlock, incoming * MAX_BLOCK_FRACTION);
+  const raw = Math.max(1, Math.round(incoming - absorbed));
   return { hit: true, damageDealt: raw, crit };
 }
 

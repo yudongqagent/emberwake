@@ -144,7 +144,12 @@ export function regionThreatLoad(): number {
   const ship = flagship.value;
   const threat = (galaxy?.threat ?? 1) - 1;
   const outgrown = Math.floor((ship?.level ?? 1) / 9) + (ship?.ascendedFrom.length ?? 0);
-  return Math.max(0, threat - outgrown);
+  // "长大了就不再怕"是对**老星区**说的——回头路过时该感觉到自己变强了。但它原来
+  // 不分老新地一律相减,于是 55 级玩家在威胁 7 的合唱深域拿到的负荷是 **0**,
+  // 和新手村完全一样(2026-08-31 实测)。整个游戏最深的地方不该有被彻底走过头的
+  // 那一天。留一条随威胁升高的地板:老星区的地板很低,前沿星区永远压着你一点。
+  const floor = Math.ceil(threat * 0.4);
+  return Math.max(floor, threat - outgrown);
 }
 
 /** How far above the player this region is, for the map warning. 0 means "this
