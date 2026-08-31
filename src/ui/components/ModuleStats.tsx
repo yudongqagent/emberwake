@@ -7,6 +7,7 @@ import {
 } from "../../engine/modules";
 import type { ModuleInstance } from "../../data/types";
 import { t } from "../../i18n/strings";
+import { localizedTrait } from "../../i18n/data";
 
 /** 一件模组的数值行,四个界面共用。
  *
@@ -107,7 +108,59 @@ export function ModuleStats({
       {compareTo && bits.some((b) => b.delta) && (
         <span style={{ color: "var(--text-dim)" }}>{t("modules.vsBest")}</span>
       )}
+      <TraitDiff mod={mod} compareTo={compareTo} />
     </span>
+  );
+}
+
+/** 换装会得到哪些效果、会失去哪些效果。
+ *
+ * 2026-08-31(/loop 第 46 轮)。搜同类游戏搜到的一条是"无脑必选":一旦某个选项
+ * 严格更强,构筑系统就不再是构筑。回头量 Emberwake,问题比那还早一步——
+ * **玩家根本看不见自己在选什么**。
+ *
+ * 每件抽出来的模组都带 1-3 条随机词条(engine/modules.ts 的 drawModule),而这些
+ * 词条的强度差着一个数量级:
+ *
+ *     barrage  三连射,每发 42%   ≈ ×2.26 伤害
+ *     volley   再打一发满伤       ≈ ×2.00
+ *     crit     +12% 暴击率        ≈ ×1.06
+ *
+ * 也就是说词条能值 2.1 倍,而整条稀有度曲线(mk1→mk5)才 3.04 倍。可抉择卡上
+ * 只写签名效果和**基础伤害的差值**——而 benchmarkFor 挑参照物用的也只是基础
+ * 伤害(engine/modules.ts:202)。于是每场仗都要做一次的那个决定,玩家看到的是
+ * 真相里较小的那一半,而且那一半会把他往反方向带:一件带 barrage 的 mk3 显示
+ * 「−120 伤害」,看起来是降级。
+ *
+ * 沿用这个组件原来的立场:**不给结论徽章**。只把另一半摆出来——绿色是会得到的,
+ * 红色是会失去的,判断留给玩家。 */
+function TraitDiff({ mod, compareTo }: { mod: ModuleInstance; compareTo?: ModuleInstance | null }) {
+  const effectsOf = (m: ModuleInstance) => {
+    const d = moduleDefById(m.defId);
+    return [d.signature, ...m.traits];
+  };
+  // 只在**有参照物**时出现。没有参照物时,各个界面自己已经列了签名和词条
+  // (Modules 的 TraitRow、抉择卡的签名行),这里再列一遍就是重复。
+  if (!compareTo) return null;
+  const mine = effectsOf(mod);
+  // 参照物只在同一类型之间成立(benchmarkFor 已经保证),所以这里直接做差集。
+  const theirs = effectsOf(compareTo);
+  const gained = mine.filter((e) => !theirs.includes(e));
+  const lost = theirs.filter((e) => !mine.includes(e));
+  if (gained.length === 0 && lost.length === 0) return null;
+  return (
+    <>
+      {gained.map((e) => (
+        <span key={`+${e}`} style={{ color: "var(--green)" }}>
+          +{localizedTrait(moduleDefById(mod.defId), e).label}
+        </span>
+      ))}
+      {lost.map((e) => (
+        <span key={`-${e}`} style={{ color: "var(--red)", textDecoration: "line-through" }}>
+          −{localizedTrait(moduleDefById(mod.defId), e).label}
+        </span>
+      ))}
+    </>
   );
 }
 
