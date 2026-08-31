@@ -60,6 +60,9 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     name: "Reaver Assault on Kestrel's Rest",
     faction: "reavers",
     isBoss: true,
+    // 掠夺者是有船员的海盗,他们的旗舰能被接舷夺下——第 37 轮实测:
+    // 整套接舷/俘获/赠送/团战的机器造好了,而全战役**只有一艘船可以俘获**。
+    capturable: true,
     enemies: [
       { name: "Reaver Skiff", hull: 50, damage: 15, block: 2, evasion: 0.15 },
       { name: "Reaver Skiff", hull: 50, damage: 15, block: 2, evasion: 0.15 },
@@ -82,6 +85,9 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     name: "Hawke, Reaver Lieutenant",
     faction: "reavers",
     isBoss: true,
+    // 掠夺者是有船员的海盗,他们的旗舰能被接舷夺下——第 37 轮实测:
+    // 整套接舷/俘获/赠送/团战的机器造好了,而全战役**只有一艘船可以俘获**。
+    capturable: true,
     enemies: [
       { name: "Hawke's Warcutter", hull: 332, damage: 55, block: 12, evasion: 0.22 },
       { name: "Reaver Skiff", hull: 57, damage: 22, block: 3, evasion: 0.18 },
@@ -280,6 +286,9 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     name: "The Ark Custodian",
     faction: "constructs",
     isBoss: true,
+    // 终局才值得把你一路攒下的盟舰叫齐。原来只有第二幕和第六幕两场,
+    // 于是"赠送一艘船"这件事在中间四幕里毫无回响。
+    fleetBattle: true,
     enemies: [
       { name: "Ark Custodian", hull: 2054, damage: 221, block: 28, evasion: 0.05 },
       { name: "Construct Warden", hull: 1095, damage: 170, block: 20, evasion: 0, role: "anchor" },
@@ -321,6 +330,9 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     name: "The Hollow, in Full",
     faction: "hollow",
     isBoss: true,
+    // 终局才值得把你一路攒下的盟舰叫齐。原来只有第二幕和第六幕两场,
+    // 于是"赠送一艘船"这件事在中间四幕里毫无回响。
+    fleetBattle: true,
     enemies: [
       { name: "The Hollow", hull: 4303, damage: 456, block: 30, evasion: 0.08, role: "anchor" },
       { name: "Hollow Vanguard", hull: 3718, damage: 506, block: 20, evasion: 0.1 },

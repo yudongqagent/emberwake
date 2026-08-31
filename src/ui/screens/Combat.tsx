@@ -2726,6 +2726,16 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
                 <b>{t(`combat.role.${target.role}`)}</b> — {t(`combat.role.${target.role}Hint`)}
               </div>
             )}
+            {/* 「这一艘能接舷」。
+            
+                2026-08-31 实测(第 37 轮):可接舷的永远是 0 号敌人,而界面上没有
+                任何地方说明是哪一艘。自动开火先把它打死之后,接舷按钮**无声消失**
+                ——玩家甚至不知道自己刚才错过了什么。 */}
+            {encounter.capturable && targetIdx === 0 && target.hull > 0 && (
+              <div style={{ marginTop: "0.3rem", fontSize: "0.64rem", color: "var(--violet)", fontWeight: 700 }}>
+                {t("combat.targetCapturable")}
+              </div>
+            )}
             {(target.charging || target.phased || target.enraged) && (
               <div style={{ marginTop: "0.3rem", fontSize: "0.64rem", color: "var(--amber)", fontWeight: 700 }}>
                 {target.charging && t("combat.targetCharging")}
