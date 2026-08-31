@@ -96,6 +96,13 @@ export function Crew() {
                             passive: Math.round(eff.passiveMultiplier * 100),
                             cooldown: Math.round(eff.cooldownMultiplier * 100),
                           })}
+                          {/* 没上岗的人支持度是**冻住**的:adjustAssignedCrewApproval
+                              只动 assignedShipId 匹配的船员。而第 36 轮起,支持度
+                              决定所有被动的强度——于是"这个数为什么一直不动"变成
+                              一个玩家自己看不出答案的问题。 */}
+                          {!assigned && (
+                            <> <span style={{ color: "var(--amber)" }}>{t("crew.approvalFrozen")}</span></>
+                          )}
                           {side && <> {t("crew.allegiance", { faction: t(`faction.${side}`) })}</>}
                         </div>
                       </div>
