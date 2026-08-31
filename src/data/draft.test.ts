@@ -4,6 +4,7 @@ import { moduleDefById } from "./modules";
 import { moduleEffectById } from "./moduleEffects";
 import { drawModule, moduleMaxLevel } from "../engine/modules";
 import { autoEquip } from "../state/store";
+import STORE_SRC from "../state/store.ts?raw";
 import { MODULE_DEFS } from "./moduleDefs";
 import type { ModuleInstance } from "./types";
 
@@ -159,5 +160,27 @@ describe("抽到的模组要立刻能用", () => {
     const mod = { ...drawModule(engine.id), id: "e1" };
     const after = autoEquip(shipWith([null, null, null, null]), mod);
     expect(after.equipped.filter((x) => x === "e1")).toHaveLength(1);
+  });
+});
+
+// 2026-08-31 实测(/loop 第 10 轮):自动装备原来只做在整备抉择那一条路径上。
+// 同一场战斗掉的「小节推进器 MK2」躺在库存里,而**引擎槽是空的**。
+// 三条给模组的路径(抉择 / 战斗掉落 / 裂隙掉落)各写各的,所以修了一条,
+// 另外两条还是老样子。
+describe("所有给模组的路径都走同一条规则", () => {
+  it("store 里只有一个地方把模组塞进背包", () => {
+    // 这条是结构性的守卫:只要有人再写一个 `modules: [...state.value.modules, x]`,
+    // 自动装备就又会漏掉一条路径,而且不会有任何报错。
+    const src = STORE_SRC;
+    const inlinePushes = (src.match(/modules:\s*\[\s*\.\.\.state\.value\.modules,/g) ?? []).length;
+    expect(
+      inlinePushes,
+      `有 ${inlinePushes} 处直接往 modules 里塞东西;应该只有 receiveModule 一处`,
+    ).toBeLessThanOrEqual(1);
+  });
+
+  it("战斗掉落和裂隙掉落都经过 receiveModule", () => {
+    expect(STORE_SRC).toMatch(/if \(bonusDrop\) receiveModule\(bonusDrop\)/);
+    expect(STORE_SRC).toMatch(/receiveModule\(drop\)/);
   });
 });

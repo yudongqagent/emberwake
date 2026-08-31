@@ -66,7 +66,8 @@ export function applyDraftChoice(opt: DraftOption): void {
   const next = { ...state.value };
   if (opt.kind === "module" && opt.module) {
     next.modules = [...next.modules, opt.module];
-    // 抽到的模组如果有对应的空槽,直接装上。
+    // 抽到的模组如果有对应的空槽,直接装上(和 receiveModule 同一条规则;
+    // 这里不能直接调它,因为整备抉择要在同一个 next 快照里一起结算 hullCost)。
     //
     // 实测(2026-08-30):抉择给你一件装备,**下一屏就是"继续推进还是撤离"**,中间
     // 没有任何装配的机会——于是那件装备在这次出击里完全是死的。搜到的原则是
@@ -583,10 +584,29 @@ export function collectWreck(poiId: string, rewards: Partial<Record<ResourceType
   persist();
 }
 
+/** 收下一件模组:进背包,有对应空槽就顺手装上。
+ *
+ * 2026-08-31 实测:自动装备原来只做在整备抉择那一条路径上。同一场战斗掉的
+ * 「小节推进器 MK2」躺在库存里,而**引擎槽是空的**——玩家赢了一件装备,游戏
+ * 把它收进包里就不管了。三条给模组的路径(抉择 / 战斗掉落 / 裂隙掉落)各写各的,
+ * 所以修了一条另外两条还是老样子。统一到这里。
+ *
+ * 商店购买刻意也走这条:玩家花钱买了一件装备,更没有理由让它躺在包里。 */
+function receiveModule(mod: ModuleInstance): ModuleInstance {
+  let ships = state.value.ships;
+  const ship = ships.find((sh) => sh.id === state.value.flagshipId);
+  if (ship) {
+    const fitted = autoEquip(ship, mod);
+    if (fitted !== ship) ships = ships.map((sh) => (sh.id === ship.id ? fitted : sh));
+  }
+  state.value = { ...state.value, modules: [...state.value.modules, mod], ships };
+  return mod;
+}
+
 /** Adds an already-rolled module instance the player chose from the Fabricator's
  * offer showcase. */
 export function addModule(mod: ModuleInstance) {
-  state.value = { ...state.value, modules: [...state.value.modules, mod] };
+  receiveModule(mod);
   playSfx("draw");
   persist();
   return mod;
@@ -935,7 +955,7 @@ export function resolveCombatVictory(
   // Section B: ordinary combat drops are capped at the market ceiling too —
   // otherwise farming trash encounters would quietly out-supply the rift.
   const bonusDrop = Math.random() < dropChance ? drawModule(undefined, { maxRarity: MARKET_MAX_RARITY }) : null;
-  if (bonusDrop) state.value = { ...state.value, modules: [...state.value.modules, bonusDrop] };
+  if (bonusDrop) receiveModule(bonusDrop);
   let leveledUp = false;
   let newLevel = flagship.value?.level ?? 1;
   if (flagship.value) {
@@ -1027,7 +1047,7 @@ export function giftCapturedShip(shipId: string) {
  * (see riftDropRarityFloor), so depth buys gear quality, not just resources. */
 export function grantRiftDrop(deepestDepth: number): ModuleInstance {
   const drop = drawModule(undefined, { minRarity: riftDropRarityFloor(deepestDepth) });
-  state.value = { ...state.value, modules: [...state.value.modules, drop] };
+  receiveModule(drop);
   playSfx("draw");
   persist();
   return drop;
