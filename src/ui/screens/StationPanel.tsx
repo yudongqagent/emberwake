@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, hasCrewRecruited, effectiveMaxHull, repairFlagship, stationPrice, stationOwner } from "../../state/store";
+import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, crewPassiveScale, effectiveMaxHull, repairFlagship, stationPrice, stationOwner } from "../../state/store";
 import { CREW_DEFS } from "../../data/crew";
 import { moduleDefById, fabricatorCost, MARKET_MAX_RARITY } from "../../data/modules";
 import { drawModule, primaryStat } from "../../engine/modules";
@@ -146,7 +146,7 @@ function TradeTab() {
   const res = state.value.resources;
   const ship = flagship.value;
   // Priya Osei: "+10% Salvage and Alloy from Trade exchanges" — fleet-wide once recruited.
-  const tradeBonus = hasCrewRecruited("priyaOsei") ? 1.1 : 1;
+  const tradeBonus = 1 + 0.1 * crewPassiveScale("priyaOsei");
   const alloyOut = Math.round(10 * tradeBonus);
   const salvageOut = Math.round(20 * tradeBonus);
   const missingHp = ship ? effectiveMaxHull(ship) - ship.currentHp : 0;

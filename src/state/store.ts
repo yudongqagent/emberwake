@@ -1087,11 +1087,32 @@ export function hasCrewRecruited(defId: string): boolean {
   return crewCount(defId) > 0;
 }
 
+/** 一名船员的被动此刻打几折——把支持度算进去。
+ *
+ * 2026-08-31(/loop 第 36 轮)。船员面板对**每一名**船员都显示「被动 X% · 冷却 Y%」,
+ * 而实际上只有走 crewPassive() 的两条战斗被动(铁衡的闪避、拉切的近距伤害)真的
+ * 吃这个倍率。其余六条全是写死的 `hasCrewRecruited(id) ? 0.08 : 0`——
+ *
+ *   奥莉 +8% 合金 · 柯莎 +15% 废料合金 · 普莉雅 +10% 兑换
+ *   七号安魂 +15% 最大船体 · 薇拉 +12% 精华 · 通用参谋 +5% 洞悉
+ *
+ * 于是面板告诉玩家「薇拉 · 忠诚 · 被动 125%」,而她的加成一动不动还是 12%。
+ * 支持度那段代码自己的注释写的是「现在它决定被动强度和主动冷却」——没有限定
+ * 只算战斗那两条。这是一套只接了四分之一的系统,而它的摆幅是 0.5x–1.5x。
+ *
+ * 通用招募可以有多份,所以这里是**求和**而不是取一个倍率:两名支持度 100% 的
+ * 参谋给 3.0,和 crewCount() 原来的按份叠加是一致的。 */
+export function crewPassiveScale(defId: string): number {
+  return state.value.crew
+    .filter((c) => c.defId === defId)
+    .reduce((sum, c) => sum + approvalEffects(c.approval).passiveMultiplier, 0);
+}
+
 /** Unit 7-Requiem's "+15% max hull fleet-wide" passive, applied wherever a ship's max
  * hull is shown or used outside of combat (combat applies its own equipment-driven
  * hull bonus on top of this — see Combat.tsx). */
 export function effectiveMaxHull(ship: Parameters<typeof computeMaxHull>[0]): number {
-  const bonus = hasCrewRecruited("unit7Requiem") ? 0.15 : 0;
+  const bonus = 0.15 * crewPassiveScale("unit7Requiem");
   return Math.round(computeMaxHull(ship) * (1 + bonus));
 }
 
@@ -1120,9 +1141,11 @@ export function resolveCombatVictory(
   const rewards = { ...enc.rewards };
   // Crew passives: Ori Vashti (+8% alloy), Kessa Vray (+15% salvage/alloy), and each
   // recruited generic tactician (+5% insight) — all fleet-wide, no assignment needed.
-  const alloyBonus = salvageAlloyBonusFraction + (hasCrewRecruited("oriVashti") ? 0.08 : 0) + (hasCrewRecruited("kessaVray") ? 0.15 : 0);
-  const salvageBonus = salvageAlloyBonusFraction + (hasCrewRecruited("kessaVray") ? 0.15 : 0);
-  const insightBonus = crewCount("recruitTactician") * 0.05;
+  // 每一条都乘上那名船员此刻的支持度倍率(见 crewPassiveScale)——船员面板上
+  // 显示的那个百分比,原来只对走 crewPassive() 的两条战斗被动生效。
+  const alloyBonus = salvageAlloyBonusFraction + 0.08 * crewPassiveScale("oriVashti") + 0.15 * crewPassiveScale("kessaVray");
+  const salvageBonus = salvageAlloyBonusFraction + 0.15 * crewPassiveScale("kessaVray");
+  const insightBonus = 0.05 * crewPassiveScale("recruitTactician");
   if (rewards.salvage) rewards.salvage = Math.round(rewards.salvage * (1 + salvageBonus));
   if (rewards.alloy) rewards.alloy = Math.round(rewards.alloy * (1 + alloyBonus));
   if (rewards.insight && insightBonus > 0) rewards.insight = Math.round(rewards.insight * (1 + insightBonus));
@@ -1135,8 +1158,9 @@ export function resolveCombatVictory(
   //
   // 搜到的话正好是这个:「大部分属性和技能根本没有效果,描述是彻头彻尾的谎话」
   // ——一张卡面写了却不兑现,损的是玩家对**所有**卡面的信任,不只是这一张。
-  if (enc.isBoss && rewards.originEssence && hasCrewRecruited("velaCantor")) {
-    rewards.originEssence = Math.round(rewards.originEssence * 1.12);
+  if (enc.isBoss && rewards.originEssence) {
+    const vela = crewPassiveScale("velaCantor");
+    if (vela > 0) rewards.originEssence = Math.round(rewards.originEssence * (1 + 0.12 * vela));
   }
   // Insight Draw: a chance to recover the scarcest resource from a win, giving
   // Insight a repeatable trickle instead of being purely story-gated.
