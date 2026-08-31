@@ -1,11 +1,12 @@
 import type { CrewInstance, ModuleInstance, ResourceType, ShipInstance, FactionId } from "../data/types";
 import type { SigilNodeId } from "../data/sigils";
+import { COMBAT_UNLOCKS } from "../data/combatUnlocks";
 import { MODULE_DEFS } from "../data/modules";
 import { CHOICE_REPUTATION, clampRep } from "../data/reputation";
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 const SAVE_KEY = "emberwake.save";
 /** Rolling copy of the previous save, written before every overwrite. */
 const BACKUP_KEY = "emberwake.save.backup";
@@ -219,6 +220,21 @@ const migrations: Record<number, (s: any) => any> = {
   }),
   // 余烬刻印(data/sigils.ts)。老存档从零开始,但 deepestDive 也从零开始,
   // 所以他们下一次潜的每一层都算"刷新纪录"——不会因为之前潜过而吃亏。
+  // 战斗控件的渐进式解锁(2026-08-30 那一轮)给老存档带来了一个回归:
+  // "新解锁"的提示只看 `unlockSeen.<id>` 这个 flag,而老存档里一个都没有——
+  // 于是一个 45 级、用了四十级抗冲的玩家,会被一场一场地告知"新:抗冲""新:舵手
+  // 指令""新:反应堆"。实测(2026-08-31)在后期存档上复现。
+  //
+  // 迁移时把**已经满足条件**的解锁直接标成看过。全新开局一个都不满足,
+  // 所以该给新玩家的提示一条都不会少。
+  12: (s: any) => {
+    const flags = { ...(s.flags ?? {}) };
+    const level = s.ships?.[0]?.level ?? 1;
+    for (const u of COMBAT_UNLOCKS) {
+      if (flags[u.flag] || level >= u.level) flags[`unlockSeen.${u.id}`] = true;
+    }
+    return { ...s, schemaVersion: 13, flags };
+  },
   11: (s: any) => ({ ...s, schemaVersion: 12, sortiePacts: s.sortiePacts ?? [] }),
   10: (s: any) => ({
     ...s,

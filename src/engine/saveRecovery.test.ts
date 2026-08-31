@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { loadGame, saveGame, recoverableSave, getLastLoadOutcome, createInitialState, SCHEMA_VERSION } from "./save";
+import { loadGame, saveGame, recoverableSave, getLastLoadOutcome, createInitialState, migrateForTest, SCHEMA_VERSION } from "./save";
 
 // The suite runs in node, which has no localStorage. A minimal in-memory stand-in
 // is enough: save.ts only uses getItem/setItem/removeItem/clear.
@@ -187,5 +187,31 @@ describe("重开之后不该再被追问", () => {
     saveGame(played);
     saveGame(createInitialState());   // 模拟"新的开始"
     expect(recoverableSave(), "重开之后备份没了,玩家再也回不去").not.toBeNull();
+  });
+});
+
+// 2026-08-31 实测(/loop 第 12 轮):造了一个 45 级的后期存档进战斗,界面上弹出
+// 「新 抗冲 — 有大家伙在蓄力的时候按下去」——一个用了四十级抗冲的玩家,被当成
+// 第一次见到它。渐进式解锁那一轮我只想着新玩家,没想过老存档。
+describe("老存档不该被告知「新解锁」", () => {
+  it("已经满足条件的解锁,迁移时直接标成看过", () => {
+    const played: any = {
+      ...createInitialState(),
+      schemaVersion: 12,
+      flags: { "act1.firstBlood.cleared": true, "act1.static.cleared": true },
+    };
+    played.ships[0].level = 45;
+    const out = migrateForTest(played);
+    for (const id of ["brace", "stance", "reactor", "overcharge"]) {
+      expect(out.flags[`unlockSeen.${id}`], `45 级老玩家还会被告知「新:${id}」`).toBe(true);
+    }
+  });
+
+  it("全新开局一条提示都不会少", () => {
+    // 迁移只标"已经满足的",而全新存档一个都不满足。
+    const fresh: any = { ...createInitialState(), schemaVersion: 12 };
+    const out = migrateForTest(fresh);
+    const seen = Object.keys(out.flags).filter((f) => f.startsWith("unlockSeen."));
+    expect(seen, "把新玩家该看到的提示也一并吞掉了").toEqual([]);
   });
 });
