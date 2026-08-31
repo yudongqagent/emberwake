@@ -245,6 +245,19 @@ export function nextHullClassOptions(current: HullClassId): HullClassDef[] {
   return HULL_CLASSES.filter((h) => h.order === cur.order + 1);
 }
 
+/** 同一层的另一艘舰级。
+ *
+ * 2026-08-31(/loop 第 34 轮)。1–6 层每层正好两艘(驱逐/拦截、巡洋/先锋、战列/壁垒、
+ * 无畏/私掠、主权/神盾、颂歌/圣所),而 nextHullClassOptions 只给 order+1 —— 玩家
+ * 在每一层做一次二选一,**永久放弃另一半**。十二艘船,一辈子只开得到六艘,而且是在
+ * 完全不知道另一条路手感如何的情况下选的。
+ *
+ * 改铸(reforge)把这个选择重新打开:花同样的精华横向换过去。 */
+export function siblingHullOptions(current: HullClassId): HullClassDef[] {
+  const cur = hullClassById(current);
+  return HULL_CLASSES.filter((h) => h.order === cur.order && h.id !== cur.id);
+}
+
 /** Whether `ship` currently meets every ascension requirement for `target` — story
  * flag, Origin Essence on hand, and minimum level. All three must hold; ascending
  * itself (see engine/ships.ts's ascendShip) is what actually spends the Essence. */

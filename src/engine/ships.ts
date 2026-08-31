@@ -99,6 +99,16 @@ export function ascendShip(ship: ShipInstance, targetHullClass: HullClassId): Sh
   return { ...grown, currentHp: computeMaxHull(grown) };
 }
 
+/** 横向改铸:换成同一层的另一艘舰级。
+ *
+ * 和 ascendShip 共用槽位迁移的逻辑,但**绝不动 ascendedFrom** —— 那个数组的长度
+ * 是剧情推进的门槛(StoryScene.requiresAscensions),往里塞一条横向记录等于让玩家
+ * 花精华跳过剧情。改铸是换形态,不是又长了一级。 */
+export function reforgeShip(ship: ShipInstance, targetHullClass: HullClassId): ShipInstance {
+  const ascended = ascendShip(ship, targetHullClass);
+  return { ...ascended, ascendedFrom: ship.ascendedFrom };
+}
+
 export function scanShip(ship: ShipInstance): ShipInstance {
   if (ship.scanned) return ship;
   return { ...ship, scanned: true, aptitude: weightedPick(APTITUDE_WEIGHTS) };

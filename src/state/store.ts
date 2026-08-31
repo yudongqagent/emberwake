@@ -25,7 +25,7 @@ import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
-import { applyXp, computeMaxHull, ascendShip } from "../engine/ships";
+import { applyXp, computeMaxHull, ascendShip, reforgeShip } from "../engine/ships";
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor } from "../engine/modules";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
@@ -725,6 +725,27 @@ export function sellModule(moduleId: string) {
 /** Ascends Whisper into `targetHullClass` — see engine/ships.ts's ascendShip and
  * docs/story/research-notes-ship-ascension.md. Silently no-ops if the requirements
  * aren't actually met (defense in depth; the UI should already have this gated). */
+/** 改铸:花精华横向换到同层的另一艘舰级。
+ *
+ * 这同时补上了精华的第二个去处。实测(第 34 轮):一整趟战役产出 4445 精华,而它
+ * 唯一的用途——走完一条完整进阶路线——只要 1590。六次进阶做完之后,精华就**永远
+ * 没有任何用处**了,而这是个通关后还继续玩的开放世界。 */
+export function reforgeShipAction(targetHullClass: HullClassId) {
+  const ship = flagship.value;
+  if (!ship) return;
+  const target = hullClassById(targetHullClass);
+  if (target.order !== hullClassById(ship.hullClass).order) return;
+  const req = ascensionRequirementsMet(target, ship.level, state.value.resources.originEssence, state.value.flags);
+  if (!req.flag || !req.essence || !req.level) return;
+  state.value = {
+    ...state.value,
+    ships: [reforgeShip(ship, targetHullClass)],
+    resources: { ...state.value.resources, originEssence: state.value.resources.originEssence - target.essenceCost },
+  };
+  playSfx("levelUp");
+  persist();
+}
+
 export function ascendShipAction(targetHullClass: HullClassId) {
   const ship = flagship.value;
   if (!ship) return;

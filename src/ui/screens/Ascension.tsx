@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
-import { state, flagship, ascendShipAction, sceneTitleForFlag } from "../../state/store";
-import { hullClassById, nextHullClassOptions, ascensionRequirementsMet } from "../../data/hullClasses";
+import { state, flagship, ascendShipAction, reforgeShipAction, sceneTitleForFlag } from "../../state/store";
+import { hullClassById, nextHullClassOptions, siblingHullOptions, ascensionRequirementsMet } from "../../data/hullClasses";
 import { hullClassAbility } from "../../data/namedShips";
 import { ascendShip, computeMaxHull, computePowerCapacity, computeSpeed, xpToNextLevel } from "../../engine/ships";
 import type { HullClassDef, HullClassId, ShipInstance } from "../../data/types";
@@ -29,6 +29,7 @@ export function Ascension() {
   const currentDef = hullClassById(ship.hullClass);
   const currentAbility = hullClassAbility(ship.hullClass);
   const options = nextHullClassOptions(ship.hullClass);
+  const siblings = siblingHullOptions(ship.hullClass);
   const res = state.value.resources;
   const xpFraction = Math.min(1, ship.xp / xpToNextLevel(ship.level));
 
@@ -122,6 +123,35 @@ export function Ascension() {
         />
       ))}
 
+      {/* 改铸:横向换到同一层的另一艘。
+      
+          实测(第 34 轮):1–6 层每层正好两艘,而玩家只能沿 order+1 走——每层做一次
+          二选一,**永久放弃另一半**,而且是在完全不知道另一条路手感如何的情况下选的。
+          同一轮量出来精华一整趟战役产出 4445,唯一的用途(走完一条完整进阶路线)
+          只要 1590;六次进阶做完之后它就永远没用了。两件事是同一个洞的两面。 */}
+      {siblings.length > 0 && (
+        <>
+          <div className="eyebrow" style={{ marginTop: "0.4rem", color: "var(--amber)" }}>{t("ascension.reforgeHeading")}</div>
+          <div style={{ fontSize: "0.78rem", color: "var(--text-mid)", marginTop: "-0.4rem" }}>
+            {t("ascension.reforgeHint")}
+          </div>
+          {siblings.map((target) => (
+            <AscensionOption
+              key={`reforge-${target.id}`}
+              ship={ship}
+              target={target}
+              essence={res.originEssence}
+              flags={state.value.flags}
+              lateral
+              onAscend={() => {
+                reforgeShipAction(target.id);
+                setJustAscended(target.id);
+              }}
+            />
+          ))}
+        </>
+      )}
+
       {justAscended && (
         <AscensionReveal hullClass={justAscended} onClose={() => setJustAscended(null)} />
       )}
@@ -153,12 +183,15 @@ function AscensionOption({
   target,
   essence,
   flags,
+  lateral = false,
   onAscend,
 }: {
   ship: ShipInstance;
   target: HullClassDef;
   essence: number;
   flags: Record<string, boolean>;
+  /** 横向改铸(同层换船),不是升一级。按钮文案和配色要分开,否则玩家会以为自己在进阶。 */
+  lateral?: boolean;
   onAscend: () => void;
 }) {
   const req = ascensionRequirementsMet(target, ship.level, essence, flags);
@@ -182,7 +215,7 @@ function AscensionOption({
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.7rem" }}>
         <div style={{ fontSize: "1rem", fontWeight: 700 }}>{localizedHullClassDisplay(target)}</div>
-        {ready && <span className="eyebrow" style={{ color: "var(--green)" }}>{t("ascension.ready")}</span>}
+        {ready && <span className="eyebrow" style={{ color: "var(--green)" }}>{t(lateral ? "ascension.readyReforge" : "ascension.ready")}</span>}
       </div>
 
       {/* Stat deltas — the whole point of the screen. Never negative by design
@@ -240,10 +273,10 @@ function AscensionOption({
       <button
         className="btn primary"
         disabled={!ready}
-        style={{ width: "100%", ...(ready ? { boxShadow: "0 0 14px var(--green)", fontWeight: 800 } : {}) }}
+        style={{ width: "100%", ...(ready ? { boxShadow: `0 0 14px var(--${lateral ? "amber" : "green"})`, fontWeight: 800 } : {}) }}
         onClick={() => { onAscend(); playSfx("levelUp"); }}
       >
-        {t("station.ascend")}
+        {t(lateral ? "station.reforge" : "station.ascend")}
       </button>
     </div>
   );
