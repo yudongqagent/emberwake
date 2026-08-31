@@ -200,6 +200,19 @@ export function rangeProfileMultiplier(profile: string | undefined, band: RangeB
   return distance >= 2 ? 0.75 : 1;
 }
 
+/** 这把武器在当前档位是吃亏还是占便宜——界面配色就按这个来。
+ *
+ * 2026-08-31(/loop 第 47 轮)。rangeProfileMultiplier 在此之前的**唯一消费者是
+ * 伤害计算**:1.67 倍的跨度(×1.25 到 ×0.75)、50 把武器里 41 把带着它,而界面上
+ * 一处都不显示。于是屏幕正中那排永远摆着的舵手指令,玩家没有依据去按。
+ *
+ * 抽成函数而不是在两处各写一遍三元表达式:配色规则和伤害规则必须同源,否则
+ * 有一天数值改了、颜色没改,界面就会开始骗人。 */
+export function rangeFitTone(profile: string | undefined, band: RangeBand): "good" | "neutral" | "poor" {
+  const m = rangeProfileMultiplier(profile, band);
+  return m > 1 ? "good" : m < 1 ? "poor" : "neutral";
+}
+
 /** Weapon-system audit #3: power draw used to constrain nothing at all. The
  * Modules screen computed an `overdrawn` flag and painted the bar red, but
  * equipModule had no check and combat never read it — the game displayed a limit,

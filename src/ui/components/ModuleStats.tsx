@@ -82,6 +82,17 @@ export function ModuleStats({
         : undefined,
     });
   }
+  // 偏好射程。第 47 轮:rangeProfileMultiplier 给擅长的档位 ×1.25、差两档 ×0.75
+  // ——1.67 倍的跨度,50 把武器里 41 把带着它,而在此之前它只被伤害计算读过,
+  // 界面上一处都不显示。抽卡时看不见它,就没法为"我这套要贴脸还是要放风筝"
+  // 挑武器。
+  if (def.rangeProfile && def.rangeProfile !== "flat") {
+    const changed = compareTo && oldDef?.rangeProfile !== def.rangeProfile;
+    bits.push({
+      text: t("modules.prefersRange", { band: t(`combat.rangeBand.${def.rangeProfile}`) }),
+      color: changed ? "var(--amber)" : "var(--text-mid)",
+    });
+  }
   // 功率是真实预算(装满一套 mk5 会超出小舰体的容量),换装时它必须一起看。
   if (compareTo && def.powerDraw !== oldDef?.powerDraw) {
     bits.push({

@@ -4,7 +4,7 @@ import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSignature, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
+import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
@@ -2875,7 +2875,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
               {autoFireWeapons.map((mod) => {
                 const def = moduleDefById(mod.defId);
-                return <WeaponAutoStatus key={mod.id} name={localizedModuleName(def)} color={def.color ?? "#8ff3ff"} cd={cooldowns[mod.id] ?? 0} />;
+                return <WeaponAutoStatus key={mod.id} name={localizedModuleName(def)} color={def.color ?? "#8ff3ff"} cd={cooldowns[mod.id] ?? 0} profile={def.rangeProfile} band={rangeBand} />;
               })}
             </div>
           </ConsoleZone>
@@ -3415,8 +3415,22 @@ function StatusBadge({ glyph, color, text }: { glyph: string; color: string; tex
  * cooldown numbers elsewhere in this file (crew/named-ship buttons) stay adequate
  * since those are still manual triggers a player consciously watches for; this one
  * needed the shape/color cue since there's no click to anchor attention to it. */
-function WeaponAutoStatus({ name, color, cd }: { name: string; color: string; cd: number }) {
+/** 2026-08-31(/loop 第 47 轮)加上偏好射程。
+ *
+ * rangeProfileMultiplier 给"打在自己擅长的档位"×1.25、"差两档"×0.75——1.67 倍的
+ * 跨度,50 把武器里 41 把带着它。而在这一轮之前,它的**唯一消费者是伤害计算**:
+ * 整个界面上一个字都不显示。
+ *
+ * 于是屏幕正中那排永远摆着的舵手指令(接近/保持/撤离),玩家没有任何依据去按——
+ * 我自己连打五场,一次都没碰过它,全程停在"保持"。指令是有的,做决定要的那半
+ * 信息不在。 */
+function WeaponAutoStatus({ name, color, cd, profile, band }: { name: string; color: string; cd: number; profile?: string; band: RangeBand }) {
   const ready = cd <= 0;
+  const mult = rangeProfileMultiplier(profile, band);
+  const tone = rangeFitTone(profile, band);
+  // flat 武器没有偏好,不占位——它就是"哪儿都一样"的那种。
+  const showFit = profile && profile !== "flat";
+  const fitColor = tone === "good" ? "var(--green)" : tone === "poor" ? "var(--red)" : "var(--text-dim)";
   return (
     <div
       title={t("combat.autoFireTitle")}
@@ -3447,6 +3461,14 @@ function WeaponAutoStatus({ name, color, cd }: { name: string; color: string; cd
         }}
       />
       {name}
+      {showFit && (
+        <span
+          style={{ color: fitColor, fontWeight: 700, fontSize: "0.9em" }}
+          title={t("combat.rangeFit", { band: t(`combat.rangeBand.${profile}`), mult: mult.toFixed(2) })}
+        >
+          {t(`combat.rangeBand.${profile}`)}
+        </span>
+      )}
       {/* Reserved slot — the dot and the countdown are different widths, so
           swapping between them resized every weapon chip on every shot. */}
       <span style={{ minWidth: "3em", textAlign: "right", opacity: 0.75, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>
