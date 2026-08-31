@@ -98,6 +98,12 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
   const objective = getNextObjective();
   const objectivePoiId = objective?.systemId === system.id ? objective.poiId : undefined;
   const objectiveElsewhere = objective && objective.systemId !== system.id ? objective : null;
+  // 只有在本星系**而且真的有一个点可去**的时候才提示。
+  //
+  // 少了后半个条件的话,开场就会显示「下一步:寒醒——就在本星系」——而"寒醒"正是
+  // 此刻正在播的那场戏,而且没有对应的 POI,按钮点了什么都不会发生。
+  // 指路指到一个不存在的地方,比不指路更糟。
+  const objectiveHere = objective && objective.systemId === system.id && objective.poiId ? objective : null;
 
   useEffect(() => {
     engagedRef.current = false;
@@ -509,6 +515,29 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
           {t("system.next", { label: objectiveElsewhere.label, system: objectiveElsewhere.systemName })}
         </button>
       )}
+      {/* 目标就在本星系时,原来什么都不说——只在画布上给那个点加个高亮。
+      
+          实测(2026-08-31):游戏让你跳到茶隼歇息地,你跳过来了,顶部的提示就消失了,
+          而目标列表里躺着 4 个点,没有任何标记。玩家最需要指路的那一刻,指路的
+          东西不见了。搜到的原则是「标记应当随进度**变化**,而不是消失」。
+          
+          点一下就设航向:玩家已经在读这一行了,让它直接可用。 */}
+      {objectiveHere && (
+        <button
+          className="btn primary"
+          style={{ margin: "0 1rem 0.5rem", textAlign: "left" }}
+          onClick={() => {
+            const poi = visiblePois.find((p) => p.id === objectivePoiId);
+            if (poi) {
+              navTargetRef.current = { x: poi.x, y: poi.y };
+              setNavTargetId(poi.id);
+              playSfx("click");
+            }
+          }}
+        >
+          {t("system.nextHere", { label: objectiveHere.label })}
+        </button>
+      )}
       <div style={{ flex: 1, position: "relative" }}>
         <canvas
           ref={canvasRef}
@@ -589,6 +618,9 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
               const d = Math.round(Math.hypot(poi.x - playerPos.x, poi.y - playerPos.y));
               const isNear = nearPoi?.id === poi.id;
               const isNav = navTargetId === poi.id;
+              // 剧情目标在列表里也要标出来。画布上的那个高亮很含蓄,而玩家真正
+              // 在读的是这一行。
+              const isObjective = poi.id === objectivePoiId;
               const color = POI_KIND_COLOR[poi.kind] ?? "var(--text-mid)";
               return (
                 <button
@@ -597,8 +629,8 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
                   style={{
                     flex: "none", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.15rem",
                     padding: "0.4em 0.6em", minWidth: 108, textAlign: "left",
-                    borderColor: isNear ? color : isNav ? "var(--cyan)" : undefined,
-                    boxShadow: isNear ? `0 0 8px ${color}` : undefined,
+                    borderColor: isObjective ? "var(--amber)" : isNear ? color : isNav ? "var(--cyan)" : undefined,
+                    boxShadow: isObjective ? "0 0 10px var(--amber)" : isNear ? `0 0 8px ${color}` : undefined,
                   }}
                   onClick={() => {
                     navTargetRef.current = { x: poi.x, y: poi.y };
@@ -608,8 +640,9 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
                   title={t("system.setCourse", { name: localizedPoiName(poi) })}
                 >
                   <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.68rem", fontWeight: 700, color, maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flex: "none" }} />
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: isObjective ? "var(--amber)" : color, flex: "none" }} />
                     {localizedPoiName(poi)}
+                    {isObjective && <span style={{ color: "var(--amber)", flex: "none" }}>▸</span>}
                   </span>
                   <span style={{ fontSize: "0.6rem", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>
                     {isNear ? t("system.inRange") : `${d}u`}
