@@ -1,9 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { applyEmberLoad, totalEmberLoad, emberLoadRewardMultiplier } from "./emberLoad";
 import { ENCOUNTER_DEFS } from "./encounters";
+import type { EncounterDef } from "./types";
 
-const plain = ENCOUNTER_DEFS.find((e) => e.enemies.length >= 3 && !e.enemies.some((x) => x.role))!;
-const solo = ENCOUNTER_DEFS.find((e) => e.enemies.length === 1)!;
+// 样本改成自己构造,不再从 ENCOUNTER_DEFS 里挑。
+//
+// 原来挑的是"3 艘以上且没有角色"的遭遇。2026-08-30 给编队普遍分配角色之后,
+// 这样的遭遇变成了 0 个,于是 find 返回 undefined,四条测试全部以
+// "Cannot read properties of undefined" 挂掉——而它们测的是 applyEmberLoad 的
+// 算法,跟roster 里恰好有没有这样一场戏毫无关系。测试的样本不该由内容数据决定。
+const plain: EncounterDef = {
+  id: "test-plain", name: "Test Formation", faction: "reavers", isBoss: false,
+  enemies: [
+    { name: "A", hull: 100, damage: 12, block: 4, evasion: 0.1 },
+    { name: "B", hull: 100, damage: 12, block: 4, evasion: 0.1 },
+    { name: "C", hull: 100, damage: 12, block: 4, evasion: 0.1 },
+  ],
+  rewards: { salvage: 50 }, xp: 30,
+};
+const solo: EncounterDef = {
+  id: "test-solo", name: "Test Solo", faction: "reavers", isBoss: false,
+  enemies: [{ name: "A", hull: 100, damage: 12, block: 4, evasion: 0.1 }],
+  rewards: { salvage: 50 }, xp: 30,
+};
 
 // Core-loop redesign #3. Ascension only ever subtracted difficulty — the rift had
 // depth scaling, the campaign had nothing, so the power curve ran away. Load is

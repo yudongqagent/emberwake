@@ -96,7 +96,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "swarm",
     isBoss: false,
     enemies: [
-      { name: "Swarm Drone", hull: 40, damage: 6, block: 0, evasion: 0.1, regen: 4 },
+      { name: "Swarm Drone", hull: 25, damage: 4, block: 0, evasion: 0.1, regen: 4, role: "mender" },
       { name: "Swarm Drone", hull: 40, damage: 6, block: 0, evasion: 0.1, regen: 4 },
       { name: "Swarm Drone", hull: 40, damage: 6, block: 0, evasion: 0.1, regen: 4 },
     ],
@@ -128,7 +128,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "swarm",
     isBoss: false,
     enemies: [
-      { name: "Swarm Warrior", hull: 90, damage: 13, block: 2, evasion: 0.12, regen: 9 },
+      { name: "Swarm Warrior", hull: 56, damage: 10, block: 2, evasion: 0.12, regen: 9, role: "mender" },
       { name: "Swarm Warrior", hull: 90, damage: 13, block: 2, evasion: 0.12, regen: 9 },
       { name: "Swarm Warrior", hull: 90, damage: 13, block: 2, evasion: 0.12, regen: 9 },
       { name: "Swarm Warrior", hull: 90, damage: 13, block: 2, evasion: 0.12, regen: 9 },
@@ -155,7 +155,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "swarm",
     isBoss: true,
     enemies: [
-      { name: "The Broodmother", hull: 620, damage: 26, block: 14, evasion: 0.08, regen: 20 },
+      { name: "The Broodmother", hull: 384, damage: 20, block: 14, evasion: 0.08, regen: 20, role: "mender" },
       { name: "Swarm Warrior", hull: 100, damage: 14, block: 3, evasion: 0.12, regen: 10 },
       { name: "Swarm Warrior", hull: 100, damage: 14, block: 3, evasion: 0.12, regen: 10 },
       { name: "Swarm Warrior", hull: 100, damage: 14, block: 3, evasion: 0.12, regen: 10 },
@@ -242,7 +242,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "constructs",
     isBoss: false,
     enemies: [
-      { name: "Construct Sentry Drone", hull: 70, damage: 10, block: 8, evasion: 0 },
+      { name: "Construct Sentry Drone", hull: 43, damage: 8, block: 8, evasion: 0, role: "anchor" },
       { name: "Construct Sentry Drone", hull: 70, damage: 10, block: 8, evasion: 0 },
     ],
     rewards: { salvage: 200, sourcePoints: 130, alloy: 140, originEssence: 60 },
@@ -296,7 +296,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "hollow",
     isBoss: false,
     enemies: [
-      { name: "Hollow Wisp", hull: 140, damage: 16, block: 6, evasion: 0.15 },
+      { name: "Hollow Wisp", hull: 87, damage: 12, block: 6, evasion: 0.15, role: "anchor" },
       { name: "Hollow Wisp", hull: 140, damage: 16, block: 6, evasion: 0.15 },
     ],
     rewards: { salvage: 250, sourcePoints: 150, alloy: 150, originEssence: 80 },
@@ -308,7 +308,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "hollow",
     isBoss: true,
     enemies: [
-      { name: "Hollow Vanguard", hull: 700, damage: 28, block: 18, evasion: 0.1 },
+      { name: "Hollow Vanguard", hull: 434, damage: 21, block: 18, evasion: 0.1, role: "anchor" },
       { name: "Hollow Wisp", hull: 160, damage: 17, block: 7, evasion: 0.15 },
       { name: "Hollow Wisp", hull: 160, damage: 17, block: 7, evasion: 0.15 },
       { name: "Hollow Wisp", hull: 160, damage: 17, block: 7, evasion: 0.15 },
@@ -322,7 +322,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "hollow",
     isBoss: true,
     enemies: [
-      { name: "The Hollow", hull: 1400, damage: 36, block: 30, evasion: 0.08 },
+      { name: "The Hollow", hull: 868, damage: 27, block: 30, evasion: 0.08, role: "anchor" },
       { name: "Hollow Vanguard", hull: 750, damage: 30, block: 20, evasion: 0.1 },
       { name: "Hollow Wisp", hull: 200, damage: 19, block: 9, evasion: 0.15 },
       { name: "Hollow Wisp", hull: 200, damage: 19, block: 9, evasion: 0.15 },
@@ -417,7 +417,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "reavers",
     isBoss: false,
     enemies: [
-      { name: "Remnant Skiff", hull: 21, damage: 4, block: 1, evasion: 0.15 },
+      { name: "Remnant Skiff", hull: 21, damage: 4, block: 1, evasion: 0.15, role: "artillery" },
       { name: "Remnant Skiff", hull: 21, damage: 4, block: 1, evasion: 0.15 },
     ],
     rewards: { salvage: 38, sourcePoints: 19, alloy: 15 },
@@ -440,7 +440,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "reavers",
     isBoss: false,
     enemies: [
-      { name: "Salvager Skiff", hull: 39, damage: 6, block: 3, evasion: 0.16 },
+      { name: "Salvager Skiff", hull: 39, damage: 6, block: 3, evasion: 0.16, role: "artillery" },
       { name: "Salvager Skiff", hull: 39, damage: 6, block: 3, evasion: 0.16 },
     ],
     rewards: { salvage: 71, alloy: 28 },
@@ -456,7 +456,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "swanreach",
     isBoss: false,
     enemies: [
-      { name: "Convoy Escort", hull: 39, damage: 6, block: 3, evasion: 0.1 },
+      { name: "Convoy Escort", hull: 24, damage: 4, block: 3, evasion: 0.1, role: "mender" },
       { name: "Convoy Hauler", hull: 39, damage: 6, block: 3, evasion: 0.05 },
     ],
     rewards: { salvage: 71, sourcePoints: 34, alloy: 28 },
@@ -489,7 +489,7 @@ export const BOUNTY_ENCOUNTER_DEFS: EncounterDef[] = [
     faction: "swarm",
     isBoss: false,
     enemies: [
-      { name: "Rift Scavenger Drone", hull: 133, damage: 21, block: 9, evasion: 0.15, regen: 11 },
+      { name: "Rift Scavenger Drone", hull: 82, damage: 16, block: 9, evasion: 0.15, regen: 11, role: "mender" },
       { name: "Rift Scavenger Drone", hull: 133, damage: 21, block: 9, evasion: 0.15, regen: 11 },
     ],
     rewards: { salvage: 243, sourcePoints: 118, alloy: 94 },
