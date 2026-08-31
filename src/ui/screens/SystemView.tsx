@@ -97,7 +97,10 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
   const galaxy = GALAXIES.find((g) => g.id === system.galaxyId)!;
   const objective = getNextObjective();
   const objectivePoiId = objective?.systemId === system.id ? objective.poiId : undefined;
-  const objectiveElsewhere = objective && objective.systemId !== system.id ? objective : null;
+  const objectiveElsewhere = objective && !objective.panel && objective.systemId !== system.id ? objective : null;
+  // 这一步不在星图上,而在舰上面板里(进阶)。点了就把那个面板打开——
+  // 目标条说"提升舰级"却把玩家丢到星图上,等于又指错一次。
+  const objectivePanel = objective?.panel ? objective : null;
   // 只有在本星系**而且真的有一个点可去**的时候才提示。
   //
   // 少了后半个条件的话,开场就会显示「下一步:寒醒——就在本星系」——而"寒醒"正是
@@ -506,6 +509,15 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
           </div>
         )}
       </div>
+      {objectivePanel && (
+        <button
+          className="btn primary"
+          style={{ margin: "0 1rem 0.5rem", textAlign: "left" }}
+          onClick={() => onNavigate(objectivePanel.panel!)}
+        >
+          {`\u25b8 ${objectivePanel.label}`}
+        </button>
+      )}
       {objectiveElsewhere && (
         <button
           className="btn primary"

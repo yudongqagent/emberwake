@@ -913,6 +913,8 @@ export interface Objective {
   systemId: string;
   systemName: string;
   poiId?: string;
+  /** 这一步不在星图上,而在某个舰上面板里(目前只有进阶)。 */
+  panel?: "ascension";
 }
 
 function findPoiByVictoryFlag(flag: string): { system: SystemDef; poiId: string; poiName: string } | null {
@@ -964,10 +966,43 @@ export function getNextObjective(): Objective | null {
   }
   for (const scene of STORY_SCENES) {
     if (hasFlag(scene.hiddenAfterFlag)) continue;
-    // Open-world redesign: never point the player at a beat their ship isn't
-    // ready for. Without this the marker would send them somewhere nothing
-    // happens, which is worse than no marker at all.
-    if (!sceneProgressMet(scene)) continue;
+    // 剧情推不下去时,要说**为什么**推不下去,而不是跳过它。
+    //
+    // 原来这里是 `if (!sceneProgressMet(scene)) continue;`,注释写的是"绝不把玩家
+    // 指向一个他还没准备好的节点"。但"跳过"并不会让指针停下——它继续往后扫,
+    // 于是指向一个**更靠后**的节点。实测(2026-08-31,/loop 第 26 轮):
+    //
+    //   20 级 / 0 次进阶 / 前两幕已完成
+    //   → 目标条:「迎战「虚无」的聚集之地 @ 暗影线」
+    //
+    // 暗影线是威胁 6 的星区,倒数第二危险的地方。守卫本来是防这个的,结果它
+    // 亲手把玩家送了过去。
+    //
+    // 而且第三幕卡住的原因写在剧情台词里(「Take her up a class」),游戏的路标
+    // 却从不提"进阶"两个字——玩家不知道自己缺的是什么。
+    if (!sceneProgressMet(scene)) {
+      if (scene.requiredFlag !== null && !hasFlag(scene.requiredFlag)) continue;
+      const ship = flagship.value;
+      const need = scene.requiresAscensions;
+      if (need !== undefined && (ship?.ascendedFrom.length ?? 0) < need) {
+        const sys = currentSystem.value;
+        return {
+          label: t("objective.ascend", { n: need - (ship?.ascendedFrom.length ?? 0) }),
+          systemId: sys.id,
+          systemName: localizedSystemName(sys),
+          panel: "ascension",
+        };
+      }
+      if (scene.requiresLevel !== undefined && (ship?.level ?? 1) < scene.requiresLevel) {
+        const sys = currentSystem.value;
+        return {
+          label: t("objective.level", { n: scene.requiresLevel }),
+          systemId: sys.id,
+          systemName: localizedSystemName(sys),
+        };
+      }
+      continue;
+    }
     const { system } = findSystem(scene.systemId);
     if (scene.requiredFlag === null || hasFlag(scene.requiredFlag)) {
       return { label: localizedScene(scene).chapterTitle, systemId: scene.systemId, systemName: localizedSystemName(system) };

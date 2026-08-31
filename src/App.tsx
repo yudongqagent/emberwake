@@ -440,7 +440,11 @@ export function App() {
             {screen === "galaxy" && <GalaxyView onNavigate={() => setScreen("system")} />}
             {screen === "system" && (
               <SystemView
-                onNavigate={(s) => setScreen(s as Screen)}
+                // 目标条现在也可能指向一个**舰上面板**(进阶),不只是星图。
+                onNavigate={(s) => {
+                  if (s === "ascension") setPanel("ascension");
+                  else setScreen(s as Screen);
+                }}
                 onDock={() => {
                   // Boons last until you dock — that's what makes docking a real
                   // decision (repair and restock, or press on with what you drafted)
