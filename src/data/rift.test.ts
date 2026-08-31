@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateRiftWaveFull, riftWaveHaul, rollSourceSurge, RIFT_ANOMALIES } from "./rift";
+import { generateRiftWaveFull, riftWaveHaul, rollSourceSurge, RIFT_ANOMALIES, RIFT_ARCHETYPES } from "./rift";
 import { t } from "../i18n/strings";
 import { ENEMY_NAMES_ZH } from "../i18n/data/encounters";
 
@@ -117,5 +117,49 @@ describe("源点获取倍率 (Source Point surge)", () => {
     // why the first tuning pass was an economy off-switch).
     expect(counts[1]).toBeGreaterThan(counts[3]);
     expect(counts[100] / 400000).toBeLessThan(0.004);
+  });
+});
+
+// 2026-08-31 量出来的(/loop 第 13 轮):最深的敌人原型出现在深度 7,最深的异常
+// 出现在深度 5。**深度 7 之后裂隙不再出现任何新东西**——同一批原型和异常,
+// 乘上 1.22^(深度-1)。而余烬刻印恰恰奖励往下潜,所以玩家被自己的收益推向那段
+// 永远不变的内容。
+//
+// 搜到的原则:「不同深度要奖励不同的打法,而不只是数字变大」。
+describe("往下潜要一直有新东西", () => {
+  const deepestArchetype = Math.max(...RIFT_ARCHETYPES.map((a) => a.minDepth));
+  const deepestAnomaly = Math.max(...RIFT_ANOMALIES.map((a) => a.minDepth));
+
+  it("深潜的后半程仍在引入新内容", () => {
+    // 刻印让玩家一路往 15、20 层去。如果 7 层之后什么都不变,那段就是纯刷。
+    expect(deepestArchetype, `最深的原型只到第 ${deepestArchetype} 层`).toBeGreaterThanOrEqual(15);
+    expect(deepestAnomaly, `最深的异常只到第 ${deepestAnomaly} 层`).toBeGreaterThanOrEqual(12);
+  });
+
+  it("每隔几层就有新东西,不会一次全开完", () => {
+    const depths = [...new Set([
+      ...RIFT_ARCHETYPES.map((a) => a.minDepth),
+      ...RIFT_ANOMALIES.map((a) => a.minDepth),
+    ])].sort((a, b) => a - b);
+    for (let i = 1; i < depths.length; i++) {
+      expect(depths[i] - depths[i - 1], `第 ${depths[i - 1]} 层到第 ${depths[i]} 层之间什么都没加`).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it("三种敌人角色在裂隙里都出现得到", () => {
+    // 在补深层原型之前,裂隙里只有锚定和炮击——**没有任何修复单位**,
+    // 于是"先打谁"在深潜里从来不是一个问题。
+    const roles = new Set(RIFT_ARCHETYPES.map((a) => a.role).filter(Boolean));
+    for (const r of ["mender", "anchor", "artillery"]) {
+      expect(roles, `裂隙里没有任何「${r}」`).toContain(r);
+    }
+  });
+
+  it("深层异常把编队形状推向两头,而不是又一档数值", () => {
+    // "更硬一点"不是新玩法。深层异常必须在"少而巨大"和"多而脆弱"两个方向上
+    // 都存在,玩家才需要为下潜单独配装。
+    const deep = RIFT_ANOMALIES.filter((a) => a.minDepth >= 9);
+    expect(deep.some((a) => a.budget < 0.7 && a.hull > 2), "没有「少而巨大」那一头").toBe(true);
+    expect(deep.some((a) => a.budget > 2 && a.hull < 0.5), "没有「多而脆弱」那一头").toBe(true);
   });
 });

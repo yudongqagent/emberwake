@@ -52,6 +52,9 @@ export const ENCOUNTER_NAMES_ZH: Record<string, string> = {
 };
 
 export const ENEMY_NAMES_ZH: Record<string, string> = {
+  "Rift Knitter": "裂隙缝合者",
+  "Rift Mirage": "裂隙蜃影",
+  "Choral Remnant": "合唱残响",
   "Convoy Escort": "运输队护航舰",
   "Convoy Hauler": "运输队货船",
   "Writ Enforcer": "执令舰",
@@ -80,7 +83,6 @@ export const ENEMY_NAMES_ZH: Record<string, string> = {
   "Rift Mote": "裂隙微尘",
   "Rift Wisp": "裂隙游丝",
   "Rift Bulwark": "裂隙壁垒",
-  "Rift Knitter": "裂隙织愈者",
   "Rift Lance": "裂隙锐锋",
   "Rift Choirmass": "裂隙合唱体",
   "Rift Harrower": "裂隙掠夺者",

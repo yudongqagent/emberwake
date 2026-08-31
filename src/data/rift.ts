@@ -57,7 +57,7 @@ interface RiftArchetype {
   cost: number;
 }
 
-const ARCHETYPES: RiftArchetype[] = [
+export const RIFT_ARCHETYPES: RiftArchetype[] = [
   // --- shallow: fast, fragile, numerous ---
   { name: "Rift Flicker", hull: 75, damage: 11, block: 2, evasion: 0.18, weight: 5, minDepth: 1, cost: 1 },
   { name: "Rift Mote", hull: 46, damage: 8, block: 0, evasion: 0.3, weight: 4, minDepth: 1, cost: 0.7 },
@@ -77,6 +77,24 @@ const ARCHETYPES: RiftArchetype[] = [
   { name: "Rift Harrower", hull: 260, damage: 33, block: 9, evasion: 0.22, weight: 2, minDepth: 6, cost: 2 },
   { name: "Rift Colossus", hull: 900, damage: 30, block: 30, evasion: 0.0, weight: 1, minDepth: 7, cost: 3.2, role: "artillery" },
   { name: "Rift Devourer", hull: 620, damage: 44, block: 16, evasion: 0.16, regen: 20, weight: 1, minDepth: 9, cost: 3.4 },
+  // --- 深层。
+  //
+  // 量出来的问题(2026-08-31,/loop 第 13 轮):最深的原型出现在深度 7,最深的异常
+  // 出现在深度 5。深度 7 之后,裂隙**不再出现任何新东西**——同一批 9 个原型、
+  // 8 种异常,乘上 1.22^(深度-1)。而余烬刻印恰恰奖励往下潜,所以玩家被自己的
+  // 收益推向那段永远不变的内容。
+  //
+  // 搜到的原则:「不同深度要奖励不同的打法,而不只是数字变大」。下面三个各自逼
+  // 一种改变,而且都走已经接好的机制(敌人角色 + 已有的 regen/evasion 轴):
+  //
+  //   缝合者(11):**裂隙里第一个修复舰**。在此之前整个裂隙没有任何治疗单位,
+  //     "先打谁"在深潜里从来不是问题。它一出现,爆发流必须先解决它。
+  //   蜃影(14):高闪避 + 炮击。你既打不中它,又不能不管它的蓄力——
+  //     纯输出流在这里第一次被逼着用抗冲。
+  //   合唱残响(17):血厚、格挡高、还带锚定。消耗战,而不是速决战。
+  { name: "Rift Knitter",   hull: 540,  damage: 26, block: 12, evasion: 0.2,  weight: 2, minDepth: 11, cost: 2.6, role: "mender" },
+  { name: "Rift Mirage",    hull: 380,  damage: 52, block: 6,  evasion: 0.5,  weight: 2, minDepth: 14, cost: 3.0, role: "artillery" },
+  { name: "Choral Remnant", hull: 1500, damage: 38, block: 44, evasion: 0.05, weight: 1, minDepth: 17, cost: 4.0, role: "anchor" },
 ];
 
 /** A per-wave anomaly (异象). The roster alone still produces recognisably similar
@@ -85,6 +103,9 @@ const ARCHETYPES: RiftArchetype[] = [
  * the combat screen so the player knows what they walked into. */
 export type RiftAnomalyId =
   | "none"
+  | "hollowed"
+  | "legion"
+  | "unmaking"
   | "swarm"        // many weak enemies
   | "titan"        // one oversized enemy
   | "brittle"      // high damage, low hull all round
@@ -117,6 +138,12 @@ export const RIFT_ANOMALIES: RiftAnomaly[] = [
   { id: "unstable",    budget: 1,    hull: 1,    damage: 1,    block: 1,   regen: 1, haul: 1.3,  weight: 2, minDepth: 4 },
   { id: "regenerative",budget: 0.9,  hull: 1.1,  damage: 0.95, block: 1,   regen: 3, haul: 1.35, weight: 2, minDepth: 5 },
   { id: "rich",        budget: 0.7,  hull: 1.5,  damage: 1.25, block: 1.2, regen: 1, haul: 2.2,  weight: 1, minDepth: 4 },
+  // 深层异常。上面八种全部在深度 5 就开完了,于是深度 5 和深度 20 抽的是同一个池子。
+  // 这三种把编队形状推到更极端的两头,逼玩家为"下潜"单独配一套装,而不是拿常规
+  // 配装一路往下。
+  { id: "hollowed",    budget: 0.55, hull: 3.4,  damage: 1.5,  block: 2.0, regen: 1, haul: 1.5,  weight: 3, minDepth: 9 },
+  { id: "legion",      budget: 2.4,  hull: 0.35, damage: 0.55, block: 0.3, regen: 1, haul: 1.45, weight: 3, minDepth: 12 },
+  { id: "unmaking",    budget: 0.9,  hull: 1.2,  damage: 2.1,  block: 0.7, regen: 1, haul: 1.8,  weight: 2, minDepth: 15 },
 ];
 
 /** Per-depth stat growth. Tuned so depth ~6 is a genuine wall for a mid-game ship
@@ -138,7 +165,7 @@ function pickAnomaly(depth: number): RiftAnomaly {
 }
 
 function pickArchetype(depth: number): RiftArchetype {
-  const pool = ARCHETYPES.filter((a) => depth >= a.minDepth);
+  const pool = RIFT_ARCHETYPES.filter((a) => depth >= a.minDepth);
   // Deeper runs weight toward the heavier archetypes — a depth-9 wave shouldn't
   // just be more Flickers, it should be a different KIND of fight.
   const weights = pool.map((a) => a.weight * (a.cost <= 1 ? Math.max(0.25, 1 - depth * 0.08) : 1 + depth * 0.1 * (a.cost - 1)));
@@ -207,7 +234,7 @@ export function generateRiftWaveFull(depth: number): RiftWave {
     });
   }
   if (enemies.length === 0) {
-    const a = ARCHETYPES[0];
+    const a = RIFT_ARCHETYPES[0];
     enemies.push({ name: a.name, hull: Math.round(a.hull * scale), damage: Math.round(a.damage * scale), block: a.block, evasion: a.evasion });
   }
 
