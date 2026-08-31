@@ -1,6 +1,25 @@
 import { generateHunterEncounter, parseHunterId } from "./hunters";
 import type { EncounterDef } from "./types";
 
+// 第一幕的第二场戏刻意教一个机制(2026-08-30,见 docs/fun-audit-2026-08-30.md)。
+//
+// 实测:那次审计里,前四场(含两个 BOSS)**零输入全部获胜**。翻数据才发现根因是
+// 它们一个敌人角色都没有——角色是靠余烬负荷发的(锚定 1、修复 3、炮击 4),而新
+// 玩家整个第一幕负荷都是 0。所以第一幕字面意义上就是"看着炮自己打"。
+//
+// 现在第 2 场是一门会蓄力的固定炮台:单敌人,所以"抗冲"和"在蓄力期间打掉它"
+// 两条出路都读得懂,是教抗冲最好的场合。
+//
+// 血量 70→100,配合按船体比例封顶的蓄力伤害(见 Combat.tsx 的
+// SIEGE_MAX_HULL_FRACTION)。只调血量调不出稳定结果:实测 95 血跑两次,一次
+// 承受 58%、一次 0%,差别全在开局武器的随机数上——教学关卡不该靠掷骰子决定
+// 教不教。100 血让它多半活得过 5.5 秒的蓄力;比例封顶保证那一发疼但不致命;
+// 而两次蓄力之间拉开到 8.4 秒,保证它来不及打出第二发。
+//
+// 别的场次刻意**没有**加角色。我本来给两个 BOSS 也加了,但:第一个 BOSS 在加
+// 角色之前就已经是临界仗(承受 92/129=71%),加修复舰之后先打谁都赢不了,六次
+// 全败;第二个 BOSS 我只能用 1 级船测(探针改不动应用自己的存档),而玩家到那一场
+// 时大约 6 级——测不出正确强度下的结果,就不发布。
 export const ENCOUNTER_DEFS: EncounterDef[] = [
   {
     id: "kestrelsRestRaid",
@@ -19,7 +38,7 @@ export const ENCOUNTER_DEFS: EncounterDef[] = [
     name: "Residual Defense Grid",
     faction: "bauhinia",
     isBoss: false,
-    enemies: [{ name: "Automated Turret", hull: 70, damage: 15, block: 6, evasion: 0 }],
+    enemies: [{ name: "Automated Turret", hull: 100, damage: 15, block: 6, evasion: 0, role: "artillery" }],
     rewards: { salvage: 40, sourcePoints: 15, insight: 5 },
     xp: 25,
   },

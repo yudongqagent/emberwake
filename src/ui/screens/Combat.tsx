@@ -74,11 +74,19 @@ const MENDER_INTERVAL = 3.2;
 /** A mender's repair per tick, as a share of the ally's max hull. Deliberately
  * enough to visibly undo a weapon volley — the whole point is that damage stops
  * sticking until it's dead. */
-const MENDER_HEAL_FRACTION = 0.09;
+// 0.09 → 0.16 (2026-08-30)。原来每 3.2 秒回 9% = 每秒 2.8%,而实测全新 1 级船的
+// 清场速度是每秒 22% 编队总血量——修复舰慢了近八倍,"先杀修复舰"因此根本不是
+// 一个决策,只是一句提示文案。第一版调到 0.16,把第一个 BOSS 变成了必败,
+// 回到 0.14——仍是原来有效速率的五倍,但留得出打错的余地。
+const MENDER_HEAL_FRACTION = 0.14;
 /** Artillery's windup. Long on purpose: it has to be killable during it, and it
  * has to leave room to react with Brace. */
 const SIEGE_WINDUP_SEC = 5.5;
-const SIEGE_DAMAGE_MULT = 3.2;
+// 3.2 → 5.0 (2026-08-30)。原来的数值让蓄力**不值得回应**:炮击舰蓄力那 5.5 秒
+// 里什么都不做,而它正常攻击 5.5 秒能打 2.3 次——3.2 倍的一击只比不蓄力多 40%,
+// 所以无视它几乎免费。5 倍之后,一门第一幕的炮台不抗冲会打掉约一半船体,抗冲
+// 减半;在蓄力期间打掉它则完全免疫。三条出路都成立,这才叫决策。
+const SIEGE_DAMAGE_MULT = 5.0;
 const COMBAT_TICK_SEC = COMBAT_TICK_MS / 1000;
 /** Baseline seconds between one enemy's attacks, jittered per-enemy so a multi-enemy
  * fight doesn't just relocate the old synchronized volley to a shorter clock — each
@@ -405,6 +413,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   );
   const maxHull = Math.round(computeMaxHull(ship) * (1 + hullBonusFraction));
   const [playerHull, setPlayerHull] = useState(Math.min(maxHull, Math.round(ship.currentHp * (1 + hullBonusFraction))));
+  /** 开打那一刻的船体,用来在战后报告里算真实的承受伤害。 */
+  const startingHullRef = useRef(playerHull);
   const [cooldowns, setCooldowns] = useState<Record<string, number>>({});
   const [crewCooldowns, setCrewCooldowns] = useState<Record<string, number>>({});
   const [targetIdx, setTargetIdx] = useState(0);
@@ -942,6 +952,19 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
    * since this runs from a setInterval closure frozen at mount. Ported line-for-line
    * from the original per-enemy turn logic where the mechanic itself didn't change,
    * only its trigger (this enemy's own timer, not "everyone, once per batch"). */
+  /** 一次蓄力打击最多打掉最大船体的这个比例。
+   *
+   * 用比例封顶,而不是靠调敌人血量,有两个理由:
+   *
+   * 1. **可靠**。实测同一场教学戏两次零输入,一次承受 58%、一次 0%——差别全在
+   *    开局武器的随机数上。教学关卡不该靠掷骰子决定教不教。
+   * 2. **各阶段都成立**。格挡是减法,所以后期玩家的格挡会把 5 倍蓄力吃成零头;
+   *    比例封顶让"蓄力必须回应"从第一幕一直到深潜都是真的。
+   *
+   * 0.55:满血时永远活得下来一发,两发就会死。这正是想要的形状——挨一下很疼,
+   * 但它教会你下次抗冲,而不是直接送你回标题界面。 */
+  const SIEGE_MAX_HULL_FRACTION = 0.55;
+
   function enemyAttack(idx: number, charged: boolean, siegeMult: number = 1) {
     const currentEnemies = enemiesRef.current;
     const enemy = currentEnemies[idx];
@@ -1027,6 +1050,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     // heal calc) stays consistent automatically.
     if (result.hit && aegisWardSecRef.current > 0) {
       result = { ...result, damageDealt: Math.round(result.damageDealt * 0.5) };
+    }
+    // 蓄力打击按最大船体比例封顶(见 SIEGE_MAX_HULL_FRACTION)。放在减伤之后、
+    // 抗冲之前:抗冲要能在封顶值的基础上再砍一半,否则抗冲在封顶生效时就白按了。
+    if (siegeMult > 1 && result.hit) {
+      const cap = Math.round(maxHull * SIEGE_MAX_HULL_FRACTION);
+      if (result.damageDealt > cap) result = { ...result, damageDealt: cap };
     }
     // UI audit #4: Brace. With the guns firing themselves, whole stretches of a
     // fight had nothing for the player to decide — they were watching, not
@@ -1489,7 +1518,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           if (timer.siegeRemaining <= 0) {
             timer.siegeRemaining = 0;
             enemyAttack(i, false, SIEGE_DAMAGE_MULT);
-            timer.attackRemaining = ENEMY_ATTACK_INTERVAL * 1.6;
+            // 打完一发之后要隔一段才重新蓄力。
+            //
+            // 从前是 1.6 个攻击间隔就再来一轮,于是一场稍长的仗里炮击舰能连打两三发
+            // ——而单发已经封顶在最大船体的 55%,两发就是必死。实测第一幕那门教学
+            // 炮台正是这样:零输入承受 126(= 63×2),满血也活不下来。
+            //
+            // 拉到 3.5 个间隔(约 8.4 秒),配合 55% 的封顶,意味着"挨一发"永远活得
+            // 下来,而"连挨两发"是你自己没处理它——那才是决策,不是宣判。
+            timer.attackRemaining = ENEMY_ATTACK_INTERVAL * 3.5;
             setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, siegeRemaining: 0 } : e)));
             pushLog(t("combat.log.siegeFired", { enemy: enemy.name }));
           } else {
@@ -1563,10 +1600,16 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         .filter(([, v]) => v > 0)
         .sort((a, b) => b[1] - a[1]);
       const total = sources.reduce((sum, [, v]) => sum + v, 0);
+      // 承受伤害从**船体差值**算,不用累加器。
+      //
+      // 累加器是在弹丸命中的回调里加的,而这份报告在船体归零的那一刻就冻结——
+      // 致命的那几发还在飞,于是玩家在战败报告上看到"承受 69/114"然后自己死了。
+      // 战败报告正是玩家想弄明白"我是怎么死的"的地方,那个数字不能是错的。
+      const takenByHull = Math.max(0, Math.round((startingHullRef.current - playerHull) / (1 + hullBonusFraction)));
       setAfterAction({
         sources,
         total,
-        taken: Math.round(damageTakenRef.current),
+        taken: Math.max(takenByHull, Math.round(damageTakenRef.current)),
         seconds: (Date.now() - combatStartRef.current) / 1000,
       });
     }
