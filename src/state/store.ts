@@ -554,6 +554,15 @@ export function autoEquip(ship: ShipInstance, mod: ModuleInstance): ShipInstance
   return ship;
 }
 
+/** 存下正在进行的深潜,或清掉它。
+ *
+ * 只在**两波之间**调用——那是唯一安全的存档点:玩家已经清掉了这一波,正在决定
+ * 推进还是撤离。战斗中途刷新会退回那一波开始前,那一波重打。 */
+export function saveRiftRun(run: GameState["riftRun"]): void {
+  state.value = { ...state.value, riftRun: run };
+  persist();
+}
+
 /** How many equipped modules on the flagship carry an effect (signature counts). */
 export function equippedEffectStacks(effectId: string): number {
   const ship = flagship.value;

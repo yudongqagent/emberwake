@@ -6,7 +6,7 @@ import { CHOICE_REPUTATION, clampRep } from "../data/reputation";
 import { createWhisper } from "./ships";
 import { randomId } from "./rng";
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 const SAVE_KEY = "emberwake.save";
 /** Rolling copy of the previous save, written before every overwrite. */
 const BACKUP_KEY = "emberwake.save.backup";
@@ -64,6 +64,22 @@ export interface GameState {
   sigilRanks: Partial<Record<SigilNodeId, number>>;
   /** 到过的最深一层。刷新它才是刻印的主要来源——所以"再深一层"永远有意义。 */
   deepestDive: number;
+  /** 正在进行中的深潜,存在**两波之间**的那个安全点上。
+   *
+   * 原来它只活在组件状态里,理由写在 App.tsx:"把没打完的一趟存下来,等于给玩家
+   * 一个把失败的跑动存档的口子"。方向对,做法过头了——真实后果是深潜 12 层之后
+   * 崩溃或误刷新一次,**整趟收获全没**,而那和作弊无关,只是意外。
+   *
+   * 正确的做法是杀戮尖塔那种:存进度,重进时回到**原位**,而不是回到银行。
+   * 所以只在"两波之间、玩家正在决定推进还是撤离"的那一刻存;战斗中途刷新会
+   * 退回那一波开始前,那一波要重打——没有白拿,也没有白丢。 */
+  riftRun: {
+    depth: number;
+    haul: Partial<Record<ResourceType, number>>;
+    anomaly: string;
+    haulMultiplier: number;
+    lastSurge: number;
+  } | null;
 }
 
 function startingModule(defId: string): ModuleInstance {
@@ -101,6 +117,7 @@ export function createInitialState(): GameState {
     sigils: 0,
     sigilRanks: {},
     deepestDive: 0,
+    riftRun: null,
     sortieBoons: [],
     sortiePacts: [],
     voluntaryLoad: 0,
@@ -162,6 +179,7 @@ const migrations: Record<number, (s: any) => any> = {
     sigils: s.sigils ?? 0,
     sigilRanks: s.sigilRanks ?? {},
     deepestDive: s.deepestDive ?? 0,
+    riftRun: s.riftRun ?? null,
   }),
   // The 17-module roster was replaced wholesale by the 200-module one
   // (data/moduleDefs.ts), so every id in an existing save now points at nothing —
@@ -227,6 +245,7 @@ const migrations: Record<number, (s: any) => any> = {
   //
   // 迁移时把**已经满足条件**的解锁直接标成看过。全新开局一个都不满足,
   // 所以该给新玩家的提示一条都不会少。
+  13: (s: any) => ({ ...s, schemaVersion: 14, riftRun: s.riftRun ?? null }),
   12: (s: any) => {
     const flags = { ...(s.flags ?? {}) };
     const level = s.ships?.[0]?.level ?? 1;
@@ -382,6 +401,7 @@ function repairState(raw: any): GameState {
     sigils: typeof raw.sigils === "number" ? raw.sigils : 0,
     sigilRanks: raw.sigilRanks && typeof raw.sigilRanks === "object" ? raw.sigilRanks : {},
     deepestDive: typeof raw.deepestDive === "number" ? raw.deepestDive : 0,
+    riftRun: raw.riftRun && typeof raw.riftRun === "object" ? raw.riftRun : null,
     sortieBoons: Array.isArray(raw.sortieBoons) ? raw.sortieBoons.filter((b: any) => typeof b === "string") : [],
     sortiePacts: Array.isArray(raw.sortiePacts) ? raw.sortiePacts.filter((b: any) => typeof b === "string") : [],
     voluntaryLoad: typeof raw.voluntaryLoad === "number" && raw.voluntaryLoad >= 0 ? raw.voluntaryLoad : 0,

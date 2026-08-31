@@ -24,7 +24,7 @@ import { generateDraft, type DraftOption } from "./data/draft";
 import type { StoryScene, ResourceType, ModuleInstance } from "./data/types";
 import { generateRiftWaveFull, riftWaveHaul, addHaul, rollSourceSurge, type RiftAnomalyId } from "./data/rift";
 import { registerRuntimeEncounter, encounterById } from "./data/encounters";
-import { grant, grantRiftDrop, bankDive, resolveEventOutcome, currentGalaxy } from "./state/store";
+import { grant, grantRiftDrop, bankDive, resolveEventOutcome, currentGalaxy, saveRiftRun } from "./state/store";
 import { setMuted, isMuted } from "./audio/engine";
 import { setMood } from "./audio/music";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
@@ -98,7 +98,12 @@ export function App() {
   const [docked, setDocked] = useState(false);
   const [combat, setCombat] = useState<PendingCombat | PendingStoryEncounter | null>(null);
   const [muted, setMutedState] = useState(isMuted());
-  const [riftRun, setRiftRun] = useState<RiftRun | null>(null);
+  // 从存档恢复一趟没打完的深潜(见 GameState.riftRun)。恢复到"两波之间"那个
+  // 安全点:玩家回来时看到的是推进/撤离的选择,而不是凭空多出的收获。
+  const [riftRun, setRiftRun] = useState<RiftRun | null>(() => {
+    const saved = state.value.riftRun;
+    return saved ? { ...saved, anomaly: saved.anomaly as RiftAnomalyId, awaitingChoice: true } : null;
+  });
   const [riftDrop, setRiftDrop] = useState<ModuleInstance | null>(null);
   const [diveResult, setDiveResult] = useState<{ earned: number; newRecord: boolean; depth: number } | null>(null);
   const [pendingEvent, setPendingEvent] = useState<{ event: GameEvent; poiId: string } | null>(null);
@@ -126,7 +131,7 @@ export function App() {
 
   function enterRift() {
     launchRiftWave(1, (w) =>
-      setRiftRun({ depth: 1, haul: {}, awaitingChoice: false, anomaly: w.anomaly, haulMultiplier: w.haulMultiplier, lastSurge: 1 }),
+      (saveRiftRun(null), setRiftRun({ depth: 1, haul: {}, awaitingChoice: false, anomaly: w.anomaly, haulMultiplier: w.haulMultiplier, lastSurge: 1 })),
     );
   }
 
@@ -137,6 +142,7 @@ export function App() {
     grant(riftRun.haul);
     // 余烬刻印(data/sigils.ts):深潜第一次留下了带得走的东西。在此之前,你潜到
     // 多深,离开的那一刻就被忘掉了——所以"再深一层"完全没有理由。
+    saveRiftRun(null);
     const dive = bankDive(riftRun.depth);
     setDiveResult(dive.earned > 0 ? { ...dive, depth: riftRun.depth } : null);
     setRiftDrop(grantRiftDrop(riftRun.depth));
@@ -381,18 +387,25 @@ export function App() {
             if (result === "defeat") {
               // The whole provisional haul is lost — that risk is what makes
               // "one more wave" an actual decision rather than free money.
+              saveRiftRun(null);
               setRiftRun(null);
               return;
             }
+            // 两波之间是唯一安全的存档点:这一波已经清掉,玩家正在决定推进还是撤离。
             setRiftRun((run) => {
               if (!run) return run;
               const surge = rollSourceSurge(run.depth);
-              return {
+              const next = {
                 ...run,
                 haul: addHaul(run.haul, riftWaveHaul(run.depth, run.haulMultiplier, surge)),
                 awaitingChoice: true,
                 lastSurge: surge,
               };
+              saveRiftRun({
+                depth: next.depth, haul: next.haul, anomaly: next.anomaly,
+                haulMultiplier: next.haulMultiplier, lastSurge: next.lastSurge,
+              });
+              return next;
             });
           }}
         />
