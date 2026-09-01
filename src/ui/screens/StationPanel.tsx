@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, crewPassiveScale, effectiveMaxHull, repairFlagship, stationPrice, stationOwner } from "../../state/store";
-import { CREW_DEFS } from "../../data/crew";
+import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, crewPassiveScale, crewCount, effectiveMaxHull, repairFlagship, stationPrice, stationOwner } from "../../state/store";
+import { CREW_DEFS, genericRecruitCost } from "../../data/crew";
 import { moduleDefById, fabricatorCost, MARKET_MAX_RARITY } from "../../data/modules";
 import { drawModule, primaryStat } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
@@ -323,13 +323,15 @@ function RecruitTab() {
   // resource a distinct, memorable job: Source Points for hulls/modules, Alloy for
   // crew, Origin Essence gates hull tiers, Insight rerolls traits, Salvage repairs
   // and is the base trade currency.
-  const cost = stationPrice(20);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
       <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
         {t("station.recruitHint")}
       </div>
-      {genericDefs.map((c) => (
+      {genericDefs.map((c) => {
+        // 价格随手里已有的**同类**人数递增(见 data/crew.ts 的 genericRecruitCost)。
+        const cost = stationPrice(genericRecruitCost(crewCount(c.id)));
+        return (
         <Row key={c.id}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
             <div style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: `${CREW_ROLE_COLOR[c.role]}18`, border: `1px solid ${CREW_ROLE_COLOR[c.role]}`, flex: "none" }}>
@@ -346,14 +348,22 @@ function RecruitTab() {
             className="btn primary"
             disabled={!canAfford({ alloy: cost })}
             onClick={() => {
-              spend({ alloy: cost });
+              // 价格在**点击那一刻**按当前人数重算,不用渲染闭包里那个 cost。
+              //
+              // 2026-08-31(第 66 轮)实测撞出来的:在同一个 tick 里连点三次,三次都
+              // 读到同一个旧价格,三个人只花了 20×3 而不是 20+32+51。真人正常点击
+              // 之间会重渲染,撞不上;但快速连点可以,而这一行就把它彻底关掉了。
+              const now = stationPrice(genericRecruitCost(crewCount(c.id)));
+              if (!canAfford({ alloy: now })) return;
+              spend({ alloy: now });
               recruitGenericCrew(c.id);
             }}
           >
             {t("station.recruit")} <ResourceIcon type="alloy" size={12} /> {cost}
           </button>
         </Row>
-      ))}
+        );
+      })}
     </div>
   );
 }

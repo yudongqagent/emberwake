@@ -116,3 +116,31 @@ export function crewDefById(id: string): CrewDef {
   if (!def) throw new Error(`Unknown crew def: ${id}`);
   return def;
 }
+
+/** 再招同一种增援要多少合金。
+ *
+ * 2026-08-31(/loop 第 66 轮)。原来是固定 20,而通用增援的被动**没有上限**,
+ * 且不论上不上岗都生效:
+ *
+ *     recruitHelmEvasionBonus = crewCount("recruitHelm") * 0.05
+ *
+ * 算一下就知道它有多划算:effectiveEvasion 的硬上限 60% 在原始值 1.50 时达到,
+ * 只靠舵手就是 1.50 / 0.05 = **30 名 = 600 合金**。而全战役合金收入是 5,886
+ * (见第 48 轮的账)——**花一成预算买下游戏允许的最高闪避**,而且永久。
+ * 战术官那条更歹毒:洞悉是全游戏最稀缺的资源(一周目 123 点),而它按比例叠。
+ *
+ * 搜到的说法是商店该"补运气不好的缺口",不该变成一台成长机器。所以价格随手里
+ * 已有的同类人数递增:第一个仍然便宜(补缺口这件事保住了),堆叠自己会停下来。
+ *
+ *     第 1 个   20        第 6 个   210
+ *     第 3 个   51        第 10 个  1,374
+ *
+ * 曲线 1.6 是照着"十来个就该让人肉疼"选的,不是拍的:十个舵手是 +0.5 原始闪避、
+ * 过 effectiveEvasion 之后 0.35,那是一笔看得见的收益,而它要花掉约 3,500 合金
+ * ——全战役预算的六成。 */
+export const GENERIC_RECRUIT_BASE_COST = 20;
+export const GENERIC_RECRUIT_CURVE = 1.6;
+
+export function genericRecruitCost(alreadyHave: number): number {
+  return Math.round(GENERIC_RECRUIT_BASE_COST * Math.pow(GENERIC_RECRUIT_CURVE, alreadyHave));
+}
