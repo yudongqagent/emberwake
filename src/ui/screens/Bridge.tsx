@@ -36,6 +36,18 @@ function EmberLoadPanel() {
   const total = emberLoad();
   const fromRegion = Math.max(0, total - fromAscension - voluntary);
   const reward = Math.round((emberLoadRewardMultiplier(total) - 1) * 100);
+  // 还没碰上这个系统的时候不摆出来——和同一屏上的 SigilPanel 同一条规矩
+  // (它是 `if (sigils === 0 && best === 0) return null;`)。
+  //
+  // 2026-09-01(/loop 第 113 轮)。搜到的原则是"先限制初始的可玩面,别一上来就
+  // 淹了玩家";而这个仓库自己在 combatUnlocks.ts 里量过"玩家要面对 25 个独立
+  // 系统",并且**只在战斗内**做了渐进解锁。开一局新游戏实测:一级玩家的舰桥上
+  // 摆着一整块负荷面板,而 0 次进阶 / 0 主动 / 0 星区,每一个数都是 0,讲的还是
+  // 一个他还没做过的动作(进阶)。刻印面板在旁边就老实地不显示。
+  //
+  // 三个来源全为零才藏:已经在用主动负荷的人不会看着它突然消失,进阶或飞进
+  // 高威胁星区的那一刻它就出现——正好是它开始有意义的那一刻。
+  if (total === 0 && voluntary === 0) return null;
   return (
     <div className="panel" style={{ padding: "0.9rem 1rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.6rem" }}>

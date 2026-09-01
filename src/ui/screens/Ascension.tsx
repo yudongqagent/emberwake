@@ -9,6 +9,8 @@ import { Bar } from "../components/StatBlock";
 import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, SpeedIcon, SlotsIcon, LevelIcon, ResourceIcon, NavIcon } from "../components/Icons";
 import { t } from "../../i18n/strings";
+import { loadThresholdCrossed, LOAD_HULL_PCT, LOAD_DAMAGE_PCT } from "../../data/emberLoad";
+import { emberLoad } from "../../state/store";
 import { localizedNamedShipActive, localizedHullClassDisplay, localizedHullClassName} from "../../i18n/data";
 
 /** Player report (2026-08-24): "火种战舰升级和进阶应该在一个新的系统，跟商店没关系"
@@ -248,6 +250,41 @@ function AscensionOption({
           <div style={{ fontSize: "0.76rem", color: "var(--text-mid)" }}>{localizedNamedShipActive(ability)}</div>
         </div>
       )}
+
+      {/* 进阶的**代价**。
+        *
+        * 2026-09-01(/loop 第 113 轮)。这一屏原来只写涨了多少船体/功率/航速/槽位,
+        * 外加解锁哪个技能——全是好处。而每进阶一次余烬负荷 +1,往后**每一仗**敌人
+        * 伤害 ×1.08、船体 ×1.11,跨过 1/3/4/6 还会分别多出锚定、医疗、炮台、
+        * 以及整整一艘船。舰桥上的负荷面板是全游戏唯一说这件事的地方,而它在你
+        * 按下这个按钮之前根本不会提醒你。
+        *
+        * 横向重铸(lateral)不涨负荷,所以不显示。 */}
+      {!lateral && (() => {
+        const currentLoad = emberLoad();
+        const nextLoad = currentLoad + 1;
+        const crossed = loadThresholdCrossed(currentLoad, nextLoad);
+        return (
+          <div style={{ marginBottom: "0.8rem", padding: "0.55rem 0.7rem", borderRadius: 6, border: "1px solid var(--red)", background: "rgba(255,92,92,0.07)" }}>
+            <div className="eyebrow" style={{ color: "var(--red)", marginBottom: "0.2rem" }}>{t("ascension.costTitle")}</div>
+            <div style={{ fontSize: "0.76rem", color: "var(--text-mid)", lineHeight: 1.5 }}>
+              {t("ascension.loadCost", {
+                from: currentLoad,
+                to: nextLoad,
+                dmg: Math.round(LOAD_DAMAGE_PCT * 100),
+                hull: Math.round(LOAD_HULL_PCT * 100),
+              })}
+              {crossed && (
+                <> <span style={{ color: "var(--red)", fontWeight: 700 }}>
+                  {t(crossed === "extra" ? "ascension.loadExtraShip" : "ascension.loadNewRole", {
+                    role: t(`combat.role.${crossed}`),
+                  })}
+                </span></>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.32rem", marginBottom: "0.8rem" }}>
         <Requirement met={req.level} label={t("station.reqLevel", { level: target.minLevel })} icon={<LevelIcon size={12} />} />

@@ -34,8 +34,10 @@ export function totalEmberLoad(ascendedCount: number, voluntary: number): number
 /** Enemy stat scaling per point of Load. Gentle on purpose: the interesting part
  * is the roles arriving, not the numbers inflating. A pure stat ramp is the
  * failure mode this mechanic exists to avoid, not reproduce. */
-const HULL_PER_LOAD = 0.11;
-const DAMAGE_PER_LOAD = 0.08;
+export const LOAD_HULL_PCT = 0.11;
+const HULL_PER_LOAD = LOAD_HULL_PCT;
+export const LOAD_DAMAGE_PCT = 0.08;
+const DAMAGE_PER_LOAD = LOAD_DAMAGE_PCT;
 
 /** How the formation's single support ship escalates with Load, plus artillery
  * on top.
@@ -49,11 +51,26 @@ const DAMAGE_PER_LOAD = 0.08;
  *
  * This shape was forced by a failing test: the first ladder tried to add a mender
  * on top of an anchor and silently never produced one. */
+const ARTILLERY_LOAD = 4;
+
+/** 每一级负荷跨过去会**新出现**什么。给进阶界面用:玩家在按下"进阶"之前
+ *  该知道这一按会让往后每一仗多出什么东西,而不是只看见自己涨了多少血。
+ *  2026-09-01(/loop 第 113 轮)。 */
+export function loadThresholdCrossed(from: number, to: number): EnemyRole | "extra" | null {
+  if (to <= from) return null;
+  if (from < 6 && to >= 6) return "extra";
+  if (from < ARTILLERY_LOAD && to >= ARTILLERY_LOAD) return "artillery";
+  for (const r of [...SUPPORT_AT].sort((a, b) => a.load - b.load)) {
+    if (from < r.load && to >= r.load) return r.role;
+  }
+  return null;
+}
+
 const SUPPORT_AT: { load: number; role: EnemyRole }[] = [
   { load: 3, role: "mender" },
   { load: 1, role: "anchor" },
 ];
-const ARTILLERY_LOAD = 4;
+
 
 
 /** Applies Load to an authored encounter. Never touches an enemy that already
