@@ -437,21 +437,35 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
       drawPlayer(ctx2d, player, now, Math.hypot(player.vx, player.vy) > 12, hullFracRef.current);
       ctx2d.restore();
     }
-    // A fixed-interval tick (rather than requestAnimationFrame) keeps the loop running
-    // at a steady rate across embedding contexts that throttle rAF for backgrounded/
-    // composited tabs — movement is still computed from real elapsed time either way.
-    // See the matching guard in Combat.tsx: a throw anywhere in step() must never
-    // permanently stall the loop.
-    const intervalId = setInterval(() => {
+    // 画面循环跟着显示器走(requestAnimationFrame),不是定时器。
+    //
+    // 2026-09-01(/loop 第 84 轮)。原来是 setInterval(16),SystemView 那边还写了
+    // 理由:"固定间隔能在会限制 rAF 的嵌入环境里保持稳定节奏"。那个顾虑是真的,
+    // 但它换来的代价更大:
+    //
+    //   1. 16ms 对不上 60Hz 的 16.67ms —— 相位一直在漂,每秒有两三帧落进同一个
+    //      刷新间隔里被白画一遍,画面因此有细微的抖动。rAF 存在的理由就是这个。
+    //   2. **看不见的时候照画**。实测(手机视口、标签页隐藏):画布每秒仍在执行
+    //      约 1833 次 ctx.save() —— 玩家切走之后,手机还在满速渲染没人看的画面。
+    //
+    // 换成 rAF 是安全的:step(now) 自己从 now 算 dt(还夹了 0.25 秒上限),所以
+    // 停一段再回来不会跳;而**战斗逻辑走的是另一条 150ms 的心跳**,不在这个循环
+    // 里,所以画面暂停不会让战斗暂停。这个仓库里另外六处动画本来就用的 rAF,
+    // 这两处才是例外。
+    // 和 Combat.tsx 里同一条:step() 里任何一处抛异常都不能把循环永久卡死。
+    let raf = 0;
+    const frame = (now: number) => {
       try {
-        step(performance.now());
+        step(now);
       } catch (err) {
         reportError("SystemView.step", err);
       }
-    }, 16);
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
 
     return () => {
-      clearInterval(intervalId);
+      cancelAnimationFrame(raf);
       vp.destroy();
       canvas.removeEventListener("pointerdown", onPointer);
       window.removeEventListener("keydown", onKeyDown);
