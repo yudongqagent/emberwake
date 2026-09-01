@@ -1929,6 +1929,18 @@ export function upgradeModule(moduleId: string): boolean {
  *    wave-1(见 App.tsx),所以这里能算得出来。
  *
  * 分母用 currentHp 不用满血:玩家要决定的是"我现在这条命扛不扛得住"。 */
+/** 把"最重一击占船体几成"排版成给玩家看的那一段。
+ *
+ * 2026-09-01(/loop 第 109 轮)。四舍五入到整数百分比,会让强力玩家在**每一个**
+ * 威胁读数上都看见 "0% hull"——而那一下并不是零,只是不到 1%。给数字的规矩里,
+ * 一个把真相抹平成 0 的数比没有更糟:它读起来像"完全无害"。
+ * 非零但不足 1% 的写成 "<1"。 */
+export function formatThreatPct(fraction: number): string {
+  const pct = fraction * 100;
+  if (pct > 0 && pct < 1) return "<1";
+  return String(Math.round(pct));
+}
+
 export function encounterThreatRead(
   encounterId: string,
   extraLoad = 0,

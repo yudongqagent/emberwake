@@ -1,10 +1,11 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { state, replaceState, flagship, encounterThreatRead } from "./store";
+import { state, replaceState, flagship, encounterThreatRead, formatThreatPct } from "./store";
 import { createInitialState } from "../engine/save";
 import { applyEmberLoad } from "../data/emberLoad";
 import { encounterById } from "../data/encounters";
 import type { HullClassId } from "../data/types";
 import SORTIE_SRC from "../ui/screens/SortieInterlude.tsx?raw";
+import SYSTEM_SRC from "../ui/screens/SystemView.tsx?raw";
 import APP_SRC from "../App.tsx?raw";
 import STRINGS_SRC from "../i18n/strings.ts?raw";
 
@@ -119,5 +120,65 @@ describe("战前威胁预读", () => {
         expect(v, `${lang} 的预告缺 ${slot}——又变回形容词了:「${v}」`).toContain(slot);
       }
     }
+  });
+});
+
+/** 裂隙口的三档潜入。
+ *
+ * 2026-09-01(/loop 第 109 轮)。这三个按钮原来只有形容词——浅层 / 深层 / 深渊
+ * ——而它是**三选一**,玩家没有任何可比的东西。巡逻点早就有威胁读数了
+ * (ThreatRead 只对 kind === "patrol" 渲染,裂隙口是 riftPocket,所以漏在外面),
+ * 出击间隙上一轮也补上了。规则对了,但没接全。
+ *
+ * 顺带确认了一件我差点搞错的事:裂隙口那三个按钮走的是**普通出击**那条路
+ * (onEngage → setSortie),不是异空间战场那套深潜。深潜是舰桥上的一个"能力"
+ * (Bridge.tsx 里 2026-08-24 明确改过:它不是星图上的一个地点)。两套东西,
+ * 名字像而已——所以这里该给的就是普通的威胁读数,和巡逻点同一份。 */
+describe("裂隙口的三档", () => {
+  beforeEach(() => replaceState(createInitialState()));
+
+  const TIERS = ["riftDiveShallow", "riftDiveDeep", "riftDiveAbyssal"] as const;
+
+  it("三档都能算出读数", () => {
+    for (const id of TIERS) {
+      expect(encounterThreatRead(id), `${id} 算不出威胁读数`).toBeTruthy();
+    }
+  });
+
+  /** 越深的一档必须**真的**更凶,否则这个选择是假的。 */
+  it("越深的一档,最重一击越重", () => {
+    const hits = TIERS.map((id) => encounterThreatRead(id)!.worstHitFraction);
+    for (let i = 1; i < hits.length; i++) {
+      expect(hits[i], `${TIERS[i]} 的最重一击不比 ${TIERS[i - 1]} 重`).toBeGreaterThan(hits[i - 1]);
+    }
+  });
+
+  it("界面上三个按钮都挂了读数,而且复用巡逻点那一份文案", () => {
+    expect(SYSTEM_SRC, "裂隙口的按钮没有威胁读数").toMatch(/encounterThreatRead\(tier\.id\)/);
+    expect(SYSTEM_SRC, "另写了一份文案——两份迟早对不上").toMatch(
+      /t\("system\.threatRead", \{ count: read\.enemies, pct \}\)/,
+    );
+    // 三档必须都从同一张表里出来,不能只给其中一两个接上。
+    for (const key of ["system.riftShallow", "system.riftDeep", "system.riftAbyssal"]) {
+      expect(SYSTEM_SRC, `${key} 不在那张表里`).toContain(key);
+    }
+  });
+});
+
+/** 四舍五入不能把真相抹平成 0。 */
+describe("威胁百分比的排版", () => {
+  it("非零但不足 1% 写成 <1,不写 0", () => {
+    expect(formatThreatPct(0.004)).toBe("<1");
+    expect(formatThreatPct(0.0001)).toBe("<1");
+  });
+
+  it("真的是 0 就写 0", () => {
+    expect(formatThreatPct(0)).toBe("0");
+  });
+
+  it("正常范围照常四舍五入", () => {
+    expect(formatThreatPct(0.09)).toBe("9");
+    expect(formatThreatPct(0.125)).toBe("13");
+    expect(formatThreatPct(1.2)).toBe("120");
   });
 });

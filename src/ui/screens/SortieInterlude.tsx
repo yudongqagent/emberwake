@@ -1,4 +1,4 @@
-import { flagship, effectiveMaxHull, encounterThreatRead } from "../../state/store";
+import { flagship, effectiveMaxHull, encounterThreatRead, formatThreatPct } from "../../state/store";
 import { Bar, hullBarKind } from "../components/StatBlock";
 import { HullIcon } from "../components/Icons";
 import { t } from "../../i18n/strings";
@@ -73,8 +73,9 @@ export function SortieInterlude({
         {(() => {
           const read = encounterThreatRead(encounterId, wave);
           if (!read) return null;
-          const pct = Math.round(read.worstHitFraction * 100);
-          const color = pct >= 25 ? "var(--red)" : pct >= 10 ? "var(--amber)" : "var(--green)";
+          const pct = formatThreatPct(read.worstHitFraction);
+          const n = read.worstHitFraction * 100;
+          const color = n >= 25 ? "var(--red)" : n >= 10 ? "var(--amber)" : "var(--green)";
           return (
             <div style={{ marginTop: "0.5rem", fontSize: "0.72rem", color, fontVariantNumeric: "tabular-nums" }}>
               {t("sortie.nextWaveThreat", { count: read.enemies, pct })}

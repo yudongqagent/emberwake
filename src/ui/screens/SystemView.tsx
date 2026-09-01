@@ -11,6 +11,7 @@ import {
   getNextObjective,
   effectiveMaxHull,
   encounterThreatRead,
+  formatThreatPct,
 } from "../../state/store";
 import type { Poi, ResourceType } from "../../data/types";
 import { playSfx } from "../../audio/engine";
@@ -618,10 +619,45 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
               <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "0.55rem" }}>
                 {t("system.riftPrompt")}
               </div>
+              {/* 每一档下面都把威胁读数写出来。
+                *
+                * 2026-09-01(/loop 第 109 轮)。这三个按钮原来只有形容词——浅层 /
+                * 深层 / 深渊——而这是整个游戏里赌注最大的一次选择,而且是**三选一**,
+                * 玩家却没有任何可比的东西。巡逻点早就有 ThreatRead 了(它只对
+                * kind === "patrol" 渲染,裂隙口是 riftPocket,所以漏在外面),
+                * 裂隙的层间面板也有预告。规则对了,但没接全。
+                *
+                * 文案复用巡逻点那一条 system.threatRead,不另写一份——两份迟早对不上。 */}
               <div style={{ display: "flex", gap: "0.4rem", justifyContent: "center", flexWrap: "wrap" }}>
-                <button className="btn" onClick={() => onEngage(tiers.shallow, nearPoi.id)}>{t("system.riftShallow")}</button>
-                <button className="btn" onClick={() => onEngage(tiers.deep, nearPoi.id)}>{t("system.riftDeep")}</button>
-                <button className="btn danger" onClick={() => onEngage(tiers.abyssal, nearPoi.id)}>{t("system.riftAbyssal")}</button>
+                {([
+                  { id: tiers.shallow, labelKey: "system.riftShallow", cls: "btn" },
+                  { id: tiers.deep, labelKey: "system.riftDeep", cls: "btn" },
+                  { id: tiers.abyssal, labelKey: "system.riftAbyssal", cls: "btn danger" },
+                ] as const).map((tier) => {
+                  const read = encounterThreatRead(tier.id);
+                  const pct = formatThreatPct(read?.worstHitFraction ?? 0);
+                  return (
+                    <button
+                      key={tier.id}
+                      className={tier.cls}
+                      style={{ flexDirection: "column", gap: 2, paddingTop: "0.4em", paddingBottom: "0.4em" }}
+                      onClick={() => onEngage(tier.id, nearPoi.id)}
+                    >
+                      <span>{t(tier.labelKey)}</span>
+                      {read && (
+                        <span
+                          style={{
+                            fontSize: "0.56rem", opacity: 0.85, fontWeight: 400,
+                            letterSpacing: "normal", textTransform: "none",
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          {t("system.threatRead", { count: read.enemies, pct })}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           );
@@ -709,8 +745,9 @@ function ThreatRead({ poi }: { poi: Poi }) {
   if (!encounterId) return null;
   const read = encounterThreatRead(encounterId);
   if (!read) return null;
-  const pct = Math.round(read.worstHitFraction * 100);
-  const color = pct >= 25 ? "var(--red)" : pct >= 10 ? "var(--amber)" : "var(--green)";
+  const pct = formatThreatPct(read.worstHitFraction);
+  const n = read.worstHitFraction * 100;
+  const color = n >= 25 ? "var(--red)" : n >= 10 ? "var(--amber)" : "var(--green)";
   return (
     <span
       style={{ fontSize: "0.58rem", color, fontVariantNumeric: "tabular-nums" }}
