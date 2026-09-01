@@ -152,6 +152,20 @@ function ReputationPanel() {
                       : eff.priceMultiplier < 1
                         ? t("rep.effect.discount", { pct: Math.round((1 - eff.priceMultiplier) * 100) })
                         : t("rep.effect.neutral")}
+                {/* 战利品分成——声望的第四条效果,原来一个字都没提。
+                  *
+                  * 2026-09-01(/loop 第 117 轮)。repEffects 有四条:价格倍率、
+                  * 盟舰参战、巡逻队追杀、**战利品分成**。前三条上面这五句文案都
+                  * 覆盖到了,只有分成漏了——而它是最大的一条:友善 +10%、盟友 +20%,
+                  * 乘在**每一场**战斗的全部战利品上(resolveCombatVictory 里的
+                  * allyShare),而不是只在这个派系的地盘上。store 里那行注释自己
+                  * 都写着它是"声望的第二个摸得着的好处",可玩家在界面上看不到。
+                  *
+                  * 单独一句、按 eff.rewardBonus 现算,所以调数值时文案不会掉队。
+                  * 措辞照着代码来:它算的是**不跟对方打的那些仗**。 */}
+                {eff.rewardBonus > 0 && (
+                  <> {t("rep.effect.rewardShare", { pct: Math.round(eff.rewardBonus * 100) })}</>
+                )}
               </div>
             </div>
           );
