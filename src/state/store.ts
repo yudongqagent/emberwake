@@ -1199,6 +1199,35 @@ export interface LogEntry {
   choice: string | null;
 }
 
+/** 航行日志按章分组——**只合并相邻的**同章条目。
+ *
+ * 2026-09-01(/loop 第 105 轮)。`chapter` 存的是地名不是序号("红棘主星"在六幕戏
+ * 里出现十次),而剧情会离开再回来,所以同一个地名会分成好几组——这是对的,时间
+ * 顺序不能打乱。
+ *
+ * 错的是**分组的 key**:原来直接用 `ch.chapter`,于是三组都叫「Bauhinia Prime」,
+ * Preact 收到三个一样的 key。实测(我自己的存档,英文,打开日志):
+ *
+ *     Bauhinia Prime · The Ledger
+ *     Bauhinia Prime · House Rules          ← 三组同一个 key
+ *     Bauhinia Prime · Calling the Reach
+ *
+ * 控制台每次渲染都在报 "two or more children with the same key attribute"。
+ * 目前没看出可见的错乱(里层条目用 scene.id 当 key,是唯一的,挡住了大部分后果),
+ * 但按 key 复用 DOM 本来就是不能踩的地雷。key 改成本组第一幕的 scene.id——
+ * 每组的起点必然不同,所以一定唯一。 */
+export function groupLogByChapter(
+  entries: LogEntry[],
+): { key: string; chapter: string; title: string; items: LogEntry[] }[] {
+  const groups: { key: string; chapter: string; title: string; items: LogEntry[] }[] = [];
+  for (const e of entries) {
+    const last = groups[groups.length - 1];
+    if (last && last.chapter === e.chapter) last.items.push(e);
+    else groups.push({ key: e.scene.id, chapter: e.chapter, title: e.chapterTitle, items: [e] });
+  }
+  return groups;
+}
+
 export function storyLog(): LogEntry[] {
   const flags = state.value.flags;
   const out: LogEntry[] = [];

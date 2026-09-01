@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { storyLog, type LogEntry } from "../../state/store";
+import { storyLog, groupLogByChapter } from "../../state/store";
 import { t } from "../../i18n/strings";
 import { playSfx } from "../../audio/engine";
 
@@ -23,13 +23,7 @@ export function Log() {
     );
   }
 
-  // 按章分组,保持剧情顺序。
-  const chapters: { chapter: string; title: string; items: LogEntry[] }[] = [];
-  for (const e of entries) {
-    const last = chapters[chapters.length - 1];
-    if (last && last.chapter === e.chapter) last.items.push(e);
-    else chapters.push({ chapter: e.chapter, title: e.chapterTitle, items: [e] });
-  }
+  const chapters = groupLogByChapter(entries);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem", padding: "0.2rem 0 1rem" }}>
@@ -37,7 +31,7 @@ export function Log() {
         {t("log.count", { n: entries.length })}
       </div>
       {chapters.map((ch) => (
-        <div key={ch.chapter}>
+        <div key={ch.key}>
           <div className="eyebrow" style={{ color: "var(--text-dim)", marginBottom: "0.35rem" }}>
             {ch.chapter} · {ch.title}
           </div>
