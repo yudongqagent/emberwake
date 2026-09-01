@@ -95,6 +95,21 @@ export function generateHunterEncounter(faction: FactionId, threat: number): Enc
     isBoss: false,
     // 他们是冲你来的,所以身上带着值钱的东西——被追杀不该是纯亏损。
     enemies,
+    // 猎杀队是团战:你的盟友会来帮你打。
+    //
+    // 2026-09-01(/loop 第 97 轮)。全部 46 个遭遇里只有 4 个标了 fleetBattle,
+    // 而且**都是幕终 BOSS**。也就是说"结盟"这件事最摸得着的那个后果——
+    // 盟友的战舰加入你的团战——一整局只兑现四次;第 96 轮刚修好的接舷缴获
+    // (缴回来的船正是靠团战出力)同样只有那四次机会派上用场。
+    //
+    // 猎杀队是接这一条最自然的地方,而且理由是叙事上的:声望敌对招来了追杀,
+    // 声望结盟就该招来援军。同一套系统的惩罚和奖励第一次在同一场仗里碰面。
+    //
+    // 机制上也对得上:猎杀队本来就是多艘、会随玩家进阶缩放(第 78 轮)、而且
+    // 会重生(240 秒),所以盟友系统终于有了一个**反复出现**的舞台,而不是
+    // 一局四次。正在追杀你的那个派系当然不会来帮你——Combat.tsx 里那条
+    // `f !== encounter.faction` 已经挡住了。
+    fleetBattle: true,
     rewards: {
       salvage: Math.round(60 * scale),
       sourcePoints: Math.round(30 * scale),
