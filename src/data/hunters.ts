@@ -17,6 +17,33 @@ import { isDiplomatic } from "./reputation";
 
 const HUNTER_PREFIX = "hunt:";
 
+/** 猎杀队该按哪一档来。
+ *
+ * 2026-09-01(/loop 第 78 轮)。这个文件顶上那句设计意图写得很清楚:
+ *
+ *     "猎杀队必须跟着星区威胁度缩放:威胁 6 的星区里冒出一队威胁 1 的猎杀船,
+ *      那不是威胁,是免费经验。"
+ *
+ * 话说对了,但只做了一半——它只看**星区**,不看**玩家**。于是镜像的那种情况
+ * 一直存在:一个已经进阶到主权级的玩家回到新手村,招来的还是威胁 1 的猎杀队。
+ *
+ * 实测(2026-09-01,洋紫荆疆域):4 艘血群快艇,每艘伤害 5;一场仗打完
+ * **总共掉 6 点血(274 里的 6)**,耗时 8.2 秒,反过来白拿 +60 废料 +30 源点
+ * +27 合金。声望系统里唯一的那个"惩罚",实际是一份免费补给。
+ *
+ * 取两者的大者。玩家这一侧用的是**已经进阶到的舰级**(HULL_CLASSES 的 order),
+ * 不是等级——等级会虚高(一条 14 级的护卫舰仍然只是护卫舰),而舰级是玩家真的
+ * 跨过了门槛才拿到的东西。order 0(护卫舰)对应威胁 1,和星区阶梯同一把尺子
+ * (见 difficultyRamp.test.ts 里的 expectedHull:威胁 t ↔ 舰级 order t−1)。
+ *
+ * 只会往上抬,不会往下压:没进阶过的玩家在高威胁星区里,面对的仍然是那个星区
+ * 该有的猎杀队。 */
+export function hunterThreatFor(regionThreat: number, flagshipHullOrder: number): number {
+  const byRegion = Math.round(regionThreat);
+  const byPlayer = flagshipHullOrder + 1;
+  return Math.max(1, Math.min(7, Math.max(byRegion, byPlayer)));
+}
+
 export function hunterEncounterId(faction: FactionId, threat: number): string {
   return `${HUNTER_PREFIX}${faction}:${threat}`;
 }

@@ -19,7 +19,7 @@ import { ACT5_SCENES } from "../data/story/act5";
 import { ACT6_SCENES } from "../data/story/act6";
 import { STANDING_SCENES } from "../data/story/standing";
 import { encounterById } from "../data/encounters";
-import { isHunterId, hunterEncounterId } from "../data/hunters";
+import { isHunterId, hunterEncounterId, hunterThreatFor } from "../data/hunters";
 import type { StoryContext } from "../data/story/reactive";
 import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
@@ -483,7 +483,14 @@ export function systemPois(system: SystemDef, galaxy: GalaxyDef): Poi[] {
       y: 120 + ((h >> 8) % 340),
       radius: 95,
       // 清掉之后过几分钟他们会再派一队来——只要你还是敌对。
-      data: { encounterId: hunterEncounterId(f, galaxy.threat), respawnSeconds: 240 },
+      // 按"星区威胁"和"玩家已进阶到的舰级"取大者——见 hunterThreatFor。
+      data: {
+        encounterId: hunterEncounterId(
+          f,
+          hunterThreatFor(galaxy.threat, flagship.value ? hullClassById(flagship.value.hullClass).order : 0),
+        ),
+        respawnSeconds: 240,
+      },
     },
   ];
 }
