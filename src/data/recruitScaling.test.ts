@@ -74,11 +74,15 @@ describe("通用增援的价格要随人数涨", () => {
     expect(STATION_SRC, "重算之后没有再校验一次买得起").toMatch(/if \(!canAfford\(\{ alloy: now \}\)\) return;/);
   });
 
-  /** 前提本身也钉住:那个被动确实没有自己的上限,所以价格必须担起这个责任。 */
+  /** 前提本身也钉住:那个被动确实没有自己的上限,所以价格必须担起这个责任。
+   *
+   * 2026-09-01(/loop 第 116 轮):式子从 crewCount 换成了 crewPassiveScale
+   * (按支持度缩放,和其余六条船员被动一致)。**线性叠加没有变,也仍然没有上限**
+   * ——这条守卫的原意(价格是唯一的刹车)照旧成立,钉的形状跟着更新。 */
   it("舵手的闪避加成本身没有上限——所以价格是唯一的刹车", () => {
-    expect(COMBAT_SRC).toMatch(/crewCount\("recruitHelm"\) \* 0\.05/);
+    expect(COMBAT_SRC).toMatch(/crewPassiveScale\("recruitHelm"\) \* 0\.05/);
     expect(
-      /Math\.min\([^)]*crewCount\("recruitHelm"\)/.test(COMBAT_SRC),
+      /Math\.min\([^)]*crewPassiveScale\("recruitHelm"\)/.test(COMBAT_SRC),
       "被动那边加了上限,那这条注释要重写",
     ).toBe(false);
   });

@@ -5,7 +5,7 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSi
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { TURN_SECONDS, AUTO_FIRE_MIN_INTERVAL, RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, MAX_BLOCK_FRACTION, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, effectiveShipBlock, effectiveShipPowerDraw, resolveCombatVictory, resolveCombatDefeat, type DefeatCost, resolveCombatWithdraw, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
+import { state, flagship, effectiveShipBlock, effectiveShipPowerDraw, resolveCombatVictory, resolveCombatDefeat, type DefeatCost, resolveCombatWithdraw, effectiveMaxHull, crewPassiveScale, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
 import { pactModifiers } from "../../data/pacts";
@@ -502,7 +502,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // playerHull 和结算时的 takenByHull),它必须和 effectiveMaxHull 用的是同一个式子。
   const hullBonusFraction = effectiveMaxHull(ship) / Math.max(1, computeMaxHull(ship)) - 1;
   // Generic recruit helms passively contribute "+5% evasion fleet-wide" each, just by being recruited.
-  const recruitHelmEvasionBonus = crewCount("recruitHelm") * 0.05;
+  // 第 116 轮:按支持度缩放,和 store.ts 的 effectiveShipEvasion 用同一条式子——
+  // 原来两边都是 crewCount(),是全仓唯一不看支持度的那条船员被动。
+  const recruitHelmEvasionBonus = crewPassiveScale("recruitHelm") * 0.05;
   const regenStacks = effectStacks("regen");
   const jumpRangeStacks = effectStacks("jumpRange");
   const shieldBreakArmorStacks = equippedModuleList.filter(

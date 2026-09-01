@@ -1530,7 +1530,17 @@ export function effectiveShipEvasion(ship: ShipInstance): number {
     + gear
     + 0.05 * equippedEffectStacks("evasion")
     + 0.08 * armorShieldBreak
-    + 0.05 * crewCount("recruitHelm");
+    // 按支持度缩放,和其余六条船员被动一致(priyaOsei / unit7Requiem / oriVashti
+    // / kessaVray / recruitTactician / velaCantor 都走 crewPassiveScale)。
+    //
+    // 2026-09-01(/loop 第 116 轮)。这里原来是 crewCount()——**唯一**一条不看
+    // 支持度的船员被动。于是船员界面按 approvalEffects 写着「被动发挥 50%」,
+    // 而实际拿到的是 100%。实测:把在编舵手从 稳当(50) 调到 记恨(15),
+    // 舰桥闪避读数**一动不动**,两次都是 30.2%。
+    //
+    // 这条同时也让第 112 轮那条"输了要能爬回来"对舵手完全失效——他的被动本来就
+    // 不受支持度影响,涨跌都无所谓。
+    + 0.05 * crewPassiveScale("recruitHelm");
   return effectiveEvasion(raw);
 }
 
