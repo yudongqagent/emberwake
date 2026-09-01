@@ -26,7 +26,7 @@ import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
 import { applyXp, computeMaxHull, ascendShip, reforgeShip, scanShip, computeBaseEvasion, computeBaseCritChance, computeSpeed } from "../engine/ships";
-import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor, computeModuleBlock, computeModuleEvasion, computeModuleThrust } from "../engine/modules";
+import { effectiveSignature, drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor, computeModuleBlock, computeModuleEvasion, computeModuleThrust } from "../engine/modules";
 import { MAX_BLOCK_FRACTION, effectiveEvasion } from "../engine/combat";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
@@ -1350,6 +1350,25 @@ export function clampHullToMax() {
   if (ships.some((s, i) => s !== state.value.ships[i])) {
     state.value = { ...state.value, ships };
   }
+}
+
+/** 这条船实际抽走多少功率——「电容」词条会减少抽取,这也是它值一个槽位的理由。
+ *
+ * 2026-09-01(/loop 第 93 轮)。这段式子原来**写了两份**:模组页一份、战斗一份。
+ * 第 91 轮刚把格挡收成一处,功率是同一个形状——两份迟早对不上,而这个数决定的是
+ * 超载惩罚(冷却最多 ×2.5)。 */
+export function effectiveShipPowerDraw(ship: ShipInstance): number {
+  const mods = ship.equipped
+    .map((id) => (id ? state.value.modules.find((x) => x.id === id) : undefined))
+    .filter((m): m is ModuleInstance => !!m);
+  // effectiveSignature 而不是 def.signature:进化过的模组签名变了,读原始定义会
+  // 把它算漏。模组页原来正是读的原始定义,而战斗读的是 effectiveSignature——
+  // 同一条船在两块屏幕上算出**不同的功率抽取**,这正是把两份合成一份的理由。
+  const capacitors = mods.filter(
+    (m) => effectiveSignature(m) === "capacitor" || m.traits.includes("capacitor"),
+  ).length;
+  const drawMult = Math.max(0.6, 1 - 0.12 * capacitors);
+  return Math.round(mods.reduce((sum, m) => sum + moduleDefById(m.defId).powerDraw, 0) * drawMult);
 }
 
 export function effectiveShipBlock(ship: ShipInstance): number {

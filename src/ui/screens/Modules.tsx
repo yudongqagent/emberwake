@@ -3,6 +3,7 @@ import { state, flagship, equipModule, spend, canAfford, sellModule, upgradeModu
 import { hullClassById } from "../../data/hullClasses";
 import { powerStrainMultiplier } from "../../engine/combat";
 import { computePowerCapacity } from "../../engine/ships";
+import { effectiveShipPowerDraw } from "../../state/store";
 import { moduleDefById, fabricatorCost, MODULE_RARITY_ORDER } from "../../data/modules";
 import { moduleEffectById } from "../../data/moduleEffects";
 import { setProgress, SET_TWO, SET_FOUR } from "../../data/setBonuses";
@@ -42,19 +43,9 @@ export function Modules() {
   const layout = slotLayout(ship.hullClass);
   // Capacitor (data/moduleEffects.ts) trims the draw of every fitted module, so a
   // capacitor engine buys room for a heavier loadout rather than just adding stats.
-  const capacitorStacks = ship.equipped.filter((id) => {
-    if (!id) return false;
-    const m = state.value.modules.find((x) => x.id === id);
-    if (!m) return false;
-    const d = moduleDefById(m.defId);
-    return d.signature === "capacitor" || m.traits.includes("capacitor");
-  }).length;
-  const drawMult = Math.max(0.6, 1 - 0.12 * capacitorStacks);
-  const usedPower = Math.round(ship.equipped.reduce((sum, id) => {
-    if (!id) return sum;
-    const mod = state.value.modules.find((m) => m.id === id);
-    return sum + (mod ? moduleDefById(mod.defId).powerDraw : 0);
-  }, 0) * drawMult);
+  // 第 93 轮:抽取的算法收进 store,四块屏幕共用一份(原来这里读的是原始
+  // signature,进化过的电容会被算漏,和战斗对不上)。
+  const usedPower = effectiveShipPowerDraw(ship);
   const capacity = computePowerCapacity(ship);
   const overdrawn = usedPower > capacity;
   const equippedIds = new Set(ship.equipped.filter(Boolean));

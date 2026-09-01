@@ -5,7 +5,7 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSi
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { TURN_SECONDS, AUTO_FIRE_MIN_INTERVAL, RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, MAX_BLOCK_FRACTION, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, effectiveShipBlock, resolveCombatVictory, resolveCombatDefeat, resolveCombatWithdraw, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
+import { state, flagship, effectiveShipBlock, effectiveShipPowerDraw, resolveCombatVictory, resolveCombatDefeat, resolveCombatWithdraw, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
 import { pactModifiers } from "../../data/pacts";
@@ -790,10 +790,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const capacity = computePowerCapacity(ship);
   // Weapon-system audit #3: overdrawing now costs cadence. Capacitor modules cut
   // the draw, which is what makes that effect worth a socket.
-  const powerDrawUsed = Math.round(
-    equippedModuleList.reduce((sum, m) => sum + moduleDefById(m.defId).powerDraw, 0)
-      * Math.max(0.6, 1 - 0.12 * equippedModuleList.filter((m) => modHasEffect(m, "capacitor")).length),
-  );
+  // 第 93 轮:抽取的算法收进 store,四块屏幕共用一份。
+  const powerDrawUsed = effectiveShipPowerDraw(ship);
   const powerStrain = powerStrainMultiplier(powerDrawUsed, capacity);
   // Read inside the frozen fireModule closure — mirror it, per the ref pattern
   // documented on combatTick.

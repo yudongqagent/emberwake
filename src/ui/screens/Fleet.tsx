@@ -1,4 +1,4 @@
-import { state, flagship, scanShipAction, effectiveMaxHull, effectiveShipEvasion, effectiveShipSpeed, effectiveShipCrit, effectiveShipBlock, giftCapturedShip } from "../../state/store";
+import { state, flagship, scanShipAction, effectiveMaxHull, effectiveShipEvasion, effectiveShipSpeed, effectiveShipCrit, effectiveShipBlock, effectiveShipPowerDraw, giftCapturedShip } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
 import { hullClassAbility } from "../../data/namedShips";
 import { computePowerCapacity } from "../../engine/ships";
@@ -66,7 +66,11 @@ export function Fleet() {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: "0.6rem", margin: "0.8rem 0" }}>
           <StatReadout icon={<HullIcon size={16} />} value={<AnimatedFraction current={ship.currentHp} max={effectiveMaxHull(ship)} />} label={t("bridge.stat.hull")} />
-          <StatReadout icon={<PowerIcon size={16} />} value={computePowerCapacity(ship)} label={t("bridge.stat.power")} color="var(--amber)" />
+          <StatReadout icon={<PowerIcon size={16} />}
+              /* 超载时数字本身变红——StatReadout 的 color 只管图标,
+                 而需要被看见的是这个数。 */
+              value={<span style={{ color: effectiveShipPowerDraw(ship) > computePowerCapacity(ship) ? "var(--red)" : undefined }}>{effectiveShipPowerDraw(ship)}/{computePowerCapacity(ship)}</span>}
+              label={t("bridge.stat.power")} color="var(--amber)" title={t("bridge.stat.powerTitle")} />
           <StatReadout icon={<SpeedIcon size={16} />} value={effectiveShipSpeed(ship)} label={t("bridge.stat.speed")} color="var(--cyan)" />
           <StatReadout icon={<EvasionIcon size={16} />} value={`${(effectiveShipEvasion(ship) * 100).toFixed(1)}%`} label={t("bridge.stat.evasion")} color="var(--green)" />
           <StatReadout icon={<ModuleTypeIcon type="armor" size={16} color="var(--cyan)" />} value={effectiveShipBlock(ship)} label={t("bridge.stat.block")} color="var(--cyan)" title={t("bridge.stat.blockTitle")} />

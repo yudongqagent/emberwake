@@ -1,4 +1,4 @@
-import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull, effectiveShipEvasion, effectiveShipSpeed, effectiveShipCrit, effectiveShipBlock, setVoluntaryLoad, reputationOf, sigilRank, buySigilRank, emberLoad } from "../../state/store";
+import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull, effectiveShipEvasion, effectiveShipSpeed, effectiveShipCrit, effectiveShipBlock, effectiveShipPowerDraw, setVoluntaryLoad, reputationOf, sigilRank, buySigilRank, emberLoad } from "../../state/store";
 import { SIGIL_NODES, sigilUpgradeCost } from "../../data/sigils";
 import { emberLoadRewardMultiplier } from "../../data/emberLoad";
 import { DIPLOMATIC_FACTIONS, repTier, repEffects } from "../../data/reputation";
@@ -263,7 +263,11 @@ export function Bridge({ onNavigate, onEnterRift }: { onNavigate: (screen: strin
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: "0.75rem", marginTop: "0.9rem" }}>
             <StatReadout icon={<HullIcon size={18} />} value={<AnimatedFraction current={ship.currentHp} max={effectiveMaxHull(ship)} />} label={t("bridge.stat.hull")} />
-            <StatReadout icon={<PowerIcon size={18} />} value={computePowerCapacity(ship)} label={t("bridge.stat.power")} color="var(--amber)" />
+            <StatReadout icon={<PowerIcon size={18} />}
+              /* 超载时数字本身变红——StatReadout 的 color 只管图标,
+                 而需要被看见的是这个数。 */
+              value={<span style={{ color: effectiveShipPowerDraw(ship) > computePowerCapacity(ship) ? "var(--red)" : undefined }}>{effectiveShipPowerDraw(ship)}/{computePowerCapacity(ship)}</span>}
+              label={t("bridge.stat.power")} color="var(--amber)" title={t("bridge.stat.powerTitle")} />
             <StatReadout icon={<SpeedIcon size={18} />} value={effectiveShipSpeed(ship)} label={t("bridge.stat.speed")} color="var(--cyan)" />
             <StatReadout icon={<EvasionIcon size={18} />} value={`${(effectiveShipEvasion(ship) * 100).toFixed(1)}%`} label={t("bridge.stat.evasion")} color="var(--green)" />
             <StatReadout icon={<ModuleTypeIcon type="armor" size={18} color="var(--cyan)" />} value={effectiveShipBlock(ship)} label={t("bridge.stat.block")} color="var(--cyan)" title={t("bridge.stat.blockTitle")} />
