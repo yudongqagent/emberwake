@@ -1308,6 +1308,30 @@ export function crewPassiveScale(defId: string): number {
  *
  * 闪避要过一遍 effectiveEvasion 的软硬上限再显示:堆到 45% 的原始值实际只有 34%,
  * 显示原始值就是又一次"写的和用的不是一个数"。 */
+/** 这条船装甲提供的格挡总量——和战斗里用的是同一个式子。
+ *
+ * 2026-09-01(/loop 第 91 轮)。舰桥和舰队面板列了五项战斗属性:船体、功率、速度、
+ * 闪避、暴击。**唯独没有格挡**——而格挡正是防御的另一半:
+ *
+ *     闪避  这一发整个躲掉的概率      (显示了)
+ *     格挡  没躲掉时每一发扣掉多少     (哪儿都没有)
+ *
+ * 于是玩家在"这一格装甲还是引擎"之间做选择时,引擎那边的闪避数会动,装甲那边
+ * **什么都不会动**。搜到的原话正对着这一条:给得太少,玩家就没法判断自己的选择
+ * 到底有没有产生影响。
+ *
+ * 刻意不乘契约倍率(pacts.blockMult):契约只活一次出击,而这是船的常驻属性——
+ * 和 effectiveMaxHull 不含契约是同一个口径。 */
+export function effectiveShipBlock(ship: ShipInstance): number {
+  return Math.round(
+    ship.equipped.reduce((sum, id) => {
+      const m = id ? state.value.modules.find((x) => x.id === id) : undefined;
+      if (!m || moduleDefById(m.defId).baseBlock === undefined) return sum;
+      return sum + computeModuleBlock(m);
+    }, 0),
+  );
+}
+
 export function effectiveShipEvasion(ship: ShipInstance): number {
   if (ship.id !== flagship.value?.id) return computeBaseEvasion(ship);
   const gear = ship.equipped.reduce((sum, id) => {

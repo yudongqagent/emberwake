@@ -5,6 +5,9 @@ import { encounterThreatRead, replaceState, state, flagship } from "../../state/
 import { createInitialState } from "../../engine/save";
 import type { ModuleInstance } from "../../data/types";
 import COMBAT_SRC from "./Combat.tsx?raw";
+import STORE_SRC from "../../state/store.ts?raw";
+import BRIDGE_SRC from "./Bridge.tsx?raw";
+import FLEET_SRC from "./Fleet.tsx?raw";
 
 /** 界面上写的格挡,必须就是挨打时用的那个格挡。
  *
@@ -42,15 +45,36 @@ describe("装甲的格挡在战斗里要算数", () => {
   });
 
   /** 这条是这一轮的正题:战斗必须走 computeModuleBlock,不能读原始值。 */
+  /** 第 91 轮把这个算法搬进了 store 的 effectiveShipBlock,让舰桥/舰队和战斗
+   * 共用一份——所以这条守卫跟着搬,而且**加严**了:原来只能保证战斗算得对,
+   * 现在保证界面和战斗读的是同一个函数,想再对不上都难。 */
   it("战斗用的是算过的格挡,不是定义里的原始值", () => {
     expect(
-      COMBAT_SRC,
-      "armorBlock 又回去读 def.baseBlock 了——界面写的和挨打时用的会再次对不上",
-    ).toMatch(/armorBlock[\s\S]{0,400}?computeModuleBlock\(m\)/);
+      STORE_SRC,
+      "effectiveShipBlock 又回去读 def.baseBlock 了——界面写的和挨打时用的会再次对不上",
+    ).toMatch(/export function effectiveShipBlock[\s\S]{0,500}?computeModuleBlock\(m\)/);
     expect(
-      /reduce\(\(sum, m\) => sum \+ \(moduleDefById\(m\.defId\)\.baseBlock \?\? 0\)/.test(COMBAT_SRC),
-      "战斗还在把原始 baseBlock 直接相加",
+      /reduce\(\(sum, m\) => sum \+ \(moduleDefById\(m\.defId\)\.baseBlock \?\? 0\)/.test(COMBAT_SRC + STORE_SRC),
+      "还在把原始 baseBlock 直接相加",
     ).toBe(false);
+  });
+
+  it("界面和战斗读的是同一个函数,不是各算各的", () => {
+    expect(COMBAT_SRC, "战斗又自己算了一遍格挡").toMatch(
+      /const armorBlock = Math\.round\(effectiveShipBlock\(ship\) \* pacts\.blockMult\)/,
+    );
+    for (const [name, src] of [["Bridge.tsx", BRIDGE_SRC], ["Fleet.tsx", FLEET_SRC]] as const) {
+      expect(src, `${name} 没有显示格挡——防御的另一半在界面上不存在`).toMatch(
+        /value=\{effectiveShipBlock\(ship\)\}/,
+      );
+    }
+  });
+
+  /** 契约只活一次出击,所以常驻属性那一份不该含它——和 effectiveMaxHull 同口径。 */
+  it("常驻属性不含契约倍率", () => {
+    const i = STORE_SRC.indexOf("export function effectiveShipBlock");
+    const body = STORE_SRC.slice(i, i + 500);
+    expect(body, "effectiveShipBlock 里混进了契约倍率").not.toMatch(/blockMult/);
   });
 
   /** 交战前的读数也得走真实结算,否则它给的是一个吓唬人的数字。 */

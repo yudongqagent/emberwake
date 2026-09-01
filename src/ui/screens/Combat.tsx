@@ -5,7 +5,7 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSi
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { TURN_SECONDS, AUTO_FIRE_MIN_INTERVAL, RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, MAX_BLOCK_FRACTION, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, resolveCombatVictory, resolveCombatDefeat, resolveCombatWithdraw, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
+import { state, flagship, effectiveShipBlock, resolveCombatVictory, resolveCombatDefeat, resolveCombatWithdraw, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
 import { pactModifiers } from "../../data/pacts";
@@ -474,9 +474,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // 这和 engine/modules.ts 里 effectPotency 那条注释说的是同一件事(一块 mk1
   // 的偏转板和一块 mk5 满级的偏转板完全一样),当时修了**效果**,漏了格挡这个
   // 数值本身。十一处引用里只有这一处没接上。
-  const armorBlock = Math.round(equippedModuleList
-    .filter((m) => moduleDefById(m.defId).baseBlock !== undefined)
-    .reduce((sum, m) => sum + computeModuleBlock(m), 0) * pacts.blockMult);
+  // 第 91 轮:算法搬到 store 的 effectiveShipBlock,舰桥/舰队和这里共用一份。
+  // 契约倍率只在战斗里叠——它只活一次出击,不是船的常驻属性。
+  const armorBlock = Math.round(effectiveShipBlock(ship) * pacts.blockMult);
   const evasionTraitCount = effectStacks("evasion");
   // 2026-08-30:装备第一次给出真正的闪避和推力数值(见 tools/genGear.py)。
   // 从前引擎一个数值都没有,所以"升级引擎"是纯粹的骗钱,而 mk5 引擎因为耗电更多,

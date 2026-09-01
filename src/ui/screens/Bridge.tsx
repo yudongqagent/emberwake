@@ -1,4 +1,4 @@
-import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull, effectiveShipEvasion, effectiveShipSpeed, effectiveShipCrit, setVoluntaryLoad, reputationOf, sigilRank, buySigilRank, emberLoad } from "../../state/store";
+import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull, effectiveShipEvasion, effectiveShipSpeed, effectiveShipCrit, effectiveShipBlock, setVoluntaryLoad, reputationOf, sigilRank, buySigilRank, emberLoad } from "../../state/store";
 import { SIGIL_NODES, sigilUpgradeCost } from "../../data/sigils";
 import { emberLoadRewardMultiplier } from "../../data/emberLoad";
 import { DIPLOMATIC_FACTIONS, repTier, repEffects } from "../../data/reputation";
@@ -7,7 +7,7 @@ import { computePowerCapacity } from "../../engine/ships";
 import { ShipRarityTag } from "../components/RarityTag";
 import { crewDefById } from "../../data/crew";
 import { playSfx } from "../../audio/engine";
-import { HullIcon, PowerIcon, AptitudeIcon, LevelIcon, LocationIcon, CrewRoleIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
+import { HullIcon, PowerIcon, AptitudeIcon, LevelIcon, LocationIcon, CrewRoleIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon, ModuleTypeIcon} from "../components/Icons";
 import { StatReadout, Bar, hullBarKind, AnimatedFraction } from "../components/StatBlock";
 import { BridgeViewscreen } from "../components/BridgeViewscreen";
 import { APTITUDE_GROWTH } from "../../data/hullClasses";
@@ -266,6 +266,7 @@ export function Bridge({ onNavigate, onEnterRift }: { onNavigate: (screen: strin
             <StatReadout icon={<PowerIcon size={18} />} value={computePowerCapacity(ship)} label={t("bridge.stat.power")} color="var(--amber)" />
             <StatReadout icon={<SpeedIcon size={18} />} value={effectiveShipSpeed(ship)} label={t("bridge.stat.speed")} color="var(--cyan)" />
             <StatReadout icon={<EvasionIcon size={18} />} value={`${(effectiveShipEvasion(ship) * 100).toFixed(1)}%`} label={t("bridge.stat.evasion")} color="var(--green)" />
+            <StatReadout icon={<ModuleTypeIcon type="armor" size={18} color="var(--cyan)" />} value={effectiveShipBlock(ship)} label={t("bridge.stat.block")} color="var(--cyan)" title={t("bridge.stat.blockTitle")} />
             <StatReadout icon={<CritIcon size={18} />} value={`${Math.round(effectiveShipCrit(ship) * 100)}%`} label={t("bridge.stat.crit")} color="var(--red)" title={t("bridge.stat.critTitle")} />
             <StatReadout icon={<LevelIcon size={18} />} value={ship.level} label={t("bridge.stat.level")} color="var(--violet)" />
             <StatReadout icon={<AptitudeIcon size={18} />} value={ship.scanned && ship.aptitude ? `${ship.aptitude} ×${APTITUDE_GROWTH[ship.aptitude].toFixed(2).replace(/0$/, "")}` : "??"} label={t("bridge.stat.aptitude")} color="var(--green)" title={t("bridge.stat.aptitudeTitle")} />
