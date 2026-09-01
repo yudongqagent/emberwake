@@ -749,7 +749,16 @@ export function saveRiftRun(run: GameState["riftRun"]): void {
   persist();
 }
 
-/** How many equipped modules on the flagship carry an effect (signature counts). */
+/** How many equipped modules on the flagship carry an effect (signature counts).
+ *
+ * 2026-09-01(/loop 第 94 轮):读 effectiveSignature 而不是 def.signature。
+ * 进化过的模组签名会变,读原始定义就会数错——第 93 轮的功率抽取正是栽在这里
+ * (模组页读原始定义、战斗读 effectiveSignature,同一条船算出两个数)。
+ *
+ * 查下来这一处**目前**还撞不到:进化只作用于武器,而且只产出战斗类签名,
+ * 和这里被查的那几个效果(hullBonus / evasion / prospector / insightDraw)不相交。
+ * 但那是"碰巧安全",不是"设计上安全"——哪天加一件签名是 hullBonus 的武器、
+ * 或者给装甲加进化,它立刻就会变成真的。改成按定义正确,而不是按巧合正确。 */
 export function equippedEffectStacks(effectId: string): number {
   const ship = flagship.value;
   if (!ship) return 0;
@@ -757,8 +766,7 @@ export function equippedEffectStacks(effectId: string): number {
     if (!id) return false;
     const m = state.value.modules.find((x) => x.id === id);
     if (!m) return false;
-    const d = moduleDefById(m.defId);
-    return d.signature === effectId || m.traits.includes(effectId);
+    return effectiveSignature(m) === effectId || m.traits.includes(effectId);
   }).length;
 }
 
@@ -1391,7 +1399,8 @@ export function effectiveShipEvasion(ship: ShipInstance): number {
     const m = id ? state.value.modules.find((x) => x.id === id) : undefined;
     if (!m) return false;
     const d = moduleDefById(m.defId);
-    return d.type === "armor" && (d.signature === "shieldBreak" || m.traits.includes("shieldBreak"));
+    // 同上:按 effectiveSignature 判定,别读原始定义。
+    return d.type === "armor" && (effectiveSignature(m) === "shieldBreak" || m.traits.includes("shieldBreak"));
   }).length;
   const raw = computeBaseEvasion(ship)
     + gear
