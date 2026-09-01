@@ -3660,6 +3660,13 @@ function WeaponAutoStatus({ name, color, cd, profile, band }: { name: string; co
           title={t("combat.rangeFit", { band: t(`combat.rangeBand.${profile}`), mult: mult.toFixed(2) })}
         >
           {t(`combat.rangeBand.${profile}`)}
+          {/* 2026-08-31(/loop 第 71 轮):把倍率写出来。
+              第 47 轮加这个标签时,占便宜还是吃亏**只靠颜色**(绿/灰/红)——而
+              "关键信息不能只由颜色承载"是无障碍设计的第一条,FTL 自己就带色盲模式。
+              悬停说明不算数:触屏上根本没有悬停。
+              只在不是 ×1.00 时显示,中性档保持干净——于是"有没有这个数"本身就是
+              第一层信号,数值本身是第二层,颜色退化成冗余。 */}
+          {mult !== 1 && <span style={{ marginLeft: "0.15em" }}>×{mult.toFixed(2)}</span>}
         </span>
       )}
       {/* Reserved slot — the dot and the countdown are different widths, so
