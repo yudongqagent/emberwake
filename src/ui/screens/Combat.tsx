@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { encounterById } from "../../data/encounters";
 import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSignature, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
@@ -26,7 +26,7 @@ import type { RiftAnomalyId } from "../../data/rift";
 import { reportError } from "../../engine/errorReporting";
 import { getSettings } from "../../engine/settings";
 import { t } from "../../i18n/strings";
-import { localizedModuleName, localizedCrewActive, localizedNamedShipActive, localizedEncounterName, localizedEnemyName } from "../../i18n/data";
+import { localizedModuleName, localizedCrewName, localizedCrewActive, localizedNamedShipActive, localizedEncounterName, localizedEnemyName } from "../../i18n/data";
 
 const REF_W = 900;
 const REF_H = 520;
@@ -600,6 +600,36 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const [boardingOrder, setBoardingOrder] = useState(false);
   const [boardProgress, setBoardProgress] = useState(0);
   const [withdrawProgress, setWithdrawProgress] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  /** 说明面板的条目。**只列当前真的解锁了、屏幕上真的有的控件**——没给你的东西
+   * 不该出现在说明里(和 combatUnlocks 那套渐进解锁同一条规矩)。
+   *
+   * 文案全部复用 title 用的那批 key,所以说明只有一份:改了 tooltip,面板跟着变。 */
+  const helpEntries = useMemo(() => {
+    const out: { name: string; desc: string }[] = [];
+    if (unlocked("stance")) {
+      for (const order of ["close", "hold", "retreat"] as StanceOrder[]) {
+        out.push({ name: t(`combat.stance.${order}`), desc: t(`combat.stance.${order}Title`) });
+      }
+    }
+    if (unlocked("brace")) out.push({ name: t("combat.brace"), desc: t("combat.braceTitle") });
+    if (encounter.capturable) out.push({ name: t("combat.board"), desc: t("combat.boardTitle") });
+    if (unlocked("reactor")) {
+      out.push({ name: t("reactor.label"), desc: t("reactor.weaponsTitle") });
+      out.push({ name: t("reactor.shields"), desc: t("reactor.shieldsTitle") });
+      out.push({ name: t("reactor.engines"), desc: t("reactor.enginesTitle") });
+    }
+    if (autoFireWeapons.length > 0) out.push({ name: t("combat.zone.weapons"), desc: t("combat.autoFireTitle") });
+    if (unlocked("overcharge")) out.push({ name: t("combat.overcharge"), desc: t("combat.overchargeTitle") });
+    for (const c of assignedCrew) {
+      const def = crewDefById(c.defId);
+      out.push({ name: localizedCrewName(def), desc: localizedCrewActive(def) });
+    }
+    out.push({ name: t("combat.emberNova"), desc: t("combat.emberNovaTitle") });
+    if (rift) out.push({ name: t(`rift.anomaly.${rift.anomaly}`), desc: t(`rift.anomaly.${rift.anomaly}.desc`) });
+    return out;
+  }, [rift, assignedCrew.length, autoFireWeapons.length]);
   const [comboCount, setComboCount] = useState(0);
   const [overcharged, setOvercharged] = useState(false);
   const [guaranteedCrit, setGuaranteedCrit] = useState(false);
@@ -3055,6 +3085,17 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
 
       {/* ---- COMMAND CONSOLE ---- */}
       <div style={{ borderTop: "1px solid var(--line)", background: "rgba(5,8,16,0.72)", padding: "0.5rem 1rem 0.6rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {/* 触屏和键盘上读不到 title,所以每个控件的规则也得有一个点得开的去处。
+            条目从**当前真的解锁了的**控件生成——没给你的东西不该出现在说明里。 */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "-0.25rem" }}>
+          <button
+            className="btn ghost"
+            style={{ fontSize: "0.62rem", padding: "0.25em 0.7em", flex: "none" }}
+            onClick={() => { setHelpOpen(true); playSfx("click"); }}
+          >
+            {t("combat.help.open")}
+          </button>
+        </div>
         {(unlocked("stance") || unlocked("brace")) && <ConsoleZone label={t("combat.zone.helm")}>
           {unlocked("stance") && <div style={{ display: "flex", gap: "0.35rem" }} role="group" aria-label={t("combat.stanceLabel")}>
             {(["close", "hold", "retreat"] as StanceOrder[]).map((order) => {
@@ -3319,6 +3360,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           })()}
         </ResultOverlay>
       )}
+      {helpOpen && <CommandHelp onClose={() => setHelpOpen(false)} entries={helpEntries} />}
       {status === "withdrawn" && (
         <ResultOverlay onConfirm={() => onResolve("withdrawn")}>
           <div className="title" style={{ marginBottom: "0.5rem", color: "var(--amber)" }}>{t("combat.withdrawTitle")}</div>
@@ -3468,6 +3510,46 @@ function ResultOverlay({ children, onConfirm }: { children: preact.ComponentChil
  * of the redesign: they teach the player that HELM/WEAPONS/ABILITIES are
  * different KINDS of thing, so a passive readout is never mistaken for a button
  * they forgot to press. */
+/** 指令说明面板。
+ *
+ * 2026-09-01(/loop 第 81 轮)。搜到的原话:"title 属性对触屏和键盘用户根本不会
+ * 出现";"如果一个界面需要靠 tooltip 才能用,那就该重新设计"。
+ *
+ * 战斗控件的**规则**——抗冲的窗口和冷却、接舷的三个条件、撤离要在远距保持 7 秒、
+ * 余烬新星怎么充能、超载的代价、自动开火是什么意思——全部只写在 title 里。
+ * 手机上一个字都读不到,而这个游戏的手机布局是做过的(375px 下不横向溢出、
+ * 导航收成侧栏、目标列表横向滚动),也就是说真的有人会在手机上打。
+ *
+ * 这里用的是搜到的那条建议:内容多的说明不要做成 tooltip,做成一个可以点开的
+ * 面板(toggletip / dialog)。文案直接复用 title 用的那几个 key,所以只有一份。 */
+function CommandHelp({ entries, onClose }: { entries: { name: string; desc: string }[]; onClose: () => void }) {
+  return (
+    <div
+      role="dialog"
+      aria-label={t("combat.help.title")}
+      style={{
+        position: "absolute", inset: 0, zIndex: 40, background: "rgba(4,7,14,0.92)",
+        display: "flex", flexDirection: "column", padding: "0.9rem 1rem",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.6rem" }}>
+        <span className="title" style={{ fontSize: "0.95rem" }}>{t("combat.help.title")}</span>
+        <button className="btn ghost" style={{ fontSize: "0.7rem", padding: "0.35em 0.8em" }} onClick={onClose}>
+          {t("common.close")}
+        </button>
+      </div>
+      <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+        {entries.map((e) => (
+          <div key={e.name}>
+            <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--cyan)" }}>{e.name}</div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-mid)", lineHeight: 1.45 }}>{e.desc}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ConsoleZone({ label, hint, children }: { label: string; hint?: string; children: preact.ComponentChildren }) {
   return (
     <div>
