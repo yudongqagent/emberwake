@@ -25,7 +25,7 @@ import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
-import { applyXp, computeMaxHull, ascendShip, reforgeShip, computeBaseEvasion, computeSpeed } from "../engine/ships";
+import { applyXp, computeMaxHull, ascendShip, reforgeShip, computeBaseEvasion, computeBaseCritChance, computeSpeed } from "../engine/ships";
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor, computeModuleBlock, computeModuleEvasion, computeModuleThrust } from "../engine/modules";
 import { MAX_BLOCK_FRACTION, effectiveEvasion } from "../engine/combat";
 import type { DraftOption } from "../data/draft";
@@ -1259,6 +1259,26 @@ export function effectiveShipEvasion(ship: ShipInstance): number {
     + 0.08 * armorShieldBreak
     + 0.05 * crewCount("recruitHelm");
   return effectiveEvasion(raw);
+}
+
+/** 这条船上**每一把**武器的暴击率下限。
+ *
+ * 2026-08-31(/loop 第 67 轮)。舰桥和舰队显示的是 computeBaseCritChance,也就是
+ * 只有船自己的那一项随机 roll。而 computeCritChance 的真实式子是:
+ *
+ *     min(0.75, **0.08** + 船体 roll + (带「暴击」词条 ? 0.12 : 0) + min(0.2, 连击 × 0.02))
+ *
+ * 那个 0.08 是**每一把武器都有的底**,而属性栏把它整个漏掉了。实测:我那条船
+ * 舰桥上写「暴击 1%」,而它任何一把枪的实际暴击率至少是 **9%**,带词条 21%,
+ * 满连击 41%。
+ *
+ * 差着九倍的后果不只是数字难看:玩家读到"暴击 1%"会合理地断定这条属性没用,
+ * 从而永远不选「暴击」词条——而那条词条是 +12 个百分点,在 9% 的底上翻倍还多。
+ *
+ * 这里给的是**下限**(零连击、不算词条):它对船上每一把武器都成立,所以放在船的
+ * 属性栏里是诚实的。词条和连击是每把枪各自的事,写在模组卡上(见 moduleEffects)。 */
+export function effectiveShipCrit(ship: ShipInstance): number {
+  return Math.min(0.75, 0.08 + computeBaseCritChance(ship));
 }
 
 /** 装上装备之后这条船实际跑多快。推力的上下限和 Combat 里那段一致。 */

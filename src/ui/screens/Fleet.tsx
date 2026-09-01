@@ -1,7 +1,7 @@
-import { state, flagship, scanShipAction, effectiveMaxHull, effectiveShipEvasion, effectiveShipSpeed, giftCapturedShip } from "../../state/store";
+import { state, flagship, scanShipAction, effectiveMaxHull, effectiveShipEvasion, effectiveShipSpeed, effectiveShipCrit, giftCapturedShip } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
 import { hullClassAbility } from "../../data/namedShips";
-import { computePowerCapacity, computeBaseCritChance } from "../../engine/ships";
+import { computePowerCapacity } from "../../engine/ships";
 import { ShipRarityTag } from "../components/RarityTag";
 import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, SlotsIcon, AptitudeIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
@@ -69,7 +69,7 @@ export function Fleet() {
           <StatReadout icon={<PowerIcon size={16} />} value={computePowerCapacity(ship)} label={t("bridge.stat.power")} color="var(--amber)" />
           <StatReadout icon={<SpeedIcon size={16} />} value={effectiveShipSpeed(ship)} label={t("bridge.stat.speed")} color="var(--cyan)" />
           <StatReadout icon={<EvasionIcon size={16} />} value={`${(effectiveShipEvasion(ship) * 100).toFixed(1)}%`} label={t("bridge.stat.evasion")} color="var(--green)" />
-          <StatReadout icon={<CritIcon size={16} />} value={`${Math.round(computeBaseCritChance(ship) * 100)}%`} label={t("bridge.stat.crit")} color="var(--red)" />
+          <StatReadout icon={<CritIcon size={16} />} value={`${Math.round(effectiveShipCrit(ship) * 100)}%`} label={t("bridge.stat.crit")} color="var(--red)" title={t("bridge.stat.critTitle")} />
           <StatReadout icon={<SlotsIcon size={16} />} value={totalSlots} label={t("fleet.stat.slots")} color="var(--violet)" />
           <StatReadout icon={<AptitudeIcon size={16} />} value={ship.scanned && ship.aptitude ? `${ship.aptitude} ×${APTITUDE_GROWTH[ship.aptitude].toFixed(2).replace(/0$/, "")}` : "??"} label={t("bridge.stat.aptitude")} color="var(--green)" title={t("bridge.stat.aptitudeTitle")} />
         </div>
