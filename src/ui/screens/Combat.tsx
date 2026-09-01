@@ -4,7 +4,7 @@ import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSignature, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, MAX_BLOCK_FRACTION, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
+import { TURN_SECONDS, AUTO_FIRE_MIN_INTERVAL, RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, MAX_BLOCK_FRACTION, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, resolveCombatWithdraw, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
@@ -40,7 +40,6 @@ const PROJECTILE_DURATION = 0.3;
  * seconds, so existing balance ratios carry over instead of being re-tuned from
  * scratch. COMBAT_TICK_MS drives cooldown/debuff decay and enemy attack dispatch —
  * fast enough to feel continuous, slow enough to keep state updates cheap. */
-const TURN_SECONDS = 2.4;
 const COMBAT_TICK_MS = 150;
 /** Item #2 (2026-08-23 playtest): weapon-type modules now fire themselves the
  * instant they're off cooldown — see the auto-fire effect below — instead of
@@ -57,7 +56,6 @@ const COMBAT_TICK_MS = 150;
  * design axis (a Reaver mk3 cycles in 0.84s, a Mayeth mk3 in 5.76s), this is a
  * safety net against a zero-cooldown weapon refiring every render, not a design
  * decision that quietly erases a whole family's identity. */
-const AUTO_FIRE_MIN_INTERVAL = 0.6;
 /** UI audit #4 — Brace. Deliberately shorter than the gap between enemy attacks:
  * holding it open permanently isn't possible, so it has to be spent on a read of
  * the intent arcs rather than mashed. */

@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { MODULE_DEFS } from "./modules";
 import { MODULE_EFFECTS } from "./moduleEffects";
-import { rangeProfileMultiplier, powerStrainMultiplier, POWER_STRAIN_CAP } from "../engine/combat";
+import { rangeProfileMultiplier, powerStrainMultiplier, POWER_STRAIN_CAP, TURN_SECONDS, AUTO_FIRE_MIN_INTERVAL } from "../engine/combat";
 import type { ModuleDef, ModuleRarity } from "./types";
 import { HULL_CLASSES } from "./hullClasses";
 
 const TIERS: ModuleRarity[] = ["mk1", "mk2", "mk3", "mk4", "mk5"];
 const RARITY_MULT: Record<ModuleRarity, number> = { mk1: 1.0, mk2: 1.32, mk3: 1.74, mk4: 2.3, mk5: 3.04 };
-const TURN_SECONDS = 2.4;
-const AUTO_FIRE_MIN_INTERVAL = 0.6;
 
 const WEAPONS = MODULE_DEFS.filter((m) => m.type === "weapon");
 

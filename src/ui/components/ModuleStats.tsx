@@ -8,6 +8,7 @@ import {
 import type { ModuleInstance } from "../../data/types";
 import { t } from "../../i18n/strings";
 import { localizedTrait } from "../../i18n/data";
+import { weaponCycleSeconds } from "../../engine/combat";
 
 /** 一件模组的数值行,四个界面共用。
  *
@@ -54,6 +55,33 @@ export function ModuleStats({
       color: "var(--red)",
       delta: compareTo && oldDef?.baseDamage !== undefined ? now - computeModuleDamage(compareTo) : undefined,
     });
+    // 每秒伤害。
+    //
+    // 2026-09-01(/loop 第 76 轮)。武器唯一被拿来**比较**的数字一直是"每发多少",
+    // 而同一层里各族武器的 DPS 是被刻意压在 20% 以内的(见 data/weapons.test.ts
+    // 那条"同层要有真正不同的数值线"):每发的差别几乎全是**射速**换来的。
+    //
+    // 于是卡片上那个 +/- 经常指错方向。量了一遍玩家真会遇到的组合(同层或相邻层,
+    // 1250 组):**40% 的比较符号是反的**,其中 277 组显示的差值超过 20。最难看的
+    // 一组是在装玛耶 mk5、卡片递上劫掠者 mk5,卡上写 **−250**,而它实际每秒还高
+    // 0.3——玩家看到一个巨大的红字,而真相是持平偏上。
+    //
+    // 所以把决定胜负的那个数也摆上去,并且**它也参与比较**。每发照旧保留:爆发、
+    // 对格挡、暴击都吃单发数值,那不是废话,只是它不该是唯一被比的那个。
+    if (def.cooldown) {
+      const cycle = weaponCycleSeconds(def.cooldown);
+      const dps = now / cycle;
+      const oldDps =
+        compareTo && oldDef?.baseDamage !== undefined && oldDef.cooldown
+          ? computeModuleDamage(compareTo) / weaponCycleSeconds(oldDef.cooldown)
+          : undefined;
+      bits.push({
+        text: t("modules.dps", { value: dps.toFixed(1) }),
+        color: "var(--amber)",
+        delta: oldDps !== undefined ? dps - oldDps : undefined,
+        decimals: 1,
+      });
+    }
   }
   if (def.baseBlock !== undefined) {
     const now = computeModuleBlock(mod);

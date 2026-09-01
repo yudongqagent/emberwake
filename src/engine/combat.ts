@@ -1,3 +1,16 @@
+/** 一个"回合"折算成多少秒,以及自动开火的最快间隔。
+ *
+ * 2026-09-01(/loop 第 76 轮)。这两个数原来抄了三份:Combat.tsx 一份、
+ * weapons.test.ts 一份,而模组数值行想算每秒伤害时只能再抄第四份。
+ * 武器的射速节奏是**规则**,规则该只有一个出处——挪到这里,谁要用谁 import。 */
+export const TURN_SECONDS = 2.4;
+export const AUTO_FIRE_MIN_INTERVAL = 0.6;
+
+/** 一件武器的实际开火周期(秒)。卡片上的每秒伤害和战斗里的冷却走同一个函数。 */
+export function weaponCycleSeconds(cooldown: number): number {
+  return Math.max(AUTO_FIRE_MIN_INTERVAL, cooldown * TURN_SECONDS);
+}
+
 export type RangeBand = "close" | "mid" | "long";
 
 export interface RangeModifier {

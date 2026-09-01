@@ -71,12 +71,31 @@ const FAMILY_FOR_FACTION: Record<string, string> = {
 
 const TIER_ORDER: ModuleRarity[] = ["mk1", "mk2", "mk3", "mk4", "mk5"];
 
-/** The tier the draft offers, from how far the player has actually got. Kept
- * deliberately simple and legible — a player should be able to predict roughly
- * what a draft can contain. */
-export function draftTierFor(shipLevel: number, greedy: boolean): ModuleRarity {
-  const base = shipLevel >= 30 ? 3 : shipLevel >= 20 ? 2 : shipLevel >= 10 ? 1 : 0;
-  const idx = Math.min(TIER_ORDER.length - 1, base + (greedy ? 1 : 0));
+/** The tier the draft offers.
+ *
+ * 原来只看**等级**,而且是十级一跳。2026-09-01(/loop 第 76 轮)量了一下这条规则
+ * 递到手里的东西:
+ *
+ *     一整趟战役里递到手的武器牌,按 DPS 真的是升级的只有 13%
+ *
+ * 实测存档对上了:13 级的玩家身上穿的是 mk3,而 draftTierFor(13) 给的是 mk2
+ * 安全档 / mk3 贪婪档。10~19 级整整十级,安全档那张牌是**按规则注定作废**的。
+ * 而层级正是决定强弱的那个轴——同层各族武器 DPS 被刻意压在 20% 以内
+ * (见 data/weapons.test.ts),跨层才是真的涨。
+ *
+ * 改完再量:13% → 28%。
+ *
+ * 改成看**玩家实际拿在手里的东西**,等级只当护栏:
+ *   - 下限:不低于等级基准(不会因为你把好装备卖了就倒退)
+ *   - 上限:不超过等级基准 + 1(裂隙里爆一件 mk5 不会让往后每张牌都变 mk5,
+ *     那会把经济曲线一次性拉爆)
+ *   - 安全档最高到倒数第二层,好让贪婪档永远还能高它一层——否则顶层玩家的
+ *     贪婪牌会变成"同层,但要收你船体"。 */
+export function draftTierFor(shipLevel: number, greedy: boolean, owned: ModuleInstance[] = []): ModuleRarity {
+  const levelIdx = shipLevel >= 30 ? 3 : shipLevel >= 20 ? 2 : shipLevel >= 10 ? 1 : 0;
+  const ownedIdx = owned.reduce((best, m) => Math.max(best, TIER_ORDER.indexOf(m.rarity)), 0);
+  const safeIdx = Math.max(levelIdx, Math.min(ownedIdx, levelIdx + 1, TIER_ORDER.length - 2));
+  const idx = Math.min(TIER_ORDER.length - 1, safeIdx + (greedy ? 1 : 0));
   return TIER_ORDER[idx];
 }
 
@@ -132,14 +151,14 @@ export function generateDraft(opts: {
   out.push({
     id: "opt-safe",
     kind: "module",
-    module: moduleOfFamily(family, draftTierFor(shipLevel, false), owned, offered),
+    module: moduleOfFamily(family, draftTierFor(shipLevel, false, owned), owned, offered),
   });
 
   // 2. Greedy: a tier above, paid for in hull.
   out.push({
     id: "opt-greedy",
     kind: "module",
-    module: moduleOfFamily(family, draftTierFor(shipLevel, true), owned, offered),
+    module: moduleOfFamily(family, draftTierFor(shipLevel, true, owned), owned, offered),
     hullCost: 12 + shipLevel * 2,
   });
 
@@ -166,7 +185,7 @@ export function generateDraft(opts: {
     out.push({
       id: "opt-third",
       kind: "module",
-      module: moduleOfFamily(family, draftTierFor(shipLevel, false), owned, offered),
+      module: moduleOfFamily(family, draftTierFor(shipLevel, false, owned), owned, offered),
     });
   }
 
