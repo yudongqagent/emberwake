@@ -178,7 +178,7 @@ h1, h2, h3 {
    * 放在 .btn 上而不是逐个界面修:这样以后新加的按钮自动达标。24px 是 WCAG
    * 2.5.8 的 AA 下限;推荐值是 44,但那会把战斗界面的密度撑散——密度本身也是
    * 可用性。所以基础保底 24,几个最要害的单独提到 32 以上。 */
-  min-height: 24px;
+  min-height: var(--tap-min, 24px);
   --btn-notch: 7px;
   font-family: var(--font-display);
   font-weight: 700;
@@ -467,4 +467,27 @@ h1, h2, h3 {
 ::-webkit-scrollbar-thumb {
   background: var(--line-bright);
   border-radius: 3px;
+}
+
+/* 触屏上把点击目标放大。
+ *
+ * 2026-09-01(/loop 第 82 轮)。WCAG 2.5.8(AA)的底线是 24×24,而 .btn 正好卡在
+ * 24——合规,但只是合规。Apple 的建议是 44、Google 是 48,理由在搜到的那条里:
+ * 指尖接触面 16–20mm,目标越小误触率越高(运动障碍用户高出 75%)。
+ *
+ * 实测 375×812 手机视口、战斗中量了每一个控件:**24 以下一个没有,44 以下 15 个
+ * 全中**——高度普遍 24~32,最小的「超载」只有 40×27。而这是个**实时**游戏:误触
+ * 意味着技能放空、或者在撤离充能到一半时把舵手指令拨掉(第 75 轮那条规则下,
+ * 那等于丢掉整次脱离)。
+ *
+ * 用 pointer: coarse 圈定,所以鼠标那一侧一个像素都不动。--tap-min 让个别确实
+ * 放不下的控件可以自己覆盖,而不是整条规则被绕过。 */
+@media (pointer: coarse) {
+  :root {
+    --tap-min: 44px;
+  }
+  button {
+    min-height: var(--tap-min);
+    min-width: var(--tap-min);
+  }
 }

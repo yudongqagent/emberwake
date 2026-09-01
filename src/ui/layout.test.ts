@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import COMBAT_SRC from "./screens/Combat.tsx?raw";
 import STATION_SRC from "./screens/StationPanel.tsx?raw";
@@ -64,14 +65,40 @@ describe("界面不能赌某种语言的文字长度", () => {
  * 取 24 而不是推荐的 44,是因为 44 会把战斗界面的密度撑散——密度本身也是可用性;
  * 几个最要害的单独提到 26/32/40。 */
 describe("触摸目标不能小于 WCAG 下限", () => {
-  // 注:.btn 上那条 24px 的保底写在 tokens.css 里,而 vitest 读不到 CSS 源码
-  // (?raw 和 glob 都返回空)。那一条是在浏览器里量的:375x812 下 75 个可点元素
-  // 全部达标。这里只断言单元测试真的读得到的东西——把读不到的东西写成断言,
-  // 等于一条永远为真的测试。
-  it("战斗里那几个裸 button 单独给了尺寸", () => {
-    // 它们不带 .btn 类,吃不到全局保底。
-    expect(COMBAT_SRC, "速度切换按钮没有最小高度").toMatch(/minWidth: 26, minHeight: 26/);
-    expect(COMBAT_SRC, "反应堆通道按钮没有最小高度").toMatch(/minHeight: 32/);
+  // 第 16 轮这里写着"vitest 读不到 CSS 源码(?raw 和 glob 都返回空)",于是那条
+  // 保底只能靠注释背书。其实 vitest 跑在 node 里,直接读文件就行——第 82 轮补上,
+  // 因为这一轮真正的规则就写在 CSS 里,靠注释背书的规则等于没有规则。
+  const TOKENS = readFileSync(new URL("./tokens.css", import.meta.url), "utf8");
+
+  it("鼠标那一侧的保底还在(24 = WCAG 2.5.8 的 AA 下限)", () => {
+    expect(TOKENS, ".btn 的最小高度没了").toMatch(/min-height: var\(--tap-min, 24px\)/);
+  });
+
+  /** 第 82 轮。第 16 轮量过一次并**刻意**选了 24 而不是 44,理由写在上面:
+   * "44 会把战斗界面的密度撑散——密度本身也是可用性"。那个理由是对的,但它是
+   * 针对**所有输入方式**一刀切的 44 说的。
+   *
+   * 这一轮在 375×812 手机视口上重量了战斗中的每一个控件:24 以下一个没有(第 16
+   * 轮那次修好了),**44 以下 15 个全中**——高度普遍 24~32,最小的「超载」40×27。
+   * 而这是实时战斗:误触意味着技能放空,或者在撤离充能到一半时把舵手指令拨掉
+   * (第 75 轮那条规则下等于丢掉整次脱离)。
+   *
+   * 所以不是推翻那个决定,是把它**按输入方式分开**:pointer: coarse 下抬到 44,
+   * 鼠标那一侧一个像素不动,密度的担心因此不成立。撑不撑得下是实测过的
+   * (见提交信息里的量测)。 */
+  it("触屏那一侧抬到 44,而且只在触屏", () => {
+    expect(TOKENS, "没有按输入方式区分").toMatch(/@media \(pointer: coarse\)/);
+    const coarse = TOKENS.slice(TOKENS.indexOf("@media (pointer: coarse)"));
+    expect(coarse, "触屏下没有把 --tap-min 抬上去").toMatch(/--tap-min:\s*44px/);
+    expect(coarse, "裸 button 吃不到这条保底").toMatch(/button\s*\{[^}]*min-height: var\(--tap-min\)/);
+  });
+
+  it("战斗里那几个裸 button 跟着同一个变量走,不写死", () => {
+    // 内联样式会盖过样式表,所以它们必须也读 --tap-min,否则触屏那条规则对它们无效。
+    expect(COMBAT_SRC, "速度切换按钮写死了尺寸,触屏抬不动它").toMatch(
+      /minWidth: "var\(--tap-min, 26px\)", minHeight: "var\(--tap-min, 26px\)"/,
+    );
+    expect(COMBAT_SRC, "反应堆通道按钮写死了高度").toMatch(/minHeight: "var\(--tap-min, 32px\)"/);
   });
 
   it("刻印购买按钮不靠内容长度撑开", () => {

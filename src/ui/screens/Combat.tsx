@@ -2930,7 +2930,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
                 title={t("combat.speedTitle")}
                 aria-pressed={combatSpeed === mult}
                 style={{
-                  minWidth: 26, minHeight: 26, padding: "0.15em 0.3em", borderRadius: 4, cursor: "pointer",
+                  // 内联值会盖过样式表,所以这里也走 --tap-min(触屏 44,鼠标 26)。
+                  minWidth: "var(--tap-min, 26px)", minHeight: "var(--tap-min, 26px)", padding: "0.15em 0.3em", borderRadius: 4, cursor: "pointer",
                   fontFamily: "var(--font-display)", fontSize: "0.6rem", fontWeight: 800,
                   border: `1px solid ${combatSpeed === mult ? "var(--cyan)" : "var(--line)"}`,
                   background: combatSpeed === mult ? "rgba(93,214,255,0.16)" : "transparent",
@@ -3422,7 +3423,7 @@ function ReactorBar({
           title={t(`reactor.${id}Title`)}
           style={{
             flex: "1 1 90px", display: "flex", alignItems: "center", gap: "0.35rem",
-            padding: "0.35em 0.45em", minHeight: 32, borderRadius: 4, cursor: disabled ? "default" : "pointer",
+            padding: "0.35em 0.45em", minHeight: "var(--tap-min, 32px)", borderRadius: 4, cursor: disabled ? "default" : "pointer",
             border: `1px solid ${alloc[id] > 2 ? color : "var(--line)"}`,
             background: alloc[id] > 2 ? "rgba(255,255,255,0.05)" : "transparent",
             color: alloc[id] > 2 ? color : "var(--text-dim)",
