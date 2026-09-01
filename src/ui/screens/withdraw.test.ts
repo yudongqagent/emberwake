@@ -64,7 +64,10 @@ describe("撤离必须是战斗的第三个出口", () => {
   it("代价和战败**形状不同**:撤离写回真实船体,战败按开打前砍半", () => {
     expect(STORE_SRC, "没有 resolveCombatWithdraw").toMatch(/export function resolveCombatWithdraw\(/);
     // 战败:开打前的值 × 0.5(封顶见下一条),受的伤不计。
-    expect(STORE_SRC).toMatch(/hullAfterDefeat\(s\.currentHp, effectiveMaxHull\(s\)\)/);
+    // 第 103 轮把这个表达式提成了变量(战败面板要显示 before → after),
+    // 所以钉的是「战败经过 hullAfterDefeat,喂的是开打前的船体」,不是某一种写法。
+    expect(STORE_SRC).toMatch(/hullAfter = hullAfterDefeat\(hullBefore, effectiveMaxHull\(flagship\.value\)\)/);
+    expect(STORE_SRC, "战败写回的不是 hullAfterDefeat 算出来的那个值").toMatch(/currentHp: hullAfter \}/);
     // 撤离:打完时的真实值。两者必须是两段不同的代码,否则"撤离"只是换个说法的死。
     const wd = STORE_SRC.slice(STORE_SRC.indexOf("export function resolveCombatWithdraw("));
     const body = wd.slice(0, wd.indexOf("\n}\n"));

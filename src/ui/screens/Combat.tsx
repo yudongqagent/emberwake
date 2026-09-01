@@ -5,7 +5,7 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSi
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { TURN_SECONDS, AUTO_FIRE_MIN_INTERVAL, RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, MAX_BLOCK_FRACTION, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, effectiveShipBlock, effectiveShipPowerDraw, resolveCombatVictory, resolveCombatDefeat, resolveCombatWithdraw, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
+import { state, flagship, effectiveShipBlock, effectiveShipPowerDraw, resolveCombatVictory, resolveCombatDefeat, type DefeatCost, resolveCombatWithdraw, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
 import { pactModifiers } from "../../data/pacts";
@@ -562,6 +562,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const [bonusDrop, setBonusDrop] = useState<ModuleInstance | null>(null);
   /** UI audit #9: the after-action figures, frozen at the moment the fight ends
    * (the ledger ref keeps mutating, and hull is combat-local). */
+  const [defeatCost, setDefeatCost] = useState<DefeatCost | null>(null);
   const [afterAction, setAfterAction] = useState<
     { sources: [string, number][]; total: number; taken: number; seconds: number } | null
   >(null);
@@ -2067,7 +2068,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       resolveCombatWithdraw(playerHullRef.current / (1 + hullBonusFraction));
     } else {
       playSfx("defeat");
-      resolveCombatDefeat();
+      // 战败的代价必须**报出来**:每个在编船员 -5 支持度、船体压到 25%。
+      // 这些数从状态写入前后实测,不按常数重算(已经到底的人不会再掉)。
+      setDefeatCost(resolveCombatDefeat());
     }
   }
 
@@ -3550,6 +3553,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           <div style={{ fontSize: "0.85rem", color: "var(--text-mid)", marginBottom: "0.5rem" }}>
             {t("combat.defeatBody")}
           </div>
+          {/* 战败真正拿走了什么。旁边的撤离面板早就把代价一条条写出来了,
+              战败这一份却只有一句"准备好再来一次"——玩家没法比较这两条路。 */}
+          {defeatCost && <DefeatCostPanel cost={defeatCost} />}
           {/* A loss is exactly when the breakdown is most useful — it's the
               feedback that turns "I died" into "my second weapon did nothing". */}
           {afterAction && afterAction.total > 0 && <AfterActionPanel data={afterAction} />}
@@ -3794,6 +3800,40 @@ function RiftStakesBar({ depth, haul, anomaly }: { depth: number; haul: Partial<
  * loadout's contribution stayed invisible, which is the single biggest reason
  * build identity didn't register. Sources are ranked and shown as shares of total
  * damage, so a build's real carry is obvious at a glance rather than inferred. */
+/** 战败的代价 — 实测值,不是按常数重算的。
+ *
+ * 2026-09-01(/loop 第 103 轮)。支持度那一条有**台阶**:掉一档,船员被动
+ * 1.0×→0.75×、冷却 1.0×→1.15×。跨档的人单独列出来,因为只有跨档才有机制后果。 */
+function DefeatCostPanel({ cost }: { cost: DefeatCost }) {
+  return (
+    <div
+      className="panel"
+      style={{ padding: "0.6rem 0.9rem", marginBottom: "0.75rem", textAlign: "left", borderColor: "var(--red)" }}
+    >
+      <div className="eyebrow" style={{ color: "var(--red)", marginBottom: "0.4rem" }}>{t("combat.defeatCost.title")}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-mid)" }}>
+        <span>{t("combat.defeatCost.hull")}</span>
+        <span style={{ color: "var(--text-hi)" }}>{cost.hullBefore} → {cost.hullAfter}</span>
+      </div>
+      {cost.crewAffected > 0 && (
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-mid)", marginTop: "0.3rem" }}>
+          <span>{t("combat.defeatCost.approval", { n: cost.crewAffected })}</span>
+          <span style={{ color: "var(--red)" }}>{cost.approvalDelta}</span>
+        </div>
+      )}
+      {cost.demoted.map((d) => (
+        <div key={d.defId} style={{ fontSize: "0.72rem", color: "var(--amber)", marginTop: "0.3rem" }}>
+          {t("combat.defeatCost.demoted", {
+            name: localizedCrewName(crewDefById(d.defId)),
+            from: t(`crew.approvalTier.${d.from}`),
+            to: t(`crew.approvalTier.${d.to}`),
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AfterActionPanel({
   data,
 }: {

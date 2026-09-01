@@ -34,7 +34,7 @@ import { CHOICE_REPUTATION, CHOICE_CINDER_TRUST, clampRep, repEffects, repTier, 
 import { canEvolve, evolveModule, evolutionPartnerMatch } from "../data/evolutions";
 import { sigilBonus, sigilUpgradeCost, sigilsForDive, type SigilNodeId } from "../data/sigils";
 import { setPermanentBonusSource } from "../engine/permanent";
-import { CREW_ALLEGIANCE, APPROVAL_FROM_REPUTATION, APPROVAL_PER_WIN, APPROVAL_PER_LOSS, clampApproval, approvalEffects, type ApprovalEffects } from "../data/crewApproval";
+import { CREW_ALLEGIANCE, APPROVAL_FROM_REPUTATION, APPROVAL_PER_WIN, APPROVAL_PER_LOSS, clampApproval, approvalEffects, approvalTier, type ApprovalTier, type ApprovalEffects } from "../data/crewApproval";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -1656,15 +1656,67 @@ export function hullAfterDefeat(preFightHull: number, maxHull: number): number {
   return Math.max(1, Math.round(Math.min(preFightHull * 0.5 + 1, maxHull * DEFEAT_HULL_CAP_FRACTION)));
 }
 
-export function resolveCombatDefeat() {
+/** 战败真正拿走的东西——**实测的**,不是按常数重算的。
+ *
+ * 2026-09-01(/loop 第 103 轮)。战败面板旁边就是撤离面板,而撤离那一份把代价
+ * 写得清清楚楚(没有战利品、没有经验、充能时挨的伤都留着)。战败那一份只有一句
+ * 「船体勉强能维持航行,准备好再来一次」——它一个代价都没提,可它扣的是:
+ *
+ *     每个在编船员 -5 支持度(赢一场才 +2,输一场抵掉两场半)
+ *     船体压到满血的 25%
+ *
+ * 支持度那一条最要命,因为它有**台阶**:掉一档,船员被动从 1.0× 变 0.75×、
+ * 冷却从 1.0× 变 1.15×;一路滑到「记恨」是 0.5× 和 1.35×。也就是说连输几场
+ * 之后船会实实在在变弱,而游戏从来没说过一个字。玩家只会觉得"这游戏莫名其妙"。
+ *
+ * 返回的数全部**从写入前后的状态里读**,不从常数推:已经是 0 的人不会再掉,
+ * 残血开打的人走的是砍半那条而不是 25% 那条。显示的必须等于生效的。 */
+export interface DefeatCost {
+  /** 实际掉了支持度的在编船员数(已经到底的人不算)。 */
+  crewAffected: number;
+  /** 实际的平均变化量,负数。没人受影响时为 0。 */
+  approvalDelta: number;
+  /** 真的跨过档位的人——这一条才有机制后果。 */
+  /** 存 defId,显示时再翻——和第 102 轮同一条规矩。 */
+  demoted: { defId: string; from: ApprovalTier; to: ApprovalTier }[];
+  hullBefore: number;
+  hullAfter: number;
+}
+
+export function resolveCombatDefeat(): DefeatCost {
+  const shipId = flagship.value?.id;
+  const before = state.value.crew.filter((c) => c.assignedShipId === shipId);
+  const beforeById = new Map(before.map((c) => [c.id, c.approval]));
+
   adjustAssignedCrewApproval(APPROVAL_PER_LOSS);
+
+  const demoted: DefeatCost["demoted"] = [];
+  let crewAffected = 0;
+  let totalDelta = 0;
+  for (const c of state.value.crew) {
+    const prev = beforeById.get(c.id);
+    if (prev === undefined || prev === c.approval) continue;
+    crewAffected++;
+    totalDelta += c.approval - prev;
+    const from = approvalTier(prev), to = approvalTier(c.approval);
+    if (from !== to) demoted.push({ defId: c.defId, from, to });
+  }
+
+  let hullBefore = 0, hullAfter = 0;
   if (flagship.value) {
+    hullBefore = flagship.value.currentHp;
+    hullAfter = hullAfterDefeat(hullBefore, effectiveMaxHull(flagship.value));
     const ships = state.value.ships.map((s) =>
-      s.id === flagship.value!.id ? { ...s, currentHp: hullAfterDefeat(s.currentHp, effectiveMaxHull(s)) } : s,
+      s.id === flagship.value!.id ? { ...s, currentHp: hullAfter } : s,
     );
     state.value = { ...state.value, ships };
   }
   persist();
+  return {
+    crewAffected,
+    approvalDelta: crewAffected ? Math.round(totalDelta / crewAffected) : 0,
+    demoted, hullBefore, hullAfter,
+  };
 }
 
 /** Section D (2026-08-24 player brief): boards and captures an enemy Ember
