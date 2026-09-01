@@ -1791,6 +1791,42 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     });
   }
 
+  /** 一次性跳一档距离——这是"重新定位"在现在的战斗模型里的意思。
+   *
+   * 2026-08-31(/loop 第 68 轮)。「闪避冲刺」的描述是"立即切换一档交战距离",
+   * 「相位跃迁」是"立即重新定位"。而两者的实现都只推了 arenaRef 里那个**渲染用
+   * 的精灵坐标**,一个字都没碰 rangeBandRef。
+   *
+   * 这是"舰桥指挥"重构留下的:那之前距离档位是由真实 x/y 距离推出来的
+   * (rangeBandFromDistance),推一下船确实会换档;重构之后档位变成独立状态,
+   * 而这两个技能没跟着改。rangeBandFromDistance 现在整个代码库里都不存在了,
+   * 所以那两下位移是纯粹的动画。
+   *
+   * 对「闪避冲刺」尤其要命:那是它的**全部**效果,而它挂在一个可以反复购买的
+   * 通用船员身上。
+   *
+   * 方向按玩家当前的舵手指令来——那是他已经在屏幕上表明的意图;"保持"时按这条船
+   * 最强那把武器擅长的档位走。 */
+  function jumpOneBand() {
+    const order = stanceOrderRef.current;
+    const idx = RANGE_ORDER.indexOf(rangeBandRef.current);
+    let delta = order === "close" ? -1 : order === "retreat" ? 1 : 0;
+    if (delta === 0) {
+      const best = autoFireWeapons
+        .slice()
+        .sort((a, b) => computeModuleDamage(b) - computeModuleDamage(a))[0];
+      const want = best ? moduleDefById(best.defId).rangeProfile : undefined;
+      const wantIdx = want && want !== "flat" ? RANGE_ORDER.indexOf(want as RangeBand) : idx;
+      delta = wantIdx < idx ? -1 : wantIdx > idx ? 1 : -1;
+    }
+    const next = Math.max(0, Math.min(RANGE_ORDER.length - 1, idx + delta));
+    if (next === idx) return;
+    rangeBandRef.current = RANGE_ORDER[next];
+    rangeProgressRef.current = 0;
+    setRangeBand(RANGE_ORDER[next]);
+    setRangeProgress(0);
+  }
+
   function finishCombat(result: "victory" | "defeat" | "captured", finalEnemies: EnemyState[]) {
     setStatus(result);
     setEnemies(finalEnemies);
@@ -2342,6 +2378,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         arenaRef.current.player.y = Math.max(20, Math.min(REF_H - 20, arenaRef.current.player.y + (dy / dist) * 140 * dir));
         spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 14, 110);
       }
+      jumpOneBand();
       pushLog(t("combat.log.evasiveBurn"));
       playSfx("jump");
     } else if (abilityId === "targetLock") {
@@ -2466,6 +2503,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       spawnRing(playerPos.x, playerPos.y, "#8ff3ff", 45);
       spawnBurst(playerPos.x, playerPos.y, "143,243,255", 12, 100);
       spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "143,243,255", 12, 100);
+      jumpOneBand();
       pushLog(t("combat.log.blinkVector"));
     } else if (namedDef.abilityId === "ravagerSalvo") {
       // Vanguard's Ravager Salvo: every equipped weapon fires at once, immediately,
