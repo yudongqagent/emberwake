@@ -309,7 +309,7 @@ export function RarityPips({ rarity, size = 6 }: { rarity: ShipRarity; size?: nu
 
 // --- Nav / chrome icons ---
 
-export function NavIcon({ name, size = 20, color = "currentColor" }: { name: "bridge" | "system" | "galaxy" | "ascension" | "fleet" | "modules" | "crew"; size?: number; color?: string }) {
+export function NavIcon({ name, size = 20, color = "currentColor" }: { name: "bridge" | "system" | "galaxy" | "ascension" | "fleet" | "modules" | "crew" | "log"; size?: number; color?: string }) {
   const paths: Record<string, preact.ComponentChildren> = {
     bridge: (
       <>
@@ -363,6 +363,14 @@ export function NavIcon({ name, size = 20, color = "currentColor" }: { name: "br
         <path d="M3 20 C3 15.5 5.5 13 9 13 C12.5 13 15 15.5 15 20" stroke={color} stroke-width="1.4" stroke-linecap="round" />
         <circle cx="17" cy="9" r="2.4" stroke={color} stroke-width="1.2" opacity="0.7" />
         <path d="M13.5 20 C13.5 17 15 15 17.5 15 C20 15 21.5 17 21.5 20" stroke={color} stroke-width="1.2" stroke-linecap="round" opacity="0.7" />
+      </>
+    ),
+    // 航行日志:一本摊开的册子,和名册(crew)那个人形区分得开。
+    log: (
+      <>
+        <path d="M12 6.5 C10 5 7 4.5 4 5 V18.5 C7 18 10 18.5 12 20" stroke={color} stroke-width="1.4" stroke-linejoin="round" fill="none" />
+        <path d="M12 6.5 C14 5 17 4.5 20 5 V18.5 C17 18 14 18.5 12 20" stroke={color} stroke-width="1.4" stroke-linejoin="round" fill="none" />
+        <path d="M12 6.5 V20" stroke={color} stroke-width="1.2" opacity="0.6" />
       </>
     ),
   };

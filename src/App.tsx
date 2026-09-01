@@ -40,6 +40,7 @@ import { hasExistingSave, createInitialState } from "./engine/save";
 import { t } from "./i18n/strings";
 import { language, setLanguage } from "./i18n/language";
 import { ShipConsole, type ConsolePanelId } from "./ui/components/ShipConsole";
+import { Log } from "./ui/screens/Log";
 import { ConsoleOverlay } from "./ui/components/ConsoleOverlay";
 
 /** Only the two WORLD views remain screens — the places the ship actually is.
@@ -53,6 +54,7 @@ const PANEL_ACCENT: Record<ConsolePanelId, string> = {
   modules: "var(--amber)",
   crew: "var(--violet)",
   fleet: "var(--text-mid)",
+  log: "var(--magenta)",
 };
 
 const PANEL_TITLE: Record<ConsolePanelId, string> = {
@@ -61,6 +63,7 @@ const PANEL_TITLE: Record<ConsolePanelId, string> = {
   modules: "nav.modules",
   crew: "crew.roster",
   fleet: "fleet.hangar",
+  log: "log.title",
 };
 
 interface PendingCombat {
@@ -516,6 +519,7 @@ export function App() {
               {panel === "fleet" && <Fleet />}
               {panel === "modules" && <Modules />}
               {panel === "crew" && <Crew />}
+              {panel === "log" && <Log />}
             </ConsoleOverlay>
           </ErrorBoundary>
         )}

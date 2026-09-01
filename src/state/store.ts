@@ -1090,6 +1090,45 @@ export function completeScene(scene: StoryScene) {
   persist();
 }
 
+/** 航行日志:玩家已经看过的每一幕,按顺序,连同他当时做的选择。
+ *
+ * 2026-09-01(/loop 第 83 轮)。这个游戏自称"story-driven",有 46 幕戏、六幕结构、
+ * 一个会写进声望的抉择系统——而且**每一幕上都有一个「跳过本节」按钮**。
+ * 演完就没了:没有日志、没有回看、没有任何地方能查"我当时选了什么"。
+ *
+ * 玩家跳过一幕(或者隔了两天回来)之后,那段剧情对他就永久消失了,而后面几幕
+ * 还在引用它。搜到的说法正对着这一条:玩家跳掉剧情,然后抱怨看不懂剧情——
+ * 而能不能补回来完全取决于设计者有没有留那扇门。
+ *
+ * 整份日志都是从**已有的 flag 推出来**的,不加任何存档字段:
+ *   看过没有 —— scene.hiddenAfterFlag 是否已置位
+ *   选了什么 —— 哪个选项的 setFlags 已置位
+ * 所以老存档一进来就有完整的日志,不需要迁移。 */
+export interface LogEntry {
+  scene: StoryScene;
+  chapter: string;
+  chapterTitle: string;
+  /** 玩家当时选的那个选项的原文;这一幕没有选择时为 null。 */
+  choice: string | null;
+}
+
+export function storyLog(): LogEntry[] {
+  const flags = state.value.flags;
+  const out: LogEntry[] = [];
+  for (const raw of STORY_SCENES) {
+    if (!flags[raw.hiddenAfterFlag]) continue;
+    const scene = localizedScene(raw);
+    const chosen = scene.choices?.find((c) => (c.setFlags ?? []).some((f) => flags[f]));
+    out.push({
+      scene,
+      chapter: scene.chapter,
+      chapterTitle: scene.chapterTitle,
+      choice: chosen?.label ?? null,
+    });
+  }
+  return out;
+}
+
 // --- Next objective (drives the "what do I do next" waypoint UI) ---
 
 export interface Objective {

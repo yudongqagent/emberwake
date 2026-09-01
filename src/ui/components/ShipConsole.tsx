@@ -2,7 +2,7 @@ import { NavIcon } from "./Icons";
 import { playSfx } from "../../audio/engine";
 import { t } from "../../i18n/strings";
 
-export type ConsolePanelId = "bridge" | "ascension" | "fleet" | "modules" | "crew";
+export type ConsolePanelId = "bridge" | "ascension" | "fleet" | "modules" | "crew" | "log";
 
 const CONSOLE_ITEMS: { id: ConsolePanelId; labelKey: string; color: string }[] = [
   { id: "bridge", labelKey: "nav.bridge", color: "var(--cyan)" },
@@ -10,6 +10,7 @@ const CONSOLE_ITEMS: { id: ConsolePanelId; labelKey: string; color: string }[] =
   { id: "modules", labelKey: "nav.modules", color: "var(--amber)" },
   { id: "crew", labelKey: "nav.crew", color: "var(--violet)" },
   { id: "fleet", labelKey: "nav.fleet", color: "var(--text-mid)" },
+  { id: "log", labelKey: "nav.log", color: "var(--magenta)" },
 ];
 
 /** Player direction 2026-08-24: "把最下面的导航栏去掉，这不是一个网页，是一个完整
