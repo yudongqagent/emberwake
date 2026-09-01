@@ -203,6 +203,22 @@ function TradeTab() {
       {([
         ["salvage", "alloy", 30, alloyOut, res.salvage] as const,
         ["alloy", "salvage", 10, salvageOut, res.alloy] as const,
+        // 源点也得有个出口。
+        //
+        // 2026-09-01(/loop 第 114 轮)。源点全代码库**只有两个消耗口**,而且都在
+        // 制造工坊里(刷新 + 购买),偏偏工坊被 MARKET_MAX_RARITY 钉死在 mk3。
+        // 而 mk4/mk5 只在裂隙里出——那正是裂隙存在的理由,也是它按钮上写的卖点。
+        // 于是任何一个下过裂隙的玩家,工坊从此只卖比他手里更差的东西,源点就变成
+        // 一堆只进不出的数字。实测我自己的存档:手上 23 件 mk5,货架上四件全是
+        // 负增益,而源点存了 2340。
+        //
+        // 搜到的说法就是这个:"没有花掉的理由,玩家就会囤,然后失去兴趣"。
+        // 这个仓库自己也踩过同一类——招募页那条注释还记着"合金除了倒卖之外
+        // 没有任何消耗口"(2026-08 playtest 的 Issue #2)。
+        //
+        // 汇率按裂隙掉落的比例定:深度 1 一波给 90 源点、45 合金,正好 2:1。
+        // 只做单向:囤积的是源点,给它一个出口就够了,再开一条进来的路只是噪音。
+        ["sourcePoints", "alloy", 20, alloyOut, res.sourcePoints] as const,
       ]).map(([from, to, unitCost, unitGain, held]) => {
         const units = Math.max(1, Math.floor((held * 0.1) / unitCost));
         const cost = unitCost * units;
