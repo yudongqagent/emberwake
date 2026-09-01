@@ -46,8 +46,10 @@ describe("界面不能赌某种语言的文字长度", () => {
 
   it("Combat 的读数用 minWidth 而不是 width", () => {
     // 这一条单独钉,因为功率/连击那两处正是这次被切的。
+    // 第 90 轮功率读数从「容量」变成「用量/容量」,更长了,所以 64 → 96;
+    // 钉的是"用 minWidth 且给得下",不是某个具体像素。
     expect(COMBAT_SRC).toMatch(/minWidth: 62/);
-    expect(COMBAT_SRC).toMatch(/minWidth: 64/);
+    expect(COMBAT_SRC, '功率读数的宽度不够放「用量/容量」').toMatch(/minWidth: 9[0-9]/);
   });
 });
 

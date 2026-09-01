@@ -3004,9 +3004,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
             className="eyebrow"
             // 同上。英文「Power 256」要 89px,原来给 64px —— 被切掉四分之一,
             // 而功率在这个游戏里是真实预算(超载会拉长武器冷却),那个数字不能缺。
-            style={{ flex: "none", minWidth: 64, textAlign: "right", color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
+            // 第 90 轮又宽了一档:现在写的是「用量/容量」,比原来长。
+            style={{ flex: "none", minWidth: 96, textAlign: "right", color: powerStrain > 1 ? "var(--red)" : "var(--text-dim)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
           >
-            {t("combat.power")} {capacity}
+            {/* 写**用了多少 / 有多少**,不是只写有多少。
+                2026-09-01(第 90 轮):上面那条注释自己就说了"功率是真实预算,超载
+                会拉长武器冷却",可屏幕上只有分母。而超载的惩罚很重——用该层最耗电
+                的模组把槽位填满,巡洋舰超 16%、无畏舰超 53%,冷却分别 ×1.24 和
+                ×1.79(封顶 ×2.5,相当于少掉六成输出)。玩家在战斗里只看得到"枪很慢",
+                看不到为什么。模组页在出击前是会警告的,但改装之后进了战斗就没有
+                第二次提醒了。 */}
+            {t("combat.power")} {powerDrawUsed}/{capacity}
+            {powerStrain > 1 && (
+              <span style={{ marginLeft: "0.35em" }}>
+                {t("combat.powerStrain", { pct: Math.round((powerStrain - 1) * 100) })}
+              </span>
+            )}
           </span>
           {/* Speed control — sits in the vitals bar because it's a viewing
               preference, not a tactical order, and shouldn't compete with the
