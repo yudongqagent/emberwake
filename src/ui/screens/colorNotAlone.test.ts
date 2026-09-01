@@ -3,6 +3,7 @@ import { rangeProfileMultiplier, rangeFitTone } from "../../engine/combat";
 import COMBAT_SRC from "./Combat.tsx?raw";
 import MODULESTATS_SRC from "../components/ModuleStats.tsx?raw";
 import SYSTEMVIEW_SRC from "./SystemView.tsx?raw";
+import STRINGS_SRC from "../../i18n/strings.ts?raw";
 
 /** 关键信息不能只由颜色承载。
  *
@@ -53,10 +54,18 @@ describe("关键信息不能只由颜色承载", () => {
     expect(MODULESTATS_SRC).toMatch(/\+\{localizedTrait/);
   });
 
-  it("敌人角色保留字形,不只是配色", () => {
-    expect(COMBAT_SRC).toMatch(/✚ MENDER/);
-    expect(COMBAT_SRC).toMatch(/◈ ANCHOR/);
-    expect(COMBAT_SRC).toMatch(/◎ SIEGE/);
+  /** 第 74 轮把这三个徽章搬进了 i18n(它们原来是写死在 canvas 上的英文),
+   * 所以守卫跟着搬:查的是**两种语言里都带字形**,而不是某个文件里的字面量。 */
+  it("敌人角色保留字形,不只是配色——中英都要有", () => {
+    for (const lang of ["EN", "ZH"] as const) {
+      const seg = STRINGS_SRC.slice(STRINGS_SRC.indexOf(`const ${lang}: StringTable = {`));
+      for (const [key, glyph] of [["mender", "✚"], ["anchor", "◈"], ["siege", "◎"]] as const) {
+        const line = seg.match(new RegExp(`"combat\\.badge\\.${key}": "([^"]*)"`))?.[1] ?? "";
+        expect(line, `${lang} 缺少 combat.badge.${key}`).toBeTruthy();
+        expect(line, `${lang} 的 ${key} 徽章丢了字形,只剩配色可分`).toContain(glyph);
+      }
+    }
+    expect(COMBAT_SRC, "战斗没有从文案表取徽章").toMatch(/t\("combat\.badge\.mender"\)/);
   });
 
   it("交战前的威胁读数带百分比,不只是红黄绿", () => {

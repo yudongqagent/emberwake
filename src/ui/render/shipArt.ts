@@ -1,3 +1,4 @@
+import { t } from "../../i18n/strings";
 import type { FactionId } from "../../data/types";
 
 export const FACTION_HULL_COLOR: Record<string, string> = {
@@ -614,7 +615,7 @@ export function drawAsteroidRocks(ctx: CanvasRenderingContext2D, poiId: string, 
     ctx.fillStyle = "rgba(160,180,200,0.55)";
     ctx.font = "10px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("recharging…", 0, 44);
+    ctx.fillText(t("combat.badge.recharging"), 0, 44);
   }
   ctx.restore();
 }

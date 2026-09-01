@@ -3989,7 +3989,7 @@ function drawEnemyShip(
     ctx.textAlign = "center";
     ctx.shadowColor = "#b478ff";
     ctx.shadowBlur = 8;
-    ctx.fillText("PHASED", pos.x, pos.y + 62);
+    ctx.fillText(t("combat.badge.phased"), pos.x, pos.y + 62);
     ctx.restore();
   }
   if (enemy.charging) {
@@ -3999,7 +3999,7 @@ function drawEnemyShip(
     ctx.textAlign = "center";
     ctx.shadowColor = "#ff5c5c";
     ctx.shadowBlur = 8;
-    ctx.fillText("⚠ CHARGING", pos.x, pos.y + 62);
+    ctx.fillText(t("combat.badge.charging"), pos.x, pos.y + 62);
     ctx.restore();
   }
   if (enemy.stunned) {
@@ -4007,7 +4007,7 @@ function drawEnemyShip(
     ctx.fillStyle = "#8ff3ff";
     ctx.font = "bold 11px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("DISABLED", pos.x, pos.y + 62);
+    ctx.fillText(t("combat.badge.disabled"), pos.x, pos.y + 62);
     ctx.restore();
   }
 
@@ -4024,7 +4024,7 @@ function drawEnemyShip(
     ctx.shadowColor = roleColor;
     ctx.shadowBlur = 8;
     ctx.fillText(
-      enemy.role === "mender" ? "✚ MENDER" : enemy.role === "anchor" ? "◈ ANCHOR" : "◎ SIEGE",
+      enemy.role === "mender" ? t("combat.badge.mender") : enemy.role === "anchor" ? t("combat.badge.anchor") : t("combat.badge.siege"),
       pos.x,
       pos.y - 46,
     );
