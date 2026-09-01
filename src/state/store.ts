@@ -476,6 +476,28 @@ export function isPoiAvailable(poi: Poi): boolean {
  *
  * 位置用星系 id 做哈希算出来,所以同一个星系里猎杀队永远在同一个地方——玩家能
  * 记住"那边有埋伏",而不是每次进来都被随机糊一脸。 */
+/** 一个星系里**现在还能去做**的东西,给星图用。
+ *
+ * 2026-09-01(/loop 第 95 轮)。全图 19 个星系、21 条悬赏,而星图上每个星系只画了
+ * 位置和控制方——**它不告诉你那里有什么**。找悬赏的唯一办法是逐个跳进去看接触
+ * 列表。搜到的说法正对着这一条:游戏往往不告诉玩家错过了什么,于是玩家仅仅因为
+ * "没撞见"就漏掉了内容;而悬赏板之所以好用,就是因为它把所有可选项一次摊开。
+ *
+ * 只数**当前真的可去**的:清掉还没重生的、要 flag 没解锁的都不算——否则星图会
+ * 承诺一件到了那儿并不存在的事。 */
+export function systemContents(system: SystemDef, galaxy: GalaxyDef): { bounties: number; station: boolean; rift: boolean } {
+  let bounties = 0;
+  let station = false;
+  let rift = false;
+  for (const p of systemPois(system, galaxy)) {
+    if (!isPoiAvailable(p)) continue;
+    if ((p.data as { bounty?: boolean } | undefined)?.bounty) bounties++;
+    if (p.kind === "station") station = true;
+    if (p.kind === "riftPocket") rift = true;
+  }
+  return { bounties, station, rift };
+}
+
 export function systemPois(system: SystemDef, galaxy: GalaxyDef): Poi[] {
   const f = system.controllingFaction;
   if (!f || !isDiplomatic(f) || !effectsFor(f).huntsYou) return system.pois;

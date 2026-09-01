@@ -425,6 +425,9 @@ const EN: StringTable = {
   "objective.level": "Reach level {n}",
   "objective.goto": "Reach {poi}",
   "galaxy.hintMulti": "Tap any discovered system to jump there directly.",
+  "galaxy.hasBounties": "{n} bounty",
+  "galaxy.hasStation": "station",
+  "galaxy.hasRift": "rift",
   "galaxy.hintSingle": "More galaxies open as the campaign progresses.",
 
   // --- Station ---
@@ -1070,6 +1073,9 @@ const ZH: StringTable = {
   "objective.level": "升到 {n} 级",
   "objective.goto": "前往{poi}",
   "galaxy.hintMulti": "点击任意已发现的星系即可直接跳转。",
+  "galaxy.hasBounties": "悬赏 {n}",
+  "galaxy.hasStation": "空间站",
+  "galaxy.hasRift": "裂隙",
   "galaxy.hintSingle": "随着战役推进将解锁更多星系。",
 
   // --- 空间站 ---

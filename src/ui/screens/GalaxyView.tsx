@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect } from "preact/hooks";
-import { unlockedGalaxies, currentGalaxy, state, travelToSystem, getNextObjective } from "../../state/store";
+import { unlockedGalaxies, currentGalaxy, state, travelToSystem, getNextObjective, systemContents } from "../../state/store";
 import { playSfx } from "../../audio/engine";
 import { FACTION_HULL_COLOR } from "../render/shipArt";
 import { t } from "../../i18n/strings";
@@ -308,6 +308,24 @@ export function GalaxyView({ onNavigate }: { onNavigate: (screen: string) => voi
                 <text y={40} text-anchor="middle" fill={isObjective ? "var(--amber)" : "var(--text-hi)"} font-size={16} font-family="var(--font-display)">
                   {localizedSystemName(sys)}
                 </text>
+                {/* 这个星系里现在有什么。
+                    星图原来只画位置和控制方,于是找悬赏的唯一办法是逐个跳进去看
+                    ——19 个星系、21 条悬赏,全靠撞。写成文字而不是只用图标:
+                    "关键信息不能只由颜色/字形承载"(第 71 轮),而且触屏上没有悬停
+                    可以补说明(第 81 轮)。 */}
+                {(() => {
+                  const c = systemContents(sys, galaxy);
+                  const bits: string[] = [];
+                  if (c.bounties > 0) bits.push(t("galaxy.hasBounties", { n: c.bounties }));
+                  if (c.station) bits.push(t("galaxy.hasStation"));
+                  if (c.rift) bits.push(t("galaxy.hasRift"));
+                  if (bits.length === 0) return null;
+                  return (
+                    <text y={57} text-anchor="middle" fill="var(--text-mid)" font-size={11}>
+                      {bits.join(" · ")}
+                    </text>
+                  );
+                })()}
               </g>
             );
           })}
