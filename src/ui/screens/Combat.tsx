@@ -618,6 +618,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const [boardProgress, setBoardProgress] = useState(0);
   const [withdrawProgress, setWithdrawProgress] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
+  /** 最后一帧画出来的时刻。用来和 document.hidden 交叉验证——见心跳里的 shouldPause。 */
+  const lastFrameAtRef = useRef(0);
 
   /** 说明面板的条目。**只列当前真的解锁了、屏幕上真的有的控件**——没给你的东西
    * 不该出现在说明里(和 combatUnlocks 那套渐进解锁同一条规矩)。
@@ -981,6 +983,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   useEffect(() => {
     const id = setInterval(() => {
       try {
+        // 看不见的时候不推进战斗。
+        //
+        // 2026-09-01(/loop 第 89 轮)。搜到的原话:"网页游戏在标签页非活动时应当
+        // 暂停,以免玩家丢失进度或错过关键事件"。而这里是反过来的:
+        //
+        //   - combatTick 的 dt 是**写死的** COMBAT_TICK_SEC(0.15),不看真实经过时间
+        //   - 实测(隐藏的浏览器面板):150ms 定时器照样 6.7 次/秒,**完全没有被节流**
+        //     → 21.2 秒真实时间里,战斗推进了 21.1 秒
+        //
+        // 也就是说切走去干别的,战斗照打;而一场仗实测只有 8~12 秒,切走十几秒
+        // 回来就可能已经是战败画面。第 84 轮把画面循环换成 rAF 之后这个不对称
+        // 更刺眼了:**画面停了,模拟没停**——玩家什么都没看见就输了。
+        //
+        // 只挡逻辑,不动画面(画面本来就跟着 rAF 停)。回到前台自然接着走:
+        // dt 是定值,所以不会因为暂停过而跳一大步。
+        if (shouldPause()) return;
         combatTick();
       } catch (err) {
         reportError("Combat.combatTick", err);
@@ -1538,6 +1556,22 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
    * elapsed time, and advances each enemy's independent attack clock — a boss's
    * charge windup included — dispatching enemyAttack() only for the enemy whose
    * own timer just expired, never all of them at once. */
+  /** 该不该停下来。
+   *
+   * 两个**互相独立**的信号都指向"没人在看"才停:
+   *   - document.hidden 说页面不可见
+   *   - 而且最近 500ms 内一帧都没画出来(rAF 没在推进)
+   *
+   * 只看 document.hidden 是不够安全的:某些嵌入/合成的环境会一直报 hidden,
+   * 而画面其实照常呈现——只信它,战斗会在那种环境里**永久卡死**。
+   * (这个仓库的浏览器预览面板正是这样一个环境,所以这不是假想的情况。)
+   * 反过来,只看帧也不行:后台标签页本来就不出帧,那和"暂停"分不清。
+   *
+   * 两个都成立时才停,于是任何一个信号出错都不会把游戏锁住。 */
+  function shouldPause(): boolean {
+    return document.hidden && Date.now() - lastFrameAtRef.current > 500;
+  }
+
   function combatTick() {
     if (statusRef.current !== "active") return;
     const dt = COMBAT_TICK_SEC * combatSpeedRef.current;
@@ -2873,6 +2907,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     // 这两处才是例外。
     let raf = 0;
     const frame = (now: number) => {
+      lastFrameAtRef.current = Date.now();
       try {
         step(now);
       } catch (err) {
