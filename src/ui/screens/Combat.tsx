@@ -24,6 +24,7 @@ import { drawPlayerHull, drawEnemyHull, drawExplosionRing, drawFieldRing } from 
 import { drawWeaponVfx, weaponVfxForFamily, weaponVfxForFaction, type WeaponVfx } from "../render/weaponVfx";
 import type { RiftAnomalyId } from "../../data/rift";
 import { reportError } from "../../engine/errorReporting";
+import { getSettings } from "../../engine/settings";
 import { t } from "../../i18n/strings";
 import { localizedModuleName, localizedCrewActive, localizedNamedShipActive, localizedEncounterName, localizedEnemyName } from "../../i18n/data";
 
@@ -747,8 +748,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
    * beat (motion visibly freezes) without touching the setTimeout-driven combat
    * resolution at all. */
   const hitStopUntilRef = useRef(0);
+  /** 「减少动态效果」这个开关原来是死的(第 72 轮)——设置页写着"关闭画面震动、
+   * 顿帧与闪光",而 reduceMotion 在整个代码库里没有任何消费方。三处运动源现在
+   * 统一走这个闸。 */
+  const motionOff = getSettings().reduceMotion;
   function triggerHitStop(ms: number) {
+    if (motionOff) return;
     hitStopUntilRef.current = Math.max(hitStopUntilRef.current, performance.now() + ms);
+  }
+  /** 画面震动的唯一入口。写 shakeRef 的地方全部改走这里。 */
+  function shake(amount: number) {
+    if (motionOff) return;
+    shakeRef.current = Math.max(shakeRef.current, amount);
   }
   const vpRef = useRef<ReturnType<typeof attachResponsiveCanvas> | null>(null);
   const enemiesRef = useRef(enemies);
@@ -850,7 +861,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       explosionsRef.current.push({ x: pos.x, y: pos.y, start: performance.now() });
     }
     playSfx("alarm");
-    shakeRef.current = 14;
+    shake(14);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enemies]);
 
@@ -1307,7 +1318,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         // 挡下来和硬吃一发,听起来必须不一样——这是玩家判断自己按对没按对的唯一
         // 即时信号。原来两种情况共用一个 "hit"。
         playSfx(braced ? "braced" : "hit");
-        setPlayerShakeToken((t) => t + 1);
+        if (!motionOff) setPlayerShakeToken((t) => t + 1);
         triggerHitStop(charged ? 100 : 45);
         hitPulseRef.current.player = performance.now();
         const hitKey = charged ? (chargeDodged ? "combat.log.enemyHitChargedDodged" : "combat.log.enemyHitCharged") : "combat.log.enemyHitPlain";
@@ -1365,7 +1376,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           lastStandUsedRef.current = true;
           pushLog(t("combat.log.lastStand"));
           playSfx("alarm");
-          shakeRef.current = 20;
+          shake(20);
           triggerHitStop(140);
           return 1;
         }
@@ -1420,7 +1431,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     });
     pushLog(t("combat.log.choralStrike", { dmg: total }));
     playSfx("alarm");
-    shakeRef.current = 18;
+    shake(18);
     triggerHitStop(110);
     setChoralResonance(0);
     setTimeout(() => {
@@ -1858,9 +1869,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       // screen, and shake — the kill you actually earned should register before the
       // rewards do.
       triggerHitStop(420);
-      shakeRef.current = 26;
-      setVictoryFlash(true);
-      setTimeout(() => setVictoryFlash(false), 620);
+      shake(26);
+      if (!motionOff) {
+        setVictoryFlash(true);
+        setTimeout(() => setVictoryFlash(false), 620);
+      }
       // Convert the combat-local (hullBonus-scaled) playerHull back to the ship's
       // own terms before persisting — see resolveCombatVictory's endingHullPoints.
       const realEndingHull = playerHull / (1 + hullBonusFraction);
@@ -1879,7 +1892,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         setLevelUpPowerGain(powerAfter - powerBefore);
         setLevelUp(outcome.newLevel);
         playSfx("levelUp");
-        shakeRef.current = 10;
+        shake(10);
       }
     } else {
       playSfx("defeat");
@@ -2023,7 +2036,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           hitPulseRef.current.enemy[targetIdx] = performance.now();
           // 暴击原来只有画面变化(更大的爆点、更长的顿帧、屏幕抖动),声音和普通
           // 命中一样是那一发 laser。于是"打出暴击"这件事在听感上不存在。
-          if (result.crit) { setPlayerShakeToken((t) => t + 1); playSfx("crit"); }
+          if (result.crit) { if (!motionOff) setPlayerShakeToken((t) => t + 1); playSfx("crit"); }
         }
       }, weaponWeight, weaponVfx);
       playSfx("laser");
@@ -2485,7 +2498,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       spawnRing(playerPos.x, playerPos.y, "#ffe25d", 85);
       spawnBurst(playerPos.x, playerPos.y, "255,226,93", 22, 130);
       hitPulseRef.current.player = performance.now();
-      shakeRef.current = Math.max(shakeRef.current, 8);
+      shake(8);
       pushLog(t("combat.log.overdriveArm"));
     } else if (namedDef.abilityId === "blinkVector") {
       // Interceptor's Blink Vector: reposition + a flat evasion buff — the only
@@ -2611,7 +2624,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     });
     pushLog(t("combat.log.emberNovaFire", { dmg: novaDamage }));
     playSfx("explosion");
-    shakeRef.current = 22;
+    shake(22);
     triggerHitStop(140);
     setEmberNovaCharge(0);
     setEnemies(nextEnemies);
@@ -2742,7 +2755,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   }, []);
 
   useEffect(() => {
-    if (playerShakeToken > 0) shakeRef.current = 10;
+    if (playerShakeToken > 0) shake(10);
   }, [playerShakeToken]);
 
   const novaReady = emberNovaCharge >= EMBER_NOVA_MAX;
