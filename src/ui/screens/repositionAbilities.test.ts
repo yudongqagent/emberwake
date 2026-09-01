@@ -26,7 +26,9 @@ describe("重新定位类技能要真的改变距离档位", () => {
     const helm = CREW_DEFS.find((c) => c.id === "recruitHelm")!;
     expect(helm.active, "舵手的技能描述变了").toMatch(/range band/i);
     const interceptor = HULL_CLASS_ABILITIES.find((h) => h.abilityId === "blinkVector");
-    expect(interceptor?.active, "拦截舰的技能描述变了").toMatch(/reposition/i);
+    // 查的是**意图**(承诺改变距离),不是某个措辞:第 69 轮把两条文案都改成了带数字的
+    // 版本,"reposition" 这个词没了,而承诺没变。守卫盯措辞就会在文案变好时报假警。
+    expect(interceptor?.active, "拦截舰的技能描述变了").toMatch(/range band/i);
   });
 
   /** 只查**调用**,不查这个词:实现里的说明注释本来就要提到它,
