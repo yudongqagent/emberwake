@@ -533,6 +533,23 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const [cooldowns, setCooldowns] = useState<Record<string, number>>({});
   const [crewCooldowns, setCrewCooldowns] = useState<Record<string, number>>({});
   const [targetIdx, setTargetIdx] = useState(0);
+
+  /** 换打哪一艘,是每场多敌遭遇里最核心的战术决定——而它此前**只能点画布**。
+   *
+   * 2026-09-01(/loop 第 85 轮)。setTargetIdx 全代码库只有三处调用:画布上的
+   * pointerdown、目标死了自动换、接舷时自动改打护卫。也就是说键盘用户根本
+   * 换不了目标(WCAG 2.1.1「键盘可操作」是 A 级,最基本的一条),而画布上既没有
+   * tabindex 也没有任何 DOM 控件。
+   *
+   * 补两条路,都不动原来的点击:目标列表做成按钮(Tab 能到、读屏能念),
+   * 外加数字键 1–9 直接切——实时战斗里按键比 Tab 到第 N 个更跟得上。 */
+  function selectTarget(i: number) {
+    const list = enemiesRef.current;
+    if (statusRef.current !== "active") return;
+    if (!list[i] || list[i].hull <= 0) return;
+    setTargetIdx(i);
+    playSfx("click");
+  }
   const [log, setLog] = useState<string[]>([t("combat.log.contact", { name: localizedEncounterName(encounter) })]);
   const [status, setStatus] = useState<"active" | "victory" | "defeat" | "captured" | "withdrawn">("active");
   const [popups, setPopups] = useState<Popup[]>([]);
@@ -939,6 +956,20 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerHull, status]);
+
+  // 数字键 1–9 切目标。挂在 window 上而不是画布上:画布不可聚焦,而这条路存在的
+  // 全部意义就是不需要指针。
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const n = Number(e.key);
+      if (!Number.isInteger(n) || n < 1 || n > 9) return;
+      selectTarget(n - 1);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Issue #8: the real-time heartbeat — separate from the 16ms canvas/physics loop
   // below since cooldown/debuff decay doesn't need per-frame precision.
@@ -3019,6 +3050,30 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
                 <span>{t("combat.hostilesLeft", { count: enemies.filter((e) => e.hull > 0).length })}</span>
               )}
             </div>
+            {/* 换目标的 DOM 入口。画布点击照旧,这里是键盘和读屏唯一的那条路
+                (数字键 1–9 同样可以切)。只列还活着的。 */}
+            {enemies.filter((e) => e.hull > 0).length > 1 && (
+              <div
+                role="group"
+                aria-label={t("combat.targetPick")}
+                style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.4rem" }}
+              >
+                {enemies.map((e, i) =>
+                  e.hull <= 0 ? null : (
+                    <button
+                      key={i}
+                      className={`btn ${i === targetIdx ? "primary" : "ghost"}`}
+                      style={{ fontSize: "0.6rem", padding: "0.25em 0.5em", flex: "none" }}
+                      aria-pressed={i === targetIdx}
+                      onClick={() => selectTarget(i)}
+                      title={`${i + 1} · ${e.name}`}
+                    >
+                      {i + 1}
+                    </button>
+                  ),
+                )}
+              </div>
+            )}
             {/* The role, spelled out. The canvas badge says WHAT it is; this says
                 why you should care, because "MENDER" means nothing the first time
                 you see it. */}

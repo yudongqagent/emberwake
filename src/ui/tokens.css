@@ -482,6 +482,29 @@ h1, h2, h3 {
  *
  * 用 pointer: coarse 圈定,所以鼠标那一侧一个像素都不动。--tap-min 让个别确实
  * 放不下的控件可以自己覆盖,而不是整条规则被绕过。 */
+/* 键盘焦点必须看得见。
+ *
+ * 2026-09-01(/loop 第 85 轮)。整个样式表里一条 :focus 规则都没有,而 .btn 用了
+ * clip-path —— 浏览器默认的焦点环会被 clip-path 沿着按钮自身的边裁掉,缺角那块
+ * 直接没了。实测 Tab 过去:outline-style 确实是 auto(默认环在),但它和按钮边框
+ * 重合、只有 1px、还被裁,在这个深色高对比的背景上基本读不出来。
+ *
+ * WCAG 2.4.7「焦点可见」是 AA 级,和第 82 轮引的 2.5.8 同一档。
+ *
+ * 用 box-shadow 而不是 outline:box-shadow 画在元素自己的绘制盒里,**不会被
+ * clip-path 裁掉**;再配一层内发光,保证在亮底和暗底上都读得出来。
+ * 只在 :focus-visible 上给,所以鼠标点击不会平白多出一圈。 */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.btn:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 2px var(--cyan),
+    inset 0 0 10px rgba(75, 232, 255, 0.55);
+}
+
 @media (pointer: coarse) {
   :root {
     --tap-min: 44px;
