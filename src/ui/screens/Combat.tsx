@@ -644,7 +644,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       out.push({ name: localizedCrewName(def), desc: localizedCrewActive(def) });
     }
     out.push({ name: t("combat.emberNova"), desc: t("combat.emberNovaTitle") });
-    if (rift) out.push({ name: t(`rift.anomaly.${rift.anomaly}`), desc: t(`rift.anomaly.${rift.anomaly}.desc`) });
+    // "none" 没有名字也没有说明(anomalyCopy.test.ts 里刻意排除的),而这里原来
+    // 不设防——浅层深潜最常掷到的就是它,于是说明面板上会直接显示 raw key。
+    // 上面那条 RiftStakesBar 一直挡着,这一处是第 81 轮我自己漏的。
+    if (rift && rift.anomaly !== "none") {
+      out.push({ name: t(`rift.anomaly.${rift.anomaly}`), desc: t(`rift.anomaly.${rift.anomaly}.desc`) });
+    }
     return out;
   }, [rift, assignedCrew.length, autoFireWeapons.length]);
   const [comboCount, setComboCount] = useState(0);
