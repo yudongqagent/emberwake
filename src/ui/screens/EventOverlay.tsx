@@ -5,6 +5,7 @@ import { language } from "../../i18n/language";
 import { t } from "../../i18n/strings";
 import { resourceLabel } from "../components/Icons";
 import type { ResourceType } from "../../data/types";
+import { effectiveEventOutcome } from "../../state/store";
 
 /** 星图事件的面板。
  *
@@ -101,12 +102,18 @@ export function EventOverlay({
  * 散文说的是"发生了什么",这一行说的是"你得到/失去了什么"——两者分开,免得玩家
  * 要从一段文学描写里去猜自己的资源变了多少。 */
 function OutcomeSummary({ outcome }: { outcome: EventOutcome }) {
+  // 显示夹过的那一份,不是 data 里声明的那一份。
+  //
+  // 第 104 轮实测:全新开局手上 20 打捞,「付钱」声明 -80,面板照着念 -80,
+  // 实际只扣走 20——游戏对新手说的第一个数字就错了四倍。夹的规则只有 store 里
+  // 那一份,这里调用它,所以结算和显示不可能再对不上。
+  const applied = effectiveEventOutcome(outcome);
   const bits: string[] = [];
-  for (const [k, v] of Object.entries(outcome.resources ?? {})) {
+  for (const [k, v] of Object.entries(applied.resources)) {
     if (v) bits.push(`${v > 0 ? "+" : ""}${v} ${resourceLabel(k as ResourceType)}`);
   }
-  if (outcome.hull) bits.push(`${outcome.hull > 0 ? "+" : ""}${outcome.hull} ${t("event.hull")}`);
-  for (const [f, v] of Object.entries(outcome.reputation ?? {})) {
+  if (applied.hull) bits.push(`${applied.hull > 0 ? "+" : ""}${applied.hull} ${t("event.hull")}`);
+  for (const [f, v] of Object.entries(applied.reputation)) {
     if (v) bits.push(`${t(`faction.${f}`)} ${v > 0 ? "+" : ""}${v}`);
   }
   if (outcome.kind === "combat") bits.push(t("event.combat"));

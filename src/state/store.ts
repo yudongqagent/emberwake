@@ -612,6 +612,60 @@ export function buySigilRank(id: SigilNodeId): boolean {
  *
  * 集中在 store 里,而不是让 App 去拼 setFlags + setPoiRuntime + grant + 改船体
  * 四件事:那样每加一种结果类型都要改两个地方,而两个地方迟早对不上。 */
+/** 这个事件结果**实际上**会改动多少——按当前余额/血量/声望上限夹过的。
+ *
+ * 2026-09-01(/loop 第 104 轮)。事件面板原来直接把 data 里声明的数字显示出来,
+ * 而三条轴全都会夹:
+ *
+ *     资源   扣不出来就扣到零为止(见下面 resolveEventOutcome)
+ *     船体   夹在 [1, 满血] 之间
+ *     声望   clampRep,而且非外交派系直接不动
+ *
+ * 实测(全新开局,英文,第一个目标点的 arthaineToll 事件):玩家有 20 打捞,
+ * 「付钱」声明 -80。面板上明晃晃写着 **-80 Salvage**,实际只扣走 20。
+ * 也就是说游戏对新手说的第一个数字就错了四倍——而这正是仓库自己那条
+ * 「显示的不等于生效的」。
+ *
+ * 夹的逻辑只留这一份:结算按它算,面板也按它显示。分成两份迟早对不上,
+ * 而那种不一致不会报错,只会让玩家觉得自己被骗了。 */
+export function effectiveEventOutcome(outcome: {
+  resources?: Partial<Record<ResourceType, number>>;
+  hull?: number;
+  reputation?: Partial<Record<FactionId, number>>;
+}): {
+  resources: Partial<Record<ResourceType, number>>;
+  hull: number;
+  reputation: Partial<Record<FactionId, number>>;
+} {
+  const resources: Partial<Record<ResourceType, number>> = {};
+  for (const [k, v] of Object.entries(outcome.resources ?? {})) {
+    if (!v) continue;
+    const key = k as ResourceType;
+    // `|| 0` 是为了把 -0 归一成 0——余额为零时 -Math.min(0,0) 会给出 -0。
+    resources[key] = (v > 0 ? v : -Math.min(-v, state.value.resources[key])) || 0;
+  }
+
+  let hull = 0;
+  if (outcome.hull) {
+    const ship = flagship.value;
+    if (ship) {
+      const next = Math.max(1, Math.min(effectiveMaxHull(ship), ship.currentHp + outcome.hull));
+      hull = next - ship.currentHp;
+    }
+  }
+
+  const reputation: Partial<Record<FactionId, number>> = {};
+  for (const [f, v] of Object.entries(outcome.reputation ?? {})) {
+    if (!v) continue;
+    const faction = f as FactionId;
+    if (!isDiplomatic(faction)) continue;
+    const before = state.value.reputation[faction] ?? 0;
+    reputation[faction] = clampRep(before + v) - before;
+  }
+
+  return { resources, hull, reputation };
+}
+
 export function resolveEventOutcome(
   eventId: string,
   poiId: string,
@@ -624,14 +678,15 @@ export function resolveEventOutcome(
   // 同一个事件只发生一次。可以反复刷的"选择"不是选择,是刷子。
   setFlags([`event.${eventId}.done`]);
   setPoiRuntime(poiId, { cleared: true, clearedAt: Date.now() });
-  if (outcome.resources) {
+  // 夹过的那一份——面板显示的也是它,两边不会对不上。
+  const applied = effectiveEventOutcome(outcome);
+  {
     const gain: Partial<Record<ResourceType, number>> = {};
     const cost: Partial<Record<ResourceType, number>> = {};
-    for (const [k, v] of Object.entries(outcome.resources)) {
+    for (const [k, v] of Object.entries(applied.resources)) {
       if (!v) continue;
       if (v > 0) gain[k as ResourceType] = v;
-      // 扣不出来就扣到零为止——事件不该把玩家推进负数。
-      else cost[k as ResourceType] = Math.min(-v, state.value.resources[k as ResourceType]);
+      else cost[k as ResourceType] = -v;
     }
     if (Object.keys(gain).length) grant(gain);
     if (Object.keys(cost).length) spend(cost);
