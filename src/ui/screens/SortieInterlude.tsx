@@ -1,4 +1,4 @@
-import { flagship, effectiveMaxHull } from "../../state/store";
+import { flagship, effectiveMaxHull, encounterThreatRead } from "../../state/store";
 import { Bar, hullBarKind } from "../components/StatBlock";
 import { HullIcon } from "../components/Icons";
 import { t } from "../../i18n/strings";
@@ -16,12 +16,15 @@ import { t } from "../../i18n/strings";
 export function SortieInterlude({
   wave,
   total,
+  encounterId,
   onPress,
   onWithdraw,
   onLoadout,
 }: {
   wave: number;
   total: number;
+  /** 下一波打的是同一个遭遇,只是负荷更高——所以这里能把它预读出来。 */
+  encounterId: string;
   onPress: () => void;
   onWithdraw: () => void;
   /** 打开配装。抉择刚给了你一件装备,这里必须能把它装上——否则那件装备在这次
@@ -63,6 +66,21 @@ export function SortieInterlude({
         <div style={{ fontSize: "0.74rem", color: "var(--text-mid)", marginTop: "0.5rem", lineHeight: 1.45 }}>
           {t("sortie.noRepair")}
         </div>
+        {/* 「下一波更难」原来只有这一个形容词。裂隙那边的同一个抉择早就写了
+            「{count} hostiles · ~{sp} Source Points」,而这里——同样是推进/收手的
+            赌注——什么数都不给。下一波的负荷是 wave(见 App.tsx 的 extraLoad),
+            所以完全算得出来。 */}
+        {(() => {
+          const read = encounterThreatRead(encounterId, wave);
+          if (!read) return null;
+          const pct = Math.round(read.worstHitFraction * 100);
+          const color = pct >= 25 ? "var(--red)" : pct >= 10 ? "var(--amber)" : "var(--green)";
+          return (
+            <div style={{ marginTop: "0.5rem", fontSize: "0.72rem", color, fontVariantNumeric: "tabular-nums" }}>
+              {t("sortie.nextWaveThreat", { count: read.enemies, pct })}
+            </div>
+          );
+        })()}
       </div>
 
       <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", justifyContent: "center" }}>

@@ -321,6 +321,7 @@ export function App() {
         <SortieInterlude
           wave={sortie.wave}
           total={sortie.total}
+          encounterId={sortie.encounterId}
           onPress={() => {
             const next = sortie.wave + 1;
             setSortie({ ...sortie, wave: next });

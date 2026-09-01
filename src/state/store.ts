@@ -29,7 +29,7 @@ import { applyXp, computeMaxHull, ascendShip, reforgeShip, scanShip, computeBase
 import { effectiveSignature, drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor, computeModuleBlock, computeModuleEvasion, computeModuleThrust } from "../engine/modules";
 import { MAX_BLOCK_FRACTION, effectiveEvasion } from "../engine/combat";
 import type { DraftOption } from "../data/draft";
-import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
+import { totalEmberLoad, emberLoadRewardMultiplier, applyEmberLoad } from "../data/emberLoad";
 import { CHOICE_REPUTATION, CHOICE_CINDER_TRUST, clampRep, repEffects, repTier, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
 import { canEvolve, evolveModule, evolutionPartnerMatch } from "../data/evolutions";
 import { sigilBonus, sigilUpgradeCost, sigilsForDive, type SigilNodeId } from "../data/sigils";
@@ -1913,16 +1913,37 @@ export function upgradeModule(moduleId: string): boolean {
  * 分子走**真实结算**:减去自己的装甲格挡,并且套上 resolveAttack 那条 75% 封顶
  * (MAX_BLOCK_FRACTION)。第一版只用敌人的原始伤害,读出来是"占船体 162%",
  * 比实际重——一个吓唬人的数字和一个没有的数字一样没用。 */
-export function encounterThreatRead(encounterId: string): { enemies: number; worstHitFraction: number } | null {
+/** 战前威胁预读。
+ *
+ * 2026-09-01(/loop 第 108 轮)修了两件事:
+ *
+ * 1. 它原来读的是**没上余烬负荷**的编队,而真打的时候 Combat 用的是
+ *    applyEmberLoad(encounter, emberLoad())。负荷把伤害乘 (1 + 0.08×load)、
+ *    船体乘 (1 + 0.11×load),还会发角色(负荷 ≥ 4 就有炮台)。也就是说预读
+ *    **系统性地低估**了每一个有进阶的玩家会挨的那一下。
+ *    实测(我的存档:5 次进阶 → 负荷 5,船体压到 300):
+ *        改前  4 HOSTILE · HEAVIEST HIT  9% HULL
+ *        改后  4 HOSTILE · HEAVIEST HIT 13% HULL
+ *
+ * 2. extraLoad 让出击间隙也能用同一个读数预告**下一波**——那一波的负荷是
+ *    wave-1(见 App.tsx),所以这里能算得出来。
+ *
+ * 分母用 currentHp 不用满血:玩家要决定的是"我现在这条命扛不扛得住"。 */
+export function encounterThreatRead(
+  encounterId: string,
+  extraLoad = 0,
+): { enemies: number; worstHitFraction: number } | null {
   const ship = flagship.value;
   if (!ship) return null;
-  let enc;
+  let raw;
   try {
-    enc = encounterById(encounterId);
+    raw = encounterById(encounterId);
   } catch {
     return null;
   }
-  if (!enc || enc.enemies.length === 0) return null;
+  if (!raw || raw.enemies.length === 0) return null;
+  // 预读的必须是玩家真的会碰上的那支编队。
+  const enc = applyEmberLoad(raw, emberLoad() + extraLoad);
   const worst = Math.max(...enc.enemies.map((e) => e.damage));
   const block = ship.equipped.reduce((sum, id) => {
     const m = id ? state.value.modules.find((x) => x.id === id) : undefined;
