@@ -83,6 +83,8 @@ describe("缴获与赠船的回报", () => {
   });
 
   it("战斗里真的把当场的等级传进去了", () => {
-    expect(COMBAT_SRC, "还在用写死的等级缴获").toMatch(/captureShip\(target!\.name, ship\.level\)/);
+    // 第 102 轮把第一个参数从 target!.name 改成 target!.baseName(存原名而不是
+    // 本地化后的名字),这条守卫钉的是**等级**那一半,跟着改名字那一半即可。
+    expect(COMBAT_SRC, "还在用写死的等级缴获").toMatch(/captureShip\(target!\.baseName, ship\.level\)/);
   });
 });

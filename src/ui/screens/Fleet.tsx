@@ -8,7 +8,7 @@ import { HullIcon, PowerIcon, SlotsIcon, AptitudeIcon, NavIcon, SpeedIcon, Evasi
 import { StatReadout, Bar, hullBarKind, RollQualityBadge, AnimatedFraction } from "../components/StatBlock";
 import { APTITUDE_GROWTH } from "../../data/hullClasses";
 import { t } from "../../i18n/strings";
-import { localizedNamedShipActive, localizedNamedShipFlavor, localizedHullClassDisplay } from "../../i18n/data";
+import { localizedNamedShipActive, localizedNamedShipFlavor, localizedHullClassDisplay, localizedEnemyName} from "../../i18n/data";
 
 /** Ship-ascension redesign (docs/story/research-notes-ship-ascension.md): Whisper
  * is the only ship there is, so this screen used to be a multi-ship hangar (switch
@@ -117,7 +117,7 @@ export function Fleet() {
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {state.value.capturedShips.map((cs) => (
               <div key={cs.id} className="panel compact" style={{ padding: "0.7rem 0.9rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem" }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>{cs.name}</div>
+                <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>{localizedEnemyName(cs.name)}</div>
                 <button className="btn" onClick={() => { giftCapturedShip(cs.id); playSfx("click"); }}>
                   {t("fleet.giftShip")}
                 </button>
@@ -138,7 +138,7 @@ export function Fleet() {
               <div key={as.id} className="panel compact accent" style={{ padding: "0.7rem 0.9rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem", ["--accent" as any]: "var(--green)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <NavIcon name="fleet" size={15} color="var(--green)" />
-                  <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>{as.name}</div>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 600 }}>{localizedEnemyName(as.name)}</div>
                 </div>
                 <span className="eyebrow" style={{ color: "var(--text-dim)" }}>{t("fleet.allyLevel", { level: as.level })}</span>
               </div>

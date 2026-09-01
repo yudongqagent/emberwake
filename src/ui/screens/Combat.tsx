@@ -213,6 +213,8 @@ const ALLY_ANCHOR_X = 60;
 
 interface EnemyState {
   name: string;
+  /** 未本地化的原名。缴获时存的必须是这个,不是屏幕上那一份——见下面的 captureShip。 */
+  baseName: string;
   maxHull: number;
   hull: number;
   damage: number;
@@ -524,7 +526,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // are excluded: they already scale with depth and stacking both would double-dip.
   const loadedEncounter = rift ? encounter : applyEmberLoad(encounter, emberLoad() + extraLoad);
   const [enemies, setEnemies] = useState<EnemyState[]>(
-    loadedEncounter.enemies.map((e) => ({ ...e, name: localizedEnemyName(e.name), maxHull: e.hull })),
+    loadedEncounter.enemies.map((e) => ({ ...e, baseName: e.name, name: localizedEnemyName(e.name), maxHull: e.hull })),
   );
   const maxHull = Math.round(effectiveMaxHull(ship) * pacts.maxHullMult);
   const [playerHull, setPlayerHull] = useState(Math.min(maxHull, Math.round(ship.currentHp * (1 + hullBonusFraction))));
@@ -1695,7 +1697,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           finishCombat("captured", enemiesRef.current);
           // 缴获的船按**当前这场仗**的量级记,而不是写死 12 级——
           // 声望送来的盟友拿的就是 ship.level,亲手缴的不该反而更弱。
-          const captured = captureShip(target!.name, ship.level);
+          // 存**原名**,不是屏幕上那一份。
+          //
+          // 2026-09-01(第 102 轮):enemies 在构造时就过了 localizedEnemyName,
+          // 于是用中文玩时缴的船会把「掠夺者副官快艇」永久写进存档,之后切成
+          // 英文,舰队里那一行仍然是中文。存 key、显示时再翻——和文案表同一条规矩。
+          const captured = captureShip(target!.baseName, ship.level);
           pushLog(t("combat.log.captured", { name: captured.name }));
         }
       }

@@ -86,6 +86,16 @@ export function localizedNamedShipFlavor(def: HullClassAbilityDef): string {
  * predates this i18n system), just always displayed English-primary. Swaps the
  * order so Chinese mode reads primary-language-first instead of "Corvette-class
  * (护卫舰)" staying English-first even with the language toggle set to Chinese. */
+/** 只要一个名字的场合(进阶链、紧凑列表)——双语那一版太长,塞不进去。
+ *
+ * 2026-09-01(/loop 第 102 轮)。进阶界面直接读了 `def.nameCn`,于是英文模式下
+ * 那里**只有中文**:一个英文玩家看到的是「主宰舰」,一个英文字都没有。
+ * 双语那一版(localizedHullClassDisplay)是刻意的设计,这一处不是——这一处是
+ * 漏了本地化。 */
+export function localizedHullClassName(def: { name: string; nameCn: string }): string {
+  return language.value === "zh" ? def.nameCn : def.name;
+}
+
 export function localizedHullClassDisplay(def: { name: string; nameCn: string }): string {
   return language.value === "zh" ? `${def.nameCn} (${def.name})` : `${def.name} (${def.nameCn})`;
 }
@@ -121,9 +131,20 @@ export function localizedEncounterName(def: Pick<EncounterDef, "id" | "name">): 
  * verbatim across many encounters. Call this once at combat setup (see Combat.tsx's
  * `enemies` initializer) rather than at every individual render call site, since
  * `enemy.name`/`target.name` are read in dozens of places throughout combat. */
+/** 反查表:中文名 → 原名。
+ *
+ * 2026-09-01(/loop 第 102 轮)。缴获的船名在这一轮之前存的是**本地化之后**的
+ * 字符串,所以老存档里可能躺着「掠夺者副官快艇」这样的名字。把它先还原成原名
+ * 再本地化,老存档在英文下也能读——否则修法只对新缴的船生效。 */
+const ENEMY_NAMES_FROM_ZH: Record<string, string> = Object.fromEntries(
+  Object.entries(ENEMY_NAMES_ZH).map(([en, zh]) => [zh, en]),
+);
+
+/** 幂等:传原名或传已翻译的名字,结果都对。 */
 export function localizedEnemyName(name: string): string {
-  if (language.value !== "zh") return name;
-  return ENEMY_NAMES_ZH[name] ?? name;
+  const canonical = ENEMY_NAMES_FROM_ZH[name] ?? name;
+  if (language.value !== "zh") return canonical;
+  return ENEMY_NAMES_ZH[canonical] ?? canonical;
 }
 
 export function localizedGalaxyName(def: Pick<GalaxyDef, "id" | "name">): string {

@@ -9,7 +9,7 @@ import { Bar } from "../components/StatBlock";
 import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, SpeedIcon, SlotsIcon, LevelIcon, ResourceIcon, NavIcon } from "../components/Icons";
 import { t } from "../../i18n/strings";
-import { localizedNamedShipActive, localizedHullClassDisplay } from "../../i18n/data";
+import { localizedNamedShipActive, localizedHullClassDisplay, localizedHullClassName} from "../../i18n/data";
 
 /** Player report (2026-08-24): "火种战舰升级和进阶应该在一个新的系统，跟商店没关系"
  * — ship advancement is its own system, not something you shop for. Ascension used
@@ -96,11 +96,11 @@ export function Ascension() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center", fontSize: "0.74rem", color: "var(--text-dim)" }}>
             {ship.ascendedFrom.map((id, i) => (
               <span key={i} style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                {hullClassById(id).nameCn}
+                {localizedHullClassName(hullClassById(id))}
                 <span>→</span>
               </span>
             ))}
-            <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{currentDef.nameCn}</span>
+            <span style={{ color: "var(--text-hi)", fontWeight: 700 }}>{localizedHullClassName(currentDef)}</span>
           </div>
         </div>
       )}
