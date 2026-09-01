@@ -226,7 +226,15 @@ export function canAfford(costs: Partial<Record<ResourceType, number>>): boolean
 export function spend(costs: Partial<Record<ResourceType, number>>) {
   const resources = { ...state.value.resources };
   for (const [k, v] of Object.entries(costs)) {
-    resources[k as ResourceType] -= v ?? 0;
+    // 扣到零为止,不许扣成负数。
+    //
+    // 2026-09-01(/loop 第 79 轮)。原来是直接减,于是任何一次"按钮上的价格已经
+    // 过期"的连点都能把余额打成负的——而负余额会让所有 canAfford 和界面读数
+    // 一起失真。事件那条路(applyEventOutcome)自己写了 Math.min(-v, 现有),说明
+    // 这个意图一直在,只是没做在根上。
+    //
+    // 和上面那条注释同一个道理:补在根上,别指望下一个调用点会记得。
+    resources[k as ResourceType] = Math.max(0, resources[k as ResourceType] - (v ?? 0));
   }
   state.value = { ...state.value, resources };
   persist();

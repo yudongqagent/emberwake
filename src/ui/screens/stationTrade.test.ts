@@ -58,7 +58,17 @@ describe("空间站兑换", () => {
   });
 
   it("两条兑换共用同一套逻辑,不会一边改一边漏", () => {
-    const spends = STATION_SRC.match(/spend\(\{ \[from\]: cost \}\)/g) ?? [];
+    // 第 79 轮把花费改成点击那一刻重算(costNow),这条守卫跟着走——它钉的是
+    // "两条兑换只有一份代码",不是某个变量叫什么名字。
+    const spends = STATION_SRC.match(/spend\(\{ \[from\]: costNow \}\)/g) ?? [];
     expect(spends.length, "两条兑换又各写各的了").toBe(1);
+  });
+
+  /** 一手的大小跟着手里有多少走,所以换完一次下一手就该变小。用渲染闭包里那个
+   * cost 连点,等于拿旧的大手反复换——和第 66 轮招募那个连点是同一个坑。 */
+  it("兑换的花费在点击那一刻按当前持有量重算", () => {
+    expect(STATION_SRC, "兑换还在用渲染闭包里的 cost").toMatch(
+      /const heldNow = state\.value\.resources\[from\];[\s\S]{0,400}?spend\(\{ \[from\]: costNow \}\)/,
+    );
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useState, useRef } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { state, flagship, spend, grant, canAfford, addModule, recruitGenericCrew, crewPassiveScale, crewCount, effectiveMaxHull, repairFlagship, stationPrice, stationOwner } from "../../state/store";
 import { CREW_DEFS, genericRecruitCost } from "../../data/crew";
@@ -168,7 +168,18 @@ function TradeTab() {
           <button
             className="btn"
             disabled={missingHp <= 0 || res.salvage < repairCost}
-            onClick={() => { spend({ salvage: repairCost }); repairFlagship(); }}
+            // 价格在**点击那一刻**按当前船体重算(见第 66 轮招募那一处的说明)。
+            // 修完之后 missingHp 归零,连点的第二下必须什么都不做,而不是再收一次钱。
+            onClick={() => {
+              const sh = flagship.value;
+              if (!sh) return;
+              const missing = effectiveMaxHull(sh) - sh.currentHp;
+              if (missing <= 0) return;
+              const now = stationPrice(Math.round(missing * 0.5));
+              if (!canAfford({ salvage: now })) return;
+              spend({ salvage: now });
+              repairFlagship();
+            }}
           >
             {t("common.repair")}
           </button>
@@ -204,7 +215,16 @@ function TradeTab() {
             <button
               className="btn"
               disabled={held < cost}
-              onClick={() => { spend({ [from]: cost }); grant({ [to]: gain }); }}
+              // 一手的大小跟着手里有多少走,所以换完一次下一手就该变小——
+              // 用渲染闭包里那个 cost 连点,就是拿旧的大手反复换。
+              onClick={() => {
+                const heldNow = state.value.resources[from];
+                const unitsNow = Math.max(1, Math.floor((heldNow * 0.1) / unitCost));
+                const costNow = unitCost * unitsNow;
+                if (heldNow < costNow) return;
+                spend({ [from]: costNow });
+                grant({ [to]: unitGain * unitsNow });
+              }}
             >
               {t("station.exchange")}
             </button>
@@ -225,6 +245,9 @@ const OFFER_COUNT = 4;
  * lives in its own screen, ui/screens/Ascension.tsx, with no RNG to reroll.
  * Cost escalates per refresh within one visit (resets when the tab remounts) so a
  * first look is still cheap but fishing for a perfect roll isn't free. */
+/** 导出给守卫用:递增的价格正是连点漏洞最好下手的地方。 */
+export const refreshCostForTest = (count: number) => refreshCost(count);
+
 function refreshCost(count: number): number {
   return 10 + count * 15;
 }
@@ -239,6 +262,11 @@ function generateModuleOffers(): ModuleInstance[] {
 function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
   const [offers, setOffers] = useState<ModuleInstance[]>(() => generateModuleOffers());
   const [refreshCount, setRefreshCount] = useState(0);
+  // 刷新价是**递增**的(10 + 15n),所以它正是第 66 轮那个连点漏洞最好下手的地方。
+  // 实测(2026-09-01):同一个 tick 里连点三次,三次都读到渲染闭包里那个 10,
+  // 三次刷新只花了 30——真价是 10 + 25 + 40 = 75。ref 才是点击那一刻的真值。
+  const refreshCountRef = useRef(refreshCount);
+  refreshCountRef.current = refreshCount;
   const cost = stationPrice(refreshCost(refreshCount));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
@@ -251,9 +279,12 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
           style={{ fontSize: "0.7rem", padding: "0.4em 0.7em", flex: "none", display: "flex", alignItems: "center", gap: "0.3rem" }}
           disabled={!canAfford({ sourcePoints: cost })}
           onClick={() => {
-            spend({ sourcePoints: cost });
+            const now = stationPrice(refreshCost(refreshCountRef.current));
+            if (!canAfford({ sourcePoints: now })) return;
+            spend({ sourcePoints: now });
+            refreshCountRef.current += 1;
+            setRefreshCount(refreshCountRef.current);
             setOffers(generateModuleOffers());
-            setRefreshCount((c) => c + 1);
           }}
         >
           {t("common.refresh")} <ResourceIcon type="sourcePoints" size={11} /> {cost}
@@ -299,7 +330,11 @@ function FabricatorTab({ onBuy }: { onBuy: (m: ModuleInstance) => void }) {
                 className="btn primary"
                 disabled={!canAfford({ sourcePoints: cost })}
                 onClick={() => {
-                  spend({ sourcePoints: cost });
+                  // 买的价钱也是从刷新次数推出来的,同样按点击那一刻算;
+                  // 而且连点必须逐次检查买不买得起,否则会把源点刷成负数。
+                  const now = stationPrice(refreshCost(refreshCountRef.current));
+                  if (!canAfford({ sourcePoints: now })) return;
+                  spend({ sourcePoints: now });
                   addModule(candidate);
                   onBuy(candidate);
                   setOffers((prev) => prev.map((o, idx) => (idx === i ? drawModule() : o)));
