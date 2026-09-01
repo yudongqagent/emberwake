@@ -1231,7 +1231,21 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         // this the reward for a correct read is an absence, which feels like
         // nothing at all.
         if (braced) {
-          addPopup("player", t("combat.braced"), "#8ff3ff");
+          // 2026-08-31(/loop 第 61+ 轮):把**挡下了多少**写出来,不只写"挡下了"。
+          //
+          // 上面那条注释已经说对了一半——"判断对了的回报是一个没发生的事,感觉像
+          // 什么都没有",所以加了这个标签。但标签是个形容词:它说"这件事发生了",
+          // 没说"值不值"。玩家看到的是 `-62` 和「已抗冲」,而 62 本来会是 124 这件
+          // 事,他无从得知。
+          //
+          // 这个仓库自己的规矩是给数字不给形容词(第 30 轮的 37 条无数字词条说明、
+          // 第 53 轮的教学文案)。反应型操作尤其需要:它的整个价值就在那个差额上。
+          //
+          // 后面几步(护盾分路、烧蚀)都是乘法,所以比例守恒——没抗冲的话最终伤害
+          // 就是 dealt / (1 - 减伤),差额可以精确反推。
+          const r = Math.min(0.95, pactsRef.current.braceReduction);
+          const saved = Math.max(1, Math.round(result.damageDealt / (1 - r)) - result.damageDealt);
+          addPopup("player", t("combat.braced", { saved }), "#8ff3ff");
           spawnRing(arenaRef.current.player.x, arenaRef.current.player.y, "#8ff3ff", 70, 420);
         }
         // 挡下来和硬吃一发,听起来必须不一样——这是玩家判断自己按对没按对的唯一
