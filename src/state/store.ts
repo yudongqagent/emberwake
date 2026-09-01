@@ -34,7 +34,7 @@ import { CHOICE_REPUTATION, CHOICE_CINDER_TRUST, clampRep, repEffects, repTier, 
 import { canEvolve, evolveModule, evolutionPartnerMatch } from "../data/evolutions";
 import { sigilBonus, sigilUpgradeCost, sigilsForDive, type SigilNodeId } from "../data/sigils";
 import { setPermanentBonusSource } from "../engine/permanent";
-import { CREW_ALLEGIANCE, APPROVAL_FROM_REPUTATION, APPROVAL_PER_WIN, APPROVAL_PER_LOSS, clampApproval, approvalEffects, approvalTier, type ApprovalTier, type ApprovalEffects } from "../data/crewApproval";
+import { CREW_ALLEGIANCE, APPROVAL_FROM_REPUTATION, APPROVAL_PER_LOSS, approvalGainForWin, clampApproval, approvalEffects, approvalTier, type ApprovalTier, type ApprovalEffects } from "../data/crewApproval";
 import { randomId } from "../engine/rng";
 import { playSfx } from "../audio/engine";
 
@@ -325,6 +325,24 @@ function applyChoiceReputation(flags: string[]) {
 /** 支持度:带着谁打赢,谁就更信你;打输了,信任掉得比涨得快。
  *
  * 只动**派在这条船上**的人。没上船的人不知道刚才发生了什么。 */
+/** 打赢之后给在编船员涨支持度——每人按自己的档位算,越低涨得越多。
+ *
+ * 和 adjustAssignedCrewApproval 分开,是因为那个函数的语义是"所有人加同一个数",
+ * 而这里每个人的增量不一样。 */
+export function adjustAssignedCrewApprovalScaled(): void {
+  const shipId = flagship.value?.id;
+  if (!shipId) return;
+  let changed = false;
+  const crew = state.value.crew.map((c) => {
+    if (c.assignedShipId !== shipId) return c;
+    const next = clampApproval(c.approval + approvalGainForWin(c.approval));
+    if (next === c.approval) return c;
+    changed = true;
+    return { ...c, approval: next };
+  });
+  if (changed) state.value = { ...state.value, crew };
+}
+
 export function adjustAssignedCrewApproval(delta: number): void {
   const shipId = flagship.value?.id;
   if (!shipId || delta === 0) return;
@@ -1639,7 +1657,9 @@ export function resolveCombatVictory(
   // 找上门的猎杀队(hunt:*)刻意不改任何声望:敌对方主动来打你,自卫再扣分就成了
   // 一个爬不出来的坑,而声望的意义恰恰是给玩家可以扭转的东西。
   // 带着他打赢仗,他就更信你一点。数值很小,靠一路打下去累积。
-  adjustAssignedCrewApproval(APPROVAL_PER_WIN);
+  // 每个人按**他自己**当前的档位涨——低的涨得快,见 approvalGainForWin。
+  // 不能用 adjustAssignedCrewApproval:那个函数给所有人加同一个数。
+  adjustAssignedCrewApprovalScaled();
 
   if (enc.reputation) {
     for (const [f, d] of Object.entries(enc.reputation)) adjustReputation(f as FactionId, d!);

@@ -4,7 +4,7 @@ import type { CrewRole } from "../../data/types";
 import { CrewRoleIcon, CREW_ROLE_COLOR, CREW_RARITY_COLOR } from "../components/Icons";
 import { Bar } from "../components/StatBlock";
 import { t } from "../../i18n/strings";
-import { approvalEffects, approvalTier, CREW_ALLEGIANCE } from "../../data/crewApproval";
+import { approvalEffects, approvalTier, approvalGainForWin, APPROVAL_PER_WIN, CREW_ALLEGIANCE } from "../../data/crewApproval";
 import { localizedCrewName, localizedCrewPassive, localizedCrewActive } from "../../i18n/data";
 
 const STATIONS: CrewRole[] = ["helm", "gunner", "engineer", "tactician"];
@@ -100,6 +100,14 @@ export function Crew() {
                               只动 assignedShipId 匹配的船员。而第 36 轮起,支持度
                               决定所有被动的强度——于是"这个数为什么一直不动"变成
                               一个玩家自己看不出答案的问题。 */}
+                          {/* 下一场胜利能涨多少——低档涨得更快(approvalGainForWin)。
+                              不写出来的话,玩家在「记恨」档只看得见自己变弱,看不见
+                              爬出去的那条路有多陡。只在真的被放大时才显示。 */}
+                          {assigned && approvalGainForWin(c.approval) > APPROVAL_PER_WIN && (
+                            <> <span style={{ color: "var(--green)" }}>
+                              {t("crew.approvalCatchUp", { gain: approvalGainForWin(c.approval) })}
+                            </span></>
+                          )}
                           {!assigned && (
                             <> <span style={{ color: "var(--amber)" }}>{t("crew.approvalFrozen")}</span></>
                           )}
