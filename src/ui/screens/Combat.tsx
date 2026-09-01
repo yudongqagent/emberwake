@@ -4,7 +4,7 @@ import { moduleDefById } from "../../data/modules";
 import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSignature, effectPotency, computeModuleEvasion, computeModuleThrust } from "../../engine/modules";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
-import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
+import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, MAX_BLOCK_FRACTION, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
 import { state, flagship, resolveCombatVictory, resolveCombatDefeat, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
@@ -167,13 +167,30 @@ const PLAYER_ANCHOR: ArenaPoint = { x: 130, y: REF_H / 2 };
  * decision the player gets a practical chance to make, not a rare timing fluke. */
 const CAPTURE_HULL_THRESHOLD = 0.4;
 const BOARD_SECONDS = 10;
-/** Section D (fleet battles): seconds between one allied ship's volleys, and the
- * fraction of its own level-scaled strength each volley lands for. Deliberately
- * slower and weaker per-ship than Whisper's own weapons — allies are a real but
- * secondary contribution (the fight is still yours to win or lose), and a stack
- * of them shortens a fleet battle without trivializing it. */
+/** Section D (fleet battles): seconds between one allied ship's volleys, and how
+ * hard each volley lands. Deliberately slower and weaker per-ship than Whisper's
+ * own weapons — allies are a real but secondary contribution (the fight is still
+ * yours to win or lose), and a stack of them shortens a fleet battle without
+ * trivializing it.
+ *
+ * ---
+ * 2026-08-31(/loop 第 64 轮)。原来是 `ally.level * 1.7`,而缴获舰的等级在
+ * captureShip 里**写死成 12**——也就是每轮固定 20 点,再**减去**敌方格挡。而团战
+ * 敌人的格挡随星区指数增长(genEnemyScale):
+ *
+ *     疆域开启(第2区)   格挡  8  → 每轮 12  → 打光 532 血要 151 秒
+ *     方舟防卫(第四幕)   格挡 28  → 每轮 **1** → 17,605 秒
+ *     二次点燃(第六区)   格挡 30  → 每轮 **1** → 72,124 秒
+ *     文明失格(终局)     格挡 26  → 每轮 **1** → **160,592 秒**
+ *
+ * 也就是说 act 2 之后的每一场团战里,一艘友舰每 3.4 秒打出 1 点伤害,占终局战的
+ * 0.002%。而整条"缴获→赠送→友舰"的链条就是为这些仗存在的——回报到手了,
+ * 却什么都不做。
+ *
+ * 改成按**玩家自己最强那把武器**的一个比例算:这样它自动跟着内容走,"次要但真实"
+ * 这句设计意图在每一层都成立,而不是只在第二个星区成立。 */
 const ALLY_ATTACK_INTERVAL = 3.4;
-const ALLY_DAMAGE_PER_LEVEL = 1.7;
+const ALLY_DAMAGE_FRACTION = 0.35;
 /** Where allied ships sit on the viewscreen — behind and flanking Whisper's own
  * fixed anchor, so their volleys visibly originate from the player's side of the
  * field rather than nowhere. */
@@ -1034,6 +1051,12 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
    * invisible. A ref, not state: it's written on most hits and only read once,
    * when the fight ends. */
   const damageLedgerRef = useRef<Record<string, number>>({});
+  // 友舰齐射的基准 = 玩家最强那把武器的伤害。combatTick 是冻结闭包,按这个文件的
+  // ref 约定镜像一份。
+  const allyBaseRef = useRef(0);
+  allyBaseRef.current = autoFireWeapons.length
+    ? Math.max(...autoFireWeapons.map((m) => computeModuleDamage(m)))
+    : 0;
   function recordDamage(source: string, amount: number) {
     if (amount <= 0) return;
     damageLedgerRef.current[source] = (damageLedgerRef.current[source] ?? 0) + amount;
@@ -1556,7 +1579,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       const target = currentEnemies[tIdx];
       if (!target || target.hull <= 0 || target.phased) return;
 
-      const dmg = Math.max(1, Math.round(ally.level * ALLY_DAMAGE_PER_LEVEL) - target.block);
+      // 友舰的一轮齐射按玩家最强武器的一个比例算(见 ALLY_DAMAGE_FRACTION),
+      // 格挡照常按 resolveAttack 的规则吸收——封顶在 75%,所以永远不会被减成 1。
+      const allyRaw = Math.max(1, Math.round(allyBaseRef.current * ALLY_DAMAGE_FRACTION));
+      const allyAbsorbed = Math.min(target.block, allyRaw * MAX_BLOCK_FRACTION);
+      const dmg = Math.max(1, Math.round(allyRaw - allyAbsorbed));
       const pos = arenaRef.current.enemyPos[tIdx] ?? enemySlot(tIdx, currentEnemies.length);
       const from = { x: ALLY_ANCHOR_X, y: REF_H / 2 + (i - (alliedFleet.length - 1) / 2) * 70 };
       fireProjectile(from, pos, "#8cffc7", () => {
