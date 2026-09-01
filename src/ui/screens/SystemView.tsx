@@ -490,7 +490,14 @@ export function SystemView({ onNavigate, onDock, onEngage, onInvestigate }: Prop
       <div style={{ padding: "0.55rem 1rem 0.5rem", borderBottom: "1px solid var(--line)", background: "rgba(5,8,16,0.6)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
           <div style={{ minWidth: 0 }}>
-            <div className="title" style={{ fontSize: "1rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {/* 星系名允许折行,不要截断。
+                2026-09-01(第 101 轮):切到英文 + 375px 手机宽度实测,
+                「Coldreach Anchorage」需要 266px 而只拿到 224px——**每一块屏幕**
+                的页首都被切掉一截,而玩家看的正是"我现在在哪儿"。中文名四个字
+                塞得下,所以只测中文永远撞不到。
+                容器改成往下长一行,而不是把名字砍掉——搜到的原话就是
+                "用能纵向生长的自适应容器,别给文字定死宽度"。 */}
+            <div className="title" style={{ fontSize: "1rem", overflowWrap: "anywhere" }}>
               {localizedSystemName(system)}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "0.1rem" }}>

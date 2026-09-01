@@ -234,10 +234,11 @@ function InventoryPanel({ inventory, ship }: { inventory: ModuleInstance[]; ship
             const def = moduleDefById(m.defId);
             const refund = Math.round(fabricatorCost(m.rarity) * 0.4);
             return (
-              <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.35rem 0", borderBottom: "1px solid var(--line)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+              <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.35rem 0", borderBottom: "1px solid var(--line)", gap: "0.5rem", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, flex: "1 1 auto" }}>
                   <ModuleTypeIcon type={def.type} size={14} />
-                  <span style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleInstanceName(m)}</span>
+                  {/* 同上:名字必须有下限,否则窄屏英文下会被压成一个字母。 */}
+                  <span style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 108, flex: "1 1 auto" }}>{localizedModuleInstanceName(m)}</span>
                   <ModuleRarityTag rarity={m.rarity} />
                   {/* 库存里躺着的那件"到底比在装的强还是弱",原来这一行完全没有。 */}
                   <ModuleStats mod={m} compareTo={wouldReplace(m)} size="0.7rem" gap="0.55rem" />
@@ -510,10 +511,17 @@ function PickerModal({
           const fitted = shipId ? isDesignEquipped(shipId, m.defId, slotIndex) : false;
           return (
             <div key={m.id} style={{ padding: "0.55rem 0", borderBottom: "1px solid var(--line)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, flex: "1 1 auto" }}>
                   <ModuleTypeIcon type={type} size={15} />
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{localizedModuleInstanceName(m)}</span>
+                  {/* 名字给下限并允许整行换行。
+                      2026-09-01(第 101 轮):切到英文 + 375px 手机宽度实测,
+                      模组名被挤到 **17~33px**(自然宽度 61~94px),屏幕上只剩
+                      「C…」。中文名两三个字塞得下,所以只测中文永远撞不到——
+                      和第 15 轮那次「Power 256」被切掉四分之一是同一个来源。
+                      稀有度标、等级、按钮都不肯收缩,minWidth:0 就让名字独自
+                      承担了全部压缩。 */}
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 108, flex: "1 1 auto" }}>{localizedModuleInstanceName(m)}</span>
                   <ModuleRarityTag rarity={m.rarity} />
                   <span className="eyebrow" style={{ color: "var(--amber)" }}>{t("modules.levelShort", { level: m.level })}</span>
                 </div>

@@ -4,6 +4,7 @@ import COMBAT_SRC from "./screens/Combat.tsx?raw";
 import STATION_SRC from "./screens/StationPanel.tsx?raw";
 import MODULES_SRC from "./screens/Modules.tsx?raw";
 import BRIDGE_SRC from "./screens/Bridge.tsx?raw";
+import SYSTEMVIEW_SRC from "./screens/SystemView.tsx?raw";
 
 /** 定宽 + 不换行 + 藏溢出 = 一段在另一种语言里会被切掉的文字。
  *
@@ -66,6 +67,48 @@ describe("界面不能赌某种语言的文字长度", () => {
  * 保底放在 .btn 的 min-height 上,而不是逐个界面调:这样以后新加的按钮自动达标。
  * 取 24 而不是推荐的 44,是因为 44 会把战斗界面的密度撑散——密度本身也是可用性;
  * 几个最要害的单独提到 26/32/40。 */
+/** 会被截断的文字,必须有一个不会被压没的下限。
+ *
+ * 2026-09-01(/loop 第 101 轮)。第 15 轮那次是"定宽 + 不换行",这一轮是它的兄弟:
+ * **可收缩到 0 + 不换行 + 省略号**。切到英文 + 375px 手机宽度实测:
+ *
+ *     模组名  Coronet Repeater   自然宽 94px,实际拿到 **33px**
+ *             Reckless Drive     自然宽 75px,实际拿到 **17px**
+ *     星系名  Coldreach Anchorage 自然宽 266px,实际拿到 224px(**每一块屏幕**的页首)
+ *
+ * 屏幕上只剩「C…」。中文名两三个字塞得下,所以只测中文永远撞不到——我自己连着
+ * 三十来轮都只在中文下验,和第 15 轮那次是同一个来源。
+ *
+ * 搜到的原话:文字溢出是本地化里最常见的缺陷,而最好的防线是"用能纵向生长的
+ * 自适应容器、给文字设下限、别用定死宽度"。
+ *
+ * 所以规则是:凡是写了 textOverflow: "ellipsis" 的文字,要么有 minWidth 下限,
+ * 要么所在的行允许换行——不能既能被压到 0、又只会省略。 */
+describe("会截断的文字要有下限", () => {
+  it("模组名在窄屏下不会被压没", () => {
+    const rows = [...MODULES_SRC.matchAll(/textOverflow: "ellipsis"[^}]*\}/g)].map((m) => m[0]);
+    expect(rows.length, "模组页不再有会截断的文字了?那这条守卫要重看").toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(
+        /minWidth: \d{2,}/.test(r),
+        `这段文字能被压缩到 0 又只会省略,窄屏英文下会只剩一个字母:\n${r}`,
+      ).toBe(true);
+    }
+  });
+
+  it("模组行允许换行,按钮挤不动名字", () => {
+    const wraps = MODULES_SRC.match(/flexWrap: "wrap"/g) ?? [];
+    expect(wraps.length, "模组行不再换行——英文按钮会把名字挤没").toBeGreaterThanOrEqual(2);
+  });
+
+  it("星系名不再被截断,而是往下长一行", () => {
+    expect(SYSTEMVIEW_SRC, "星系名又变回截断了——页首写的是玩家现在在哪儿").not.toMatch(
+      /className="title" style=\{\{ fontSize: "1rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" \}\}/,
+    );
+    expect(SYSTEMVIEW_SRC).toMatch(/className="title" style=\{\{ fontSize: "1rem", overflowWrap: "anywhere" \}\}/);
+  });
+});
+
 describe("触摸目标不能小于 WCAG 下限", () => {
   // 第 16 轮这里写着"vitest 读不到 CSS 源码(?raw 和 glob 都返回空)",于是那条
   // 保底只能靠注释背书。其实 vitest 跑在 node 里,直接读文件就行——第 82 轮补上,
