@@ -618,6 +618,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const [boardProgress, setBoardProgress] = useState(0);
   const [withdrawProgress, setWithdrawProgress] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
+  /** 接舷要求身处近距,而「长枪」把阵位锁死在远距——这种时候它永远不可能完成。 */
+  const boardBlocked = pacts.lockedBand !== null && pacts.lockedBand !== "close";
   /** 最后一帧画出来的时刻。用来和 document.hidden 交叉验证——见心跳里的 shouldPause。 */
   const lastFrameAtRef = useRef(0);
 
@@ -3301,16 +3303,27 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
               <button
                 className={`btn ${boardingOrder ? "primary" : "ghost"}`}
                 style={{ flex: 1.2, fontSize: "0.68rem", padding: "0.45em 0.2em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3em", position: "relative", overflow: "hidden" }}
-                disabled={status !== "active"}
+                // 阵位被锁在近距**以外**时,接舷永远不可能完成(它要求身处近距)。
+                //
+                // 2026-09-01(/loop 第 99 轮)。「长枪」把阵位锁死在远距,于是接舷
+                // 的条件里那一条永远不成立——按钮照样能按、进度条永远停在 0%。
+                // 这和第 98 轮那条是同一类,但结论不同:那次"锁位就再也逃不掉"是
+                // 不成比例的,所以放开了;这次"远距锁死够不着敌舰的舷"是**说得通的**,
+                // 所以不改规则,改的是**别让一个按不动的按钮装作能按**。
+                disabled={status !== "active" || boardBlocked}
                 onClick={() => { setBoardingOrder((b) => !b); playSfx("click"); }}
-                title={t("combat.boardTitle")}
+                title={boardBlocked ? t("combat.boardLockedTitle") : t("combat.boardTitle")}
               >
-                {boardingOrder && (
+                {boardingOrder && !boardBlocked && (
                   <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${boardProgress * 100}%`, background: "var(--green)", opacity: 0.28, transition: "width 150ms linear" }} />
                 )}
                 <BoardIcon size={12} />
                 <span style={{ position: "relative" }}>
-                  {boardingOrder ? t("combat.boarding", { pct: Math.round(boardProgress * 100) }) : t("combat.board")}
+                  {boardBlocked
+                    ? t("combat.boardLocked")
+                    : boardingOrder
+                      ? t("combat.boarding", { pct: Math.round(boardProgress * 100) })
+                      : t("combat.board")}
                 </span>
               </button>
             )}
