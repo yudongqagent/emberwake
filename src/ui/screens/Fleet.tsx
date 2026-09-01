@@ -1,7 +1,7 @@
-import { state, flagship, scanShipAction, effectiveMaxHull, giftCapturedShip } from "../../state/store";
+import { state, flagship, scanShipAction, effectiveMaxHull, effectiveShipEvasion, effectiveShipSpeed, giftCapturedShip } from "../../state/store";
 import { hullClassById } from "../../data/hullClasses";
 import { hullClassAbility } from "../../data/namedShips";
-import { computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
+import { computePowerCapacity, computeBaseCritChance } from "../../engine/ships";
 import { ShipRarityTag } from "../components/RarityTag";
 import { playSfx } from "../../audio/engine";
 import { HullIcon, PowerIcon, SlotsIcon, AptitudeIcon, NavIcon, SpeedIcon, EvasionIcon, CritIcon } from "../components/Icons";
@@ -67,8 +67,8 @@ export function Fleet() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: "0.6rem", margin: "0.8rem 0" }}>
           <StatReadout icon={<HullIcon size={16} />} value={<AnimatedFraction current={ship.currentHp} max={effectiveMaxHull(ship)} />} label={t("bridge.stat.hull")} />
           <StatReadout icon={<PowerIcon size={16} />} value={computePowerCapacity(ship)} label={t("bridge.stat.power")} color="var(--amber)" />
-          <StatReadout icon={<SpeedIcon size={16} />} value={computeSpeed(ship)} label={t("bridge.stat.speed")} color="var(--cyan)" />
-          <StatReadout icon={<EvasionIcon size={16} />} value={`${Math.round(computeBaseEvasion(ship) * 100)}%`} label={t("bridge.stat.evasion")} color="var(--green)" />
+          <StatReadout icon={<SpeedIcon size={16} />} value={effectiveShipSpeed(ship)} label={t("bridge.stat.speed")} color="var(--cyan)" />
+          <StatReadout icon={<EvasionIcon size={16} />} value={`${(effectiveShipEvasion(ship) * 100).toFixed(1)}%`} label={t("bridge.stat.evasion")} color="var(--green)" />
           <StatReadout icon={<CritIcon size={16} />} value={`${Math.round(computeBaseCritChance(ship) * 100)}%`} label={t("bridge.stat.crit")} color="var(--red)" />
           <StatReadout icon={<SlotsIcon size={16} />} value={totalSlots} label={t("fleet.stat.slots")} color="var(--violet)" />
           <StatReadout icon={<AptitudeIcon size={16} />} value={ship.scanned && ship.aptitude ? `${ship.aptitude} ×${APTITUDE_GROWTH[ship.aptitude].toFixed(2).replace(/0$/, "")}` : "??"} label={t("bridge.stat.aptitude")} color="var(--green)" title={t("bridge.stat.aptitudeTitle")} />

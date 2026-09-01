@@ -25,9 +25,9 @@ import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
-import { applyXp, computeMaxHull, ascendShip, reforgeShip } from "../engine/ships";
-import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor, computeModuleBlock } from "../engine/modules";
-import { MAX_BLOCK_FRACTION } from "../engine/combat";
+import { applyXp, computeMaxHull, ascendShip, reforgeShip, computeBaseEvasion, computeSpeed } from "../engine/ships";
+import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor, computeModuleBlock, computeModuleEvasion, computeModuleThrust } from "../engine/modules";
+import { MAX_BLOCK_FRACTION, effectiveEvasion } from "../engine/combat";
 import type { DraftOption } from "../data/draft";
 import { totalEmberLoad, emberLoadRewardMultiplier } from "../data/emberLoad";
 import { CHOICE_REPUTATION, CHOICE_CINDER_TRUST, clampRep, repEffects, repTier, isDiplomatic, DIPLOMATIC_FACTIONS, REP_PER_KILL, type RepEffects } from "../data/reputation";
@@ -1223,6 +1223,55 @@ export function crewPassiveScale(defId: string): number {
 /** Unit 7-Requiem's "+15% max hull fleet-wide" passive, applied wherever a ship's max
  * hull is shown or used outside of combat (combat applies its own equipment-driven
  * hull bonus on top of this — see Combat.tsx). */
+/** 这条船实际的闪避率和实际的机动——**和战斗用的是同一个式子**。
+ *
+ * 2026-08-31(/loop 第 59 轮)。上一轮把船体上限收成了一个来源,顺着同一条线往下扫,
+ * 闪避和速度是一样的病:舰桥和舰队面板显示的是 computeBaseEvasion / computeSpeed,
+ * 也就是**只有船自己的随机 roll**,而战斗里真正参与结算的是
+ *
+ *     闪避  船体 roll + 装备闪避 + 「闪避」词条 + 装甲位的「破盾」+ 舵手船员
+ *     机动  computeSpeed × 装备推力(−35% ~ +60%)
+ *
+ * 实测:我那条船舰桥上写「闪避 0%」,而它装着一台 2.9% 闪避的信使引擎。也就是说
+ * 引擎槽整条属性线在船的属性栏里不存在——而"升级引擎到底给了什么"本来就是这个
+ * 游戏被抱怨过的老问题(见 engine/modules.ts 的 effectPotency 注释)。
+ *
+ * 只收**船本身就带着的**那些项。反应堆分配、契约、卡恩的主动技能都是战斗期间的
+ * 临时状态,地图上并不存在,留在 Combat 里。
+ *
+ * 闪避要过一遍 effectiveEvasion 的软硬上限再显示:堆到 45% 的原始值实际只有 34%,
+ * 显示原始值就是又一次"写的和用的不是一个数"。 */
+export function effectiveShipEvasion(ship: ShipInstance): number {
+  if (ship.id !== flagship.value?.id) return computeBaseEvasion(ship);
+  const gear = ship.equipped.reduce((sum, id) => {
+    const m = id ? state.value.modules.find((x) => x.id === id) : undefined;
+    return m ? sum + computeModuleEvasion(m) : sum;
+  }, 0) / 100;
+  const armorShieldBreak = ship.equipped.filter((id) => {
+    const m = id ? state.value.modules.find((x) => x.id === id) : undefined;
+    if (!m) return false;
+    const d = moduleDefById(m.defId);
+    return d.type === "armor" && (d.signature === "shieldBreak" || m.traits.includes("shieldBreak"));
+  }).length;
+  const raw = computeBaseEvasion(ship)
+    + gear
+    + 0.05 * equippedEffectStacks("evasion")
+    + 0.08 * armorShieldBreak
+    + 0.05 * crewCount("recruitHelm");
+  return effectiveEvasion(raw);
+}
+
+/** 装上装备之后这条船实际跑多快。推力的上下限和 Combat 里那段一致。 */
+export function effectiveShipSpeed(ship: ShipInstance): number {
+  const base = computeSpeed(ship);
+  if (ship.id !== flagship.value?.id) return base;
+  const thrust = Math.max(-0.35, Math.min(0.6, ship.equipped.reduce((sum, id) => {
+    const m = id ? state.value.modules.find((x) => x.id === id) : undefined;
+    return m ? sum + computeModuleThrust(m) : sum;
+  }, 0)));
+  return Math.round(base * (1 + thrust));
+}
+
 /** 船体上限——**战斗内外必须是同一个数**。
  *
  * 2026-08-31(/loop 第 58 轮)。这里原来只加了七号安魂那 15%,而 Combat.tsx 自己算
