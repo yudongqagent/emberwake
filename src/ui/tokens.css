@@ -17,7 +17,13 @@
 
   --text-hi: #f2f9ff;
   --text-mid: #9fb8cc;
-  --text-dim: #5d7285;
+  /* 2026-09-01(/loop 第 110 轮):原来是 #5d7285,在**四种背景上全都**达不到
+     WCAG 1.4.3 AA 的 4.5:1(最差 3.38:1,在 --bg-panel-raised 上)。而这个变量
+     全仓用了 99 处,字号都在 0.6~0.74rem——远够不到"大字"那条 3:1 的豁免线,
+     所以每一处都不合格。按同一色相整体抬亮 1.185 倍到刚好达标:
+         bg-panel-raised 4.51   bg-panel 5.02   bg-void 5.36   bg-inset 5.46
+     和第 85 轮补的焦点可见(2.4.7)同属 AA。 */
+  --text-dim: #6e879e;
 
   --rarity-salvage: #8a97a6;
   --rarity-standard: #5dd6ff;
