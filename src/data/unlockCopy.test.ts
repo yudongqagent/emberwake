@@ -72,11 +72,13 @@ describe("战斗控件的教学文案", () => {
 
   it("反应堆说明里的每格增益就是那四个函数的真值", () => {
     expect(Math.round((1 - weaponsCadenceMultiplier(3)) * 100)).toBe(10);
-    expect(Math.round((1 - shieldsDamageMultiplier(3)) * 100)).toBe(9);
+    // 第 77 轮从 9 提到 13:护盾原来在防御这条轴上输给火力(火力打得快也等于少挨打),
+    // 于是这一格没有理由去点。数字变了,文案必须跟着变——这条守卫就是干这个的。
+    expect(Math.round((1 - shieldsDamageMultiplier(3)) * 100)).toBe(13);
     expect(Math.round((enginesRateMultiplier(3) - 1) * 100)).toBe(22);
     expect(Math.round(enginesEvasionBonus(3) * 100)).toBe(4);
     const zh = desc("ZH", "reactor");
-    for (const n of ["10", "9", "22", "4"]) {
+    for (const n of ["10", "13", "22", "4"]) {
       expect(zh, `反应堆说明里没有 ${n}`).toMatch(new RegExp(n));
     }
   });

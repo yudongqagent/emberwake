@@ -3360,10 +3360,19 @@ function ReactorBar({
     { id: "shields", color: "var(--cyan)" },
     { id: "engines", color: "var(--green)" },
   ];
+  /** 每条通道在**它自己那条轴**上相对均衡态(2 格)的变化。
+   *  火力看射速(冷却倍率的倒数)、护盾看挨伤、引擎看换档速度。 */
+  function effectPct(id: ReactorChannel, pips: number): number {
+    if (id === "weapons") return Math.round((1 / weaponsCadenceMultiplier(pips) - 1) * 100);
+    if (id === "shields") return Math.round((shieldsDamageMultiplier(pips) - 1) * 100);
+    return Math.round((enginesRateMultiplier(pips) - 1) * 100);
+  }
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.45rem", flexWrap: "wrap" }}>
       <span className="eyebrow" style={{ color: "var(--text-dim)", flex: "none" }}>{t("reactor.label")}</span>
-      {channels.map(({ id, color }) => (
+      {channels.map(({ id, color }) => {
+        const pct = effectPct(id, alloc[id]);
+        return (
         <button
           key={id}
           onClick={() => onShift(id)}
@@ -3379,7 +3388,21 @@ function ReactorBar({
             transition: "border-color 140ms ease, color 140ms ease",
           }}
         >
-          <span style={{ whiteSpace: "nowrap" }}>{t(`reactor.${id}`)}</span>
+          {/* 每一格到底换来什么,写出来。
+              仓库自己的规矩是给数字不给形容词(第 30 轮的模组词条、第 53 轮的教学
+              文案、第 69 轮的技能说明、第 70 轮的裂隙异常)——而功率分配是**战斗里
+              唯一一个每场都在的资源取舍**,它此前只有一个名字和几个亮点,一个数
+              都没有。玩家没法判断该不该挪这一格。
+              每条都按"它自己那条轴相对均衡态的变化"来写,三格中立时是 0%,
+              所以不显示——干净的默认态本身就是信号。 */}
+          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.15, minWidth: 0 }}>
+            <span style={{ whiteSpace: "nowrap" }}>{t(`reactor.${id}`)}</span>
+            {pct !== 0 && (
+              <span style={{ fontSize: "0.86em", fontWeight: 600, opacity: 0.9, whiteSpace: "nowrap" }}>
+                {t(`reactor.effect.${id}`, { pct: `${pct > 0 ? "+" : "−"}${Math.abs(pct)}%` })}
+              </span>
+            )}
+          </span>
           <span aria-hidden="true" style={{ display: "flex", gap: 2, marginLeft: "auto" }}>
             {Array.from({ length: REACTOR_PIPS }, (_, i) => (
               <span
@@ -3394,7 +3417,8 @@ function ReactorBar({
             ))}
           </span>
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }

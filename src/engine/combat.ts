@@ -327,9 +327,28 @@ export function weaponsCadenceMultiplier(pips: number): number {
   return 1 - (pips - 2) * 0.1;
 }
 
-/** Incoming-damage multiplier from the shields channel. */
+/** Incoming-damage multiplier from the shields channel.
+ *
+ * 2026-09-01(/loop 第 77 轮)。每格原来是 0.09,而护盾这一路是**被严格支配**的:
+ *
+ *     一场仗挨的总伤 ∝ (打完要多久) × (每发打进来多少)
+ *     而"打完要多久"正比于武器的冷却倍率——**火力也是防御**。
+ *
+ *     全火力  打完耗时 ×0.60   挨的总伤 ×0.708
+ *     全护盾  打完耗时 ×1.20   挨的总伤 ×0.768
+ *
+ * 也就是说押满火力**比押满护盾还更抗打**,同时还快一倍。护盾在它唯一的本职上
+ * 输给了火力,于是这一格没有任何理由去点——一个核心战斗控件是死的。
+ *
+ * 代数上很干净:设武器每格 w、护盾每格 s,则
+ *     全火力挨伤 ∝ (1−4w)(1+2s)      全护盾挨伤 ∝ (1+2w)(1−4s)
+ * 两边在 **w = s** 时正好相等。原来 w=0.10 > s=0.09,所以护盾必输。
+ *
+ * 提到 0.13(而不是把火力砍下来):让防御路线真的值得走,而不是让三条路一起变弱。
+ *     全火力 ×0.756   全护盾 ×0.576   —— 护盾在防御上领先 24%,火力仍快一倍。
+ * 代价那头也对称:一格不点时挨伤 ×1.26,这就是全押进攻要付的东西。 */
 export function shieldsDamageMultiplier(pips: number): number {
-  return 1 - (pips - 2) * 0.09;
+  return 1 - (pips - 2) * 0.13;
 }
 
 /** Multiplier on how fast the helm's stance order moves the range band, and on
