@@ -1490,23 +1490,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         playSfx("evade");
         pushLog(phaseShiftBlocksThis ? t("combat.log.phaseShiftMiss", { enemy: enemy.name }) : t("combat.log.enemyMiss", { enemy: enemy.name }));
       }
-      if (dealt > 0) setPlayerHull((prev) => {
-        const next = Math.max(0, Math.min(maxHull, prev - dealt));
-        // Last Stand: survive one otherwise-fatal blow per fight, at 1 hull. The
-        // check lives here rather than at the damage roll because this is the only
-        // place that knows the resulting hull — every other damage source (burn,
-        // Choral Strike, honor riposte) routes through setPlayerHull too, so the
-        // save applies to all of them rather than only to direct weapon fire.
-        if (next <= 0 && hasEffect("lastStand") && !lastStandUsedRef.current) {
-          lastStandUsedRef.current = true;
-          pushLog(t("combat.log.lastStand"));
-          playSfx("alarm");
-          shake(20);
-          triggerHitStop(140);
-          return 1;
-        }
-        return next;
-      });
+      if (dealt > 0) applyPlayerDamage(dealt);
       // Inertial Dampers' Momentum: real-time reinterpretation of "a clean enemy
       // turn" — now evaluated per individual attack event instead of per batch,
       // since batches no longer exist. Any hit landed resets the streak to zero.
@@ -1560,7 +1544,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     triggerHitStop(110);
     setChoralResonance(0);
     setTimeout(() => {
-      setPlayerHull((prev) => Math.max(0, Math.min(maxHull, prev - total)));
+      applyPlayerDamage(total);
     }, PROJECTILE_DURATION * 1000 + 20);
   }
 
@@ -1583,6 +1567,38 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
    * 反过来,只看帧也不行:后台标签页本来就不出帧,那和"暂停"分不清。
    *
    * 两个都成立时才停,于是任何一个信号出错都不会把游戏锁住。 */
+  /** 玩家挨伤的唯一入口。
+   *
+   * 2026-09-01(/loop 第 111 轮)。「背水」写的是"每场战斗可承受一次**本应致命**的
+   * 攻击",而它原来只挡得住**直接武器火力**那一条路。原处的注释还写着:
+   *
+   *     "every other damage source (burn, Choral Strike, honor riposte) routes
+   *      through setPlayerHull too, so the save applies to all of them"
+   *
+   * 这句话是错的——它点名的那两条正是漏掉的两条。setPlayerHull 只是个 useState
+   * 的 setter,判定写在**它其中一个调用点传进去的回调里**,别的调用点各写各的:
+   *
+   *     圣咏合击 / 攻城齐射   prev - total       没有背水判定
+   *     狮心荣誉反击          h - counterDmg     没有背水判定
+   *
+   * 也就是说带着背水的玩家被这两种伤害打死时,那个签名效果一声不响地没生效。
+   * 判定收进这一个函数,三条路全走它——补在根上,别指望下一个调用点会记得。 */
+  function applyPlayerDamage(amount: number) {
+    if (amount <= 0) return;
+    setPlayerHull((prev) => {
+      const next = Math.max(0, Math.min(maxHull, prev - amount));
+      if (next <= 0 && hasEffect("lastStand") && !lastStandUsedRef.current) {
+        lastStandUsedRef.current = true;
+        pushLog(t("combat.log.lastStand"));
+        playSfx("alarm");
+        shake(20);
+        triggerHitStop(140);
+        return 1;
+      }
+      return next;
+    });
+  }
+
   function shouldPause(): boolean {
     return document.hidden && Date.now() - lastFrameAtRef.current > 500;
   }
@@ -2247,7 +2263,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         if (encounter.faction === "lionsheart" && hitTarget.hull > 0) {
           const counterDmg = Math.round(target.damage * 0.5);
           setTimeout(() => {
-            setPlayerHull((h) => Math.max(0, h - counterDmg));
+            applyPlayerDamage(counterDmg);
             addPopup("player", `-${counterDmg}`, "#5dd6ff", false, hitWeight(counterDmg, maxHull));
             damageTakenRef.current += counterDmg;
             spawnBurst(arenaRef.current.player.x, arenaRef.current.player.y, "93,214,255", 10, 90);
