@@ -71,11 +71,34 @@ export function sigilBonus(ranks: Partial<Record<SigilNodeId, number>>, id: Sigi
  * 两部分:到达深度的基础结算,加上**刷新纪录**的一大笔。基础那部分是线性的,
  * 所以反复刷浅层不会比往下潜划算;纪录那部分是这套东西真正的引擎——它只在你
  * 比上一次更深的时候给,所以"再深一层"永远是最优解。 */
+/** 每突破一层给多少枚。
+ *
+ * 2026-09-01(/loop 第 88 轮)。原来是 2,而整棵树要 201 枚。按"每次都比上次深一层"
+ * 这条最努力的走法算,买满全树要潜到**第 30 层**;停在某一层反复刷则要 39~92 趟。
+ *
+ * 而这个模式根本没有被写到那么深:
+ *   - DEPTH_SCALE 自己的注释写着"深度 ~6 对中期船是一堵真墙"
+ *   - authored 内容最深的一条异常(unmaking)是 minDepth 15
+ *   - 敌人总血按 1.22^depth 涨,从第 1 层到第 30 层是 **660 倍**
+ *
+ * 实测各深度清一波要多久(用最强 mk5 武器升满 × 最多 10 个武器槽 = 2510 DPS,
+ * 再宽放到 ×3):
+ *      深 15   4~10 秒        深 20   18~39 秒
+ *      深 25   43~136 秒      深 30   185~502 秒
+ * 而常规战斗实测是 8~12 秒。也就是说第 30 层一**波**要三到八分钟,而一趟深潜要
+ * 从第 1 层一路清到第 30 层。这棵树的顶端被定价在了这个模式够不到的地方——
+ * 和第 54 轮那个"进阶阶梯的上半截够不到"是同一类。
+ *
+ * 提到 6:买满全树落在第 21 层附近,刚过 authored 内容的最深处(15),而一波仍在
+ * 几十秒的量级。基础那部分(floor(depth/3))不动——反复刷浅层依然不划算,
+ * "再深一层"依然是最优解。 */
+export const SIGILS_PER_NEW_DEPTH = 6;
+
 export function sigilsForDive(depth: number, previousBest: number): number {
   const base = Math.floor(depth / 3);
   if (depth <= previousBest) return base;
-  // 每突破一层给 2 枚,一次深潜突破多层就一次结清。
-  return base + (depth - previousBest) * 2;
+  // 突破多层就一次结清。
+  return base + (depth - previousBest) * SIGILS_PER_NEW_DEPTH;
 }
 
 /** 全部买下来一共要多少——用来判断这棵树够不够长。 */
