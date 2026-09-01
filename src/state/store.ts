@@ -580,6 +580,8 @@ export function buySigilRank(id: SigilNodeId): boolean {
     sigils: state.value.sigils - cost,
     sigilRanks: { ...state.value.sigilRanks, [id]: rank + 1 },
   };
+    // 第 80 轮:出击之间的每一个"落定"的动作都得有声音——见 audioFeedback.test.ts。
+  playSfx("levelUp");
   persist();
   return true;
 }
@@ -732,6 +734,8 @@ export function fitAll(shipId: string): number {
     ...state.value,
     ships: state.value.ships.map((s) => (s.id === shipId ? { ...s, equipped } : s)),
   };
+    // 第 80 轮:出击之间的每一个"落定"的动作都得有声音——见 audioFeedback.test.ts。
+  playSfx("draw");
   persist();
   return fits.length;
 }
@@ -840,6 +844,8 @@ export function sellModule(moduleId: string) {
     modules: state.value.modules.filter((m) => m.id !== moduleId),
     resources: { ...state.value.resources, sourcePoints: state.value.resources.sourcePoints + refund },
   };
+    // 第 80 轮:出击之间的每一个"落定"的动作都得有声音——见 audioFeedback.test.ts。
+  playSfx("mine");
   persist();
   return refund;
 }
@@ -950,6 +956,8 @@ export function equipModule(shipId: string, slotIndex: number, moduleId: string 
     return { ...s, equipped };
   });
   state.value = { ...state.value, ships };
+    // 第 80 轮:出击之间的每一个"落定"的动作都得有声音——见 audioFeedback.test.ts。
+  playSfx("click");
   persist();
 }
 
@@ -997,6 +1005,8 @@ export function assignCrew(crewId: string, shipId: string | null) {
     return c;
   });
   state.value = { ...state.value, crew };
+    // 第 80 轮:出击之间的每一个"落定"的动作都得有声音——见 audioFeedback.test.ts。
+  playSfx("click");
   persist();
 }
 
@@ -1638,5 +1648,7 @@ export function repairFlagship() {
   // the bar's own endpoint, since every other screen displays effectiveMaxHull.
   const ships = state.value.ships.map((s) => (s.id === shipId ? { ...s, currentHp: effectiveMaxHull(s) } : s));
   state.value = { ...state.value, ships };
+    // 第 80 轮:出击之间的每一个"落定"的动作都得有声音——见 audioFeedback.test.ts。
+  playSfx("dock");
   persist();
 }
