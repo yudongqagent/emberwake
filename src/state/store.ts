@@ -1447,11 +1447,52 @@ export function resolveCombatVictory(
   return { leveledUp, newLevel, rewards, bonusDrop };
 }
 
+/** 主动撤离:这一仗不打了,但也没输。
+ *
+ * 2026-09-01(/loop 第 75 轮)。战斗此前**只有两个出口**:打赢,或者死。而屏幕上
+ * 一直摆着一个写着「撤离」的按钮——它只把距离拉开一档,并不能离开。
+ *
+ * 和战败的区别就是代价的形状:
+ *   战败  船体砍半(currentHp × 0.5 + 1),按**开打前**的值算,受的伤反而不计
+ *   撤离  船体按**打完时**的真实值写回——你在充能那几秒里挨的每一下都留在船上
+ *
+ * 战利品、经验、POI 清除标记、剧情 flag 一律没有:这一仗没有发生过好事。
+ * 船员支持度不动——撤离不是败仗,不该记在船员头上。 */
+export function resolveCombatWithdraw(endingHullPoints: number) {
+  if (flagship.value) {
+    const ships = state.value.ships.map((s) =>
+      s.id === flagship.value!.id
+        ? { ...s, currentHp: Math.max(1, Math.min(effectiveMaxHull(s), Math.round(endingHullPoints))) }
+        : s,
+    );
+    state.value = { ...state.value, ships };
+  }
+  persist();
+}
+
+/** 战败之后船上还剩多少。
+ *
+ * 老规矩是"开打前的船体砍半",而且**不看你在这一仗里挨了多少**。第 75 轮把
+ * 主动撤离做出来之后,这条规矩立刻露出一个反转:
+ *
+ *     满血 263 出发,打到只剩 20 —— 战死,写回 263×0.5+1 = 133
+ *                                   撤离,写回 20(实测那一把是 110)
+ *
+ * 也就是说**去死比逃命划算**,而且越是残血越划算——那会把刚做出来的第三个出口
+ * 变成一个没有理性玩家会按的按钮。
+ *
+ * 加一条上限:战败最多给你满船体的四分之一。残血开打的人仍然走砍半那条(取更小
+ * 的那个),所以这不是对已经很惨的人再踩一脚;它管的是"满血冲进去送死"这一种。 */
+export const DEFEAT_HULL_CAP_FRACTION = 0.25;
+export function hullAfterDefeat(preFightHull: number, maxHull: number): number {
+  return Math.max(1, Math.round(Math.min(preFightHull * 0.5 + 1, maxHull * DEFEAT_HULL_CAP_FRACTION)));
+}
+
 export function resolveCombatDefeat() {
   adjustAssignedCrewApproval(APPROVAL_PER_LOSS);
   if (flagship.value) {
     const ships = state.value.ships.map((s) =>
-      s.id === flagship.value!.id ? { ...s, currentHp: Math.round(s.currentHp * 0.5 + 1) } : s,
+      s.id === flagship.value!.id ? { ...s, currentHp: hullAfterDefeat(s.currentHp, effectiveMaxHull(s)) } : s,
     );
     state.value = { ...state.value, ships };
   }

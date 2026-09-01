@@ -5,7 +5,7 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSi
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, MAX_BLOCK_FRACTION, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, resolveCombatVictory, resolveCombatDefeat, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
+import { state, flagship, resolveCombatVictory, resolveCombatDefeat, resolveCombatWithdraw, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
 import { pactModifiers } from "../../data/pacts";
@@ -168,6 +168,22 @@ const PLAYER_ANCHOR: ArenaPoint = { x: 130, y: REF_H / 2 };
  * decision the player gets a practical chance to make, not a rare timing fluke. */
 const CAPTURE_HULL_THRESHOLD = 0.4;
 const BOARD_SECONDS = 10;
+/** 撤离:在「远距」上持续执行撤离指令这么多秒,这一仗就结束了。
+ *
+ * 2026-09-01(/loop 第 75 轮)。战斗此前只有两个出口——打赢,或者死。而
+ * 「撤离」这个按钮**一直摆在屏幕上**,中文写的是"撤离",做的却只是把距离
+ * 拉开一档。
+ *
+ * 照 FTL 的形状做:逃是要**充能时间**的,而且充能期间对面照打。所以撤离不是
+ * 一个躲开后果的按钮,它自己就有后果——那几秒里挨的伤全都留在船上。
+ *
+ * 和接舷同一套写法(条件断了就**停住,不倒退**),因为理由是同一个:短暂失去
+ * 档位或指令该付的是节奏,不是已经挣到的进度。
+ *
+ * 7 秒是按已有的数调的:拉开一档在 8 秒量级(ENEMY_RANGE_RATE = 1/8),所以从
+ * 近距撤走全程 20 秒上下——比接舷的 10 秒长,比一场仗(实测 12 秒量级)长,
+ * 于是"我打不过"这个判断必须**早做**才来得及,而不是血皮上按一下就跑。 */
+const WITHDRAW_SECONDS = 7;
 /** Section D (fleet battles): seconds between one allied ship's volleys, and how
  * hard each volley lands. Deliberately slower and weaker per-ship than Whisper's
  * own weapons — allies are a real but secondary contribution (the fight is still
@@ -321,7 +337,7 @@ interface Props {
   encounterId: string;
   poiId: string | null;
   victoryFlag?: string;
-  onResolve: (result: "victory" | "defeat" | "captured") => void;
+  onResolve: (result: "victory" | "defeat" | "captured" | "withdrawn") => void;
   /** UI audit #7: the live stakes of an extradimensional battlefield run. Combat
    * previously had no idea it was inside a rift dive — depth only changed the
    * enemy numbers, so the one mode built around mounting risk felt exactly like
@@ -520,7 +536,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const [crewCooldowns, setCrewCooldowns] = useState<Record<string, number>>({});
   const [targetIdx, setTargetIdx] = useState(0);
   const [log, setLog] = useState<string[]>([t("combat.log.contact", { name: localizedEncounterName(encounter) })]);
-  const [status, setStatus] = useState<"active" | "victory" | "defeat" | "captured">("active");
+  const [status, setStatus] = useState<"active" | "victory" | "defeat" | "captured" | "withdrawn">("active");
   const [popups, setPopups] = useState<Popup[]>([]);
   const [playerShakeToken, setPlayerShakeToken] = useState(0);
   const [rewardsEarned, setRewardsEarned] = useState<Partial<Record<ResourceType, number>> | null>(null);
@@ -585,6 +601,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
 
   const [boardingOrder, setBoardingOrder] = useState(false);
   const [boardProgress, setBoardProgress] = useState(0);
+  const [withdrawProgress, setWithdrawProgress] = useState(0);
   const [comboCount, setComboCount] = useState(0);
   const [overcharged, setOvercharged] = useState(false);
   const [guaranteedCrit, setGuaranteedCrit] = useState(false);
@@ -786,6 +803,15 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const rangeProgressRef = useRef(rangeProgress);
   const boardingOrderRef = useRef(boardingOrder);
   const boardProgressRef = useRef(boardProgress);
+  const withdrawProgressRef = useRef(withdrawProgress);
+  /** finishCombat 结算船体时**不能**读渲染闭包里的 playerHull。
+   *
+   * 胜/败两条路是 useEffect 触发的(依赖里就有 playerHull),闭包是新的;而接舷
+   * 俘获和撤离都是从心跳 setInterval 里调的——那个闭包停在装载那一刻,于是
+   * 写回存档的是**开打前**的船体。第 66 轮那次三连点击读到旧价格,是同一个坑。
+   *
+   * 实测(2026-09-01):撤离时真实船体 138,存档里写进去的是 263。 */
+  const playerHullRef = useRef(playerHull);
   enemiesRef.current = enemies;
   targetIdxRef.current = targetIdx;
   statusRef.current = status;
@@ -805,6 +831,8 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   rangeProgressRef.current = rangeProgress;
   boardingOrderRef.current = boardingOrder;
   boardProgressRef.current = boardProgress;
+  withdrawProgressRef.current = withdrawProgress;
+  playerHullRef.current = playerHull;
 
   useEffect(() => {
     if (enemies[targetIdx] && enemies[targetIdx].hull <= 0) {
@@ -1573,6 +1601,26 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       }
     }
 
+    // 撤离(第 75 轮):在「远距」上持续保持撤离指令,充满就脱离。
+    //
+    // 和接舷同一套:条件断了就**停住,不倒退**。区别在于对面这几秒照打——
+    // 充能期间挨的伤会原样写回船体(resolveCombatWithdraw),所以这不是一个
+    // 躲开后果的按钮。
+    //
+    // 只在舵手指令这一格解锁之后才可能发生:没给你指令的时候,也不该要求你用它。
+    if (unlocked("stance")) {
+      const charging = stanceOrderRef.current === "retreat" && rangeBandRef.current === "long";
+      if (charging) {
+        const next = Math.min(1, withdrawProgressRef.current + dt / WITHDRAW_SECONDS);
+        withdrawProgressRef.current = next;
+        setWithdrawProgress(next);
+        if (next >= 1) {
+          pushLog(t("combat.log.withdrew"));
+          finishCombat("withdrawn", enemiesRef.current);
+        }
+      }
+    }
+
     // Section D (fleet battles): allied ships fire on their own independent
     // clocks at whatever the player has designated as focus fire — they follow
     // the player's targeting order rather than picking their own, which keeps
@@ -1838,7 +1886,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     setRangeProgress(0);
   }
 
-  function finishCombat(result: "victory" | "defeat" | "captured", finalEnemies: EnemyState[]) {
+  function finishCombat(result: "victory" | "defeat" | "captured" | "withdrawn", finalEnemies: EnemyState[]) {
     setStatus(result);
     setEnemies(finalEnemies);
     // UI audit #9: freeze the after-action figures for every outcome, losses
@@ -1854,7 +1902,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       // 累加器是在弹丸命中的回调里加的,而这份报告在船体归零的那一刻就冻结——
       // 致命的那几发还在飞,于是玩家在战败报告上看到"承受 69/114"然后自己死了。
       // 战败报告正是玩家想弄明白"我是怎么死的"的地方,那个数字不能是错的。
-      const takenByHull = Math.max(0, Math.round((startingHullRef.current - playerHull) / (1 + hullBonusFraction)));
+      const takenByHull = Math.max(0, Math.round((startingHullRef.current - playerHullRef.current) / (1 + hullBonusFraction)));
       setAfterAction({
         sources,
         total,
@@ -1876,7 +1924,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       }
       // Convert the combat-local (hullBonus-scaled) playerHull back to the ship's
       // own terms before persisting — see resolveCombatVictory's endingHullPoints.
-      const realEndingHull = playerHull / (1 + hullBonusFraction);
+      const realEndingHull = playerHullRef.current / (1 + hullBonusFraction);
       const outcome = resolveCombatVictory(encounterId, poiId, victoryFlag, yieldBonusFraction, realEndingHull);
       setRewardsEarned(outcome.rewards);
       if (outcome.bonusDrop) {
@@ -1894,6 +1942,11 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         playSfx("levelUp");
         shake(10);
       }
+    } else if (result === "withdrawn") {
+      // 撤离不是败仗,所以不放战败音效,也不动船员支持度。代价是**打完时**的
+      // 真实船体值原样写回——充能那几秒挨的伤一点都不退。
+      playSfx("draw");
+      resolveCombatWithdraw(playerHullRef.current / (1 + hullBonusFraction));
     } else {
       playSfx("defeat");
       resolveCombatDefeat();
@@ -3009,17 +3062,25 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
             {(["close", "hold", "retreat"] as StanceOrder[]).map((order) => {
               const OrderIcon = order === "close" ? CloseOrderIcon : order === "hold" ? HoldOrderIcon : RetreatOrderIcon;
               const active = stanceOrder === order;
+              // 撤离键自己就是脱离进度条:满了这一仗就结束。文案跟着走,
+              // 免得"撤离"这两个字继续承诺一件按钮做不到的事。
+              const charging = order === "retreat" && active && rangeBand === "long" && status === "active";
               return (
                 <button
                   key={order}
                   className={`btn ${active ? "primary" : "ghost"}`}
-                  style={{ flex: 1, fontSize: "0.68rem", padding: "0.45em 0.2em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3em" }}
+                  style={{ flex: 1, fontSize: "0.68rem", padding: "0.45em 0.2em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3em", position: "relative", overflow: "hidden" }}
                   disabled={status !== "active"}
                   onClick={() => { setStanceOrder(order); playSfx("click"); }}
                   title={t(`combat.stance.${order}Title`)}
                 >
+                  {order === "retreat" && withdrawProgress > 0 && (
+                    <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${withdrawProgress * 100}%`, background: "var(--amber)", opacity: 0.3, transition: "width 150ms linear" }} />
+                  )}
                   <OrderIcon size={12} />
-                  {t(`combat.stance.${order}`)}
+                  <span style={{ position: "relative" }}>
+                    {charging ? t("combat.withdrawing", { pct: Math.round(withdrawProgress * 100) }) : t(`combat.stance.${order}`)}
+                  </span>
                 </button>
               );
             })}
@@ -3258,6 +3319,16 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
               </div>
             );
           })()}
+        </ResultOverlay>
+      )}
+      {status === "withdrawn" && (
+        <ResultOverlay onConfirm={() => onResolve("withdrawn")}>
+          <div className="title" style={{ marginBottom: "0.5rem", color: "var(--amber)" }}>{t("combat.withdrawTitle")}</div>
+          <div style={{ fontSize: "0.85rem", color: "var(--text-mid)", marginBottom: "0.5rem" }}>
+            {t("combat.withdrawBody")}
+          </div>
+          {/* 和战败一样给战后报告——"我为什么打不过"正是撤离之后要弄清的事。 */}
+          {afterAction && afterAction.total > 0 && <AfterActionPanel data={afterAction} />}
         </ResultOverlay>
       )}
       {status === "defeat" && (

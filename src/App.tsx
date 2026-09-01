@@ -380,8 +380,11 @@ export function App() {
                 activePacts: state.value.sortiePacts,
               }));
             }
+            // 主动撤离(第 75 轮)和战败在**这一层**是同一件事:这一趟没走完。
+            // 区别在船体和支持度上,那部分由 resolveCombatWithdraw 负责。
+            const ended = result === "defeat" || result === "withdrawn";
             if (!riftRun && sortie) {
-              if (result === "defeat") {
+              if (ended) {
                 // A lost sortie ends it. Whatever was drafted along the way is
                 // kept — the loss is the mission and the hull, not the refit.
                 setSortie(null);
@@ -391,7 +394,7 @@ export function App() {
               // A mid-sortie win falls through to the draft, then the interlude.
             }
             if (!riftRun) return;
-            if (result === "defeat") {
+            if (ended) {
               // The whole provisional haul is lost — that risk is what makes
               // "one more wave" an actual decision rather than free money.
               saveRiftRun(null);
