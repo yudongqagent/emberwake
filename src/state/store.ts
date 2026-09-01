@@ -1223,9 +1223,35 @@ export function crewPassiveScale(defId: string): number {
 /** Unit 7-Requiem's "+15% max hull fleet-wide" passive, applied wherever a ship's max
  * hull is shown or used outside of combat (combat applies its own equipment-driven
  * hull bonus on top of this — see Combat.tsx). */
-export function effectiveMaxHull(ship: Parameters<typeof computeMaxHull>[0]): number {
-  const bonus = 0.15 * crewPassiveScale("unit7Requiem");
-  return Math.round(computeMaxHull(ship) * (1 + bonus));
+/** 船体上限——**战斗内外必须是同一个数**。
+ *
+ * 2026-08-31(/loop 第 58 轮)。这里原来只加了七号安魂那 15%,而 Combat.tsx 自己算
+ * 了另一个:
+ *
+ *     界面    computeMaxHull × (1 + 0.15 × 七号安魂支持度缩放)
+ *     战斗    computeMaxHull × (1 + min(0.6, 0.15×船体模组) + (招募了七号安魂 ? 0.15 : 0)) × 契约倍率
+ *
+ * 两条互不包含对方那一项:
+ *
+ *   - **模组「船体」加成(最高 +60%)在界面上完全不存在**。装四件船体模组的玩家,
+ *     地图上的血条比战斗里短 60%。
+ *   - 七号安魂那份在界面上跟着支持度缩放(0.5x~1.5x),在战斗里是**固定** 0.15。
+ *
+ * 而 repairFlagship() 把血修到 effectiveMaxHull,修船报价也是按它算缺多少——
+ * 于是**花钱修满,进战斗还是不满**,而且没有任何办法把差的那截补上。
+ *
+ * 现在这里是唯一的真相来源,Combat 只在它上面乘一个出击契约倍率(契约是出击期间
+ * 的临时状态,地图上本来就不存在)。
+ *
+ * 装备/船员加成只对**旗舰**成立——舰队面板也会拿这个函数显示友舰和缴获舰,
+ * 那些船身上没有你的装备。 */
+export function effectiveMaxHull(ship: Parameters<typeof computeMaxHull>[0] & { id?: string }): number {
+  const isFlagship = !ship.id || ship.id === flagship.value?.id;
+  if (!isFlagship) return computeMaxHull(ship);
+  const crew = 0.15 * crewPassiveScale("unit7Requiem");
+  // 显式上限:效果强度会随稀有度/等级增长,三件满级 mk5 船体模组能给到 +110%。
+  const gear = Math.min(0.6, 0.15 * equippedEffectStacks("hullBonus"));
+  return Math.round(computeMaxHull(ship) * (1 + gear + crew));
 }
 
 /** Issue #2 (docs/design-principles.md Player-Tested Anti-Patterns #2): a fully

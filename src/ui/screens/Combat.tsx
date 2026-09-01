@@ -5,7 +5,7 @@ import { computeModuleDamage, computeModuleBlock, computeCritChance, effectiveSi
 import { ModuleRarityTag } from "../components/RarityTag";
 import { computeMaxHull, computePowerCapacity, computeSpeed, computeBaseEvasion, computeBaseCritChance } from "../../engine/ships";
 import { RANGE_MODIFIERS, resolveAttack, advanceRangeBand, anchorBonusBlock, rangeProfileMultiplier, rangeFitTone, abilityCooldownSeconds, powerStrainMultiplier, shiftReactor, weaponsCadenceMultiplier, shieldsDamageMultiplier, enginesRateMultiplier, enginesEvasionBonus, DEFAULT_ALLOCATION, REACTOR_PIPS, type ReactorAllocation, type ReactorChannel, RANGE_ORDER, CRIT_MULTIPLIER, effectiveEvasion, type RangeBand, type StanceOrder } from "../../engine/combat";
-import { state, flagship, resolveCombatVictory, resolveCombatDefeat, hasCrewRecruited, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
+import { state, flagship, resolveCombatVictory, resolveCombatDefeat, effectiveMaxHull, crewCount, spend, captureShip, emberLoad, effectsFor, markUnlockSeen } from "../../state/store";
 import { DIPLOMATIC_FACTIONS } from "../../data/reputation";
 import { activeSetBonuses } from "../../data/setBonuses";
 import { pactModifiers } from "../../data/pacts";
@@ -443,7 +443,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // 效果强度现在会随稀有度/等级增长(见 engine/modules.ts 的 effectPotency),
   // 所以原来靠"最多也就装得下几件"隐式封顶的地方,现在必须写出显式上限——
   // 三件满级 mk5 的船体模组会给到 +110%,那不是丰富,那是崩了。
-  const hullBonusFraction = Math.min(0.6, 0.15 * effectStacks("hullBonus")) + (hasCrewRecruited("unit7Requiem") ? 0.15 : 0);
+  // 2026-08-31(第 58 轮):船体上限改成只有 store 的 effectiveMaxHull 一个来源。
+  // 这里保留 hullBonusFraction 只是为了把"战前那点血"按同一比例缩放(见下面的
+  // playerHull 和结算时的 takenByHull),它必须和 effectiveMaxHull 用的是同一个式子。
+  const hullBonusFraction = effectiveMaxHull(ship) / Math.max(1, computeMaxHull(ship)) - 1;
   // Generic recruit helms passively contribute "+5% evasion fleet-wide" each, just by being recruited.
   const recruitHelmEvasionBonus = crewCount("recruitHelm") * 0.05;
   const regenStacks = effectStacks("regen");
@@ -471,7 +474,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   const [enemies, setEnemies] = useState<EnemyState[]>(
     loadedEncounter.enemies.map((e) => ({ ...e, name: localizedEnemyName(e.name), maxHull: e.hull })),
   );
-  const maxHull = Math.round(computeMaxHull(ship) * (1 + hullBonusFraction) * pacts.maxHullMult);
+  const maxHull = Math.round(effectiveMaxHull(ship) * pacts.maxHullMult);
   const [playerHull, setPlayerHull] = useState(Math.min(maxHull, Math.round(ship.currentHp * (1 + hullBonusFraction))));
   /** 开打那一刻的船体,用来在战后报告里算真实的承受伤害。 */
   const startingHullRef = useRef(playerHull);
