@@ -567,7 +567,19 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     { sources: [string, number][]; total: number; taken: number; seconds: number } | null
   >(null);
   const damageTakenRef = useRef(0);
-  const combatStartRef = useRef(Date.now());
+  /** 这一仗真正推进了多少秒——**模拟时间**,不是墙上时钟。
+   *
+   * 2026-09-01(/loop 第 107 轮)。战后报告的"用时"原来是
+   * (Date.now() - 开打时刻)/1000,而第 89 轮之后战斗在标签页看不见时是**暂停**的,
+   * 于是切走的那几分钟全被算进了"这一仗打了多久"。倍速按钮(1×/2×/3×)也没被算
+   * 进去:三倍速下墙上时钟只走三分之一。
+   *
+   * 实测(全新开局第一场仗,我一边打一边逐帧推进):报告写 **150.7s**,而第 89 轮
+   * 的注释里量过"一场仗实测只有 8~12 秒"——差了十倍以上。
+   *
+   * 换成累加 combatTick 的 dt:那一跳只在战斗真的推进时执行,倍速也已经折在
+   * dt 里,所以两个毛病一起没了。 */
+  const elapsedRef = useRef(0);
   // Brace (UI audit #4). braceUntil is a wall-clock deadline read inside the
   // frozen enemyAttack closure, so it lives in a ref; the cooldown is state
   // because the button has to render it.
@@ -1578,6 +1590,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   function combatTick() {
     if (statusRef.current !== "active") return;
     const dt = COMBAT_TICK_SEC * combatSpeedRef.current;
+    // 战后报告里的"用时"就是这里累加出来的,而不是墙上时钟。
+    // 这一跳只在**真的推进了战斗**时执行(上面 shouldPause 挡住了看不见的时候),
+    // 所以切走的那段时间不会被算进去,倍速也已经折在 dt 里了。
+    elapsedRef.current += dt;
 
     setCooldowns((prev) => {
       const next: Record<string, number> = {};
@@ -2026,7 +2042,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         sources,
         total,
         taken: Math.max(takenByHull, Math.round(damageTakenRef.current)),
-        seconds: (Date.now() - combatStartRef.current) / 1000,
+        seconds: elapsedRef.current,
       });
     }
     if (result === "victory" || result === "captured") {
