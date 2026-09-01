@@ -51,7 +51,7 @@ describe("撤离必须是战斗的第三个出口", () => {
 
   it("充能条件是「远距 + 撤离指令」,而且断了只停住不倒退", () => {
     expect(COMBAT_SRC).toMatch(
-      /const charging = stanceOrderRef\.current === "retreat" && rangeBandRef\.current === "long"/,
+      /const charging = stanceOrderRef\.current === "retreat"\s*\n?\s*&& \(rangeBandRef\.current === "long" \|\| bandLocked\)/,
     );
     // 和接舷同一套写法:进度只在条件成立时前进,没有任何 -= 或归零。
     const block = COMBAT_SRC.slice(COMBAT_SRC.indexOf("const charging = stanceOrderRef"));
@@ -72,6 +72,30 @@ describe("撤离必须是战斗的第三个出口", () => {
     expect(body, "撤离没有写回打完时的船体").toMatch(/endingHullPoints/);
     // 撤离不是败仗,不该记在船员头上。
     expect(body, "撤离扣了船员支持度").not.toMatch(/APPROVAL_PER_LOSS|adjustAssignedCrewApproval/);
+  });
+
+  /** 第 98 轮补上的一条:阵位被契约锁死时,**仍然要能脱离**。
+   *
+   * 「咬死」把阵位锁在近距,而脱离原来要求身处远距——两条一叠,取了那个契约就等于
+   * 整趟出击再也没有战斗以外的出口,只剩打赢或打死。而契约上写的代价只有
+   * "舵手指令失效",一个字没提这个。这正是第 63 轮那个静默死局的形状,只不过
+   * 这次是第 75 轮我自己加的撤离撞上了一条早就在的契约。 */
+  it("阵位被契约锁死时,仍然能脱离", () => {
+    expect(COMBAT_SRC, "没有考虑锁位的情况——取了「咬死」就再也退不出来").toMatch(
+      /const bandLocked = pactsRef\.current\.lockedBand !== null;/,
+    );
+    // 按钮上的进度也要跟着放宽,否则玩家在充能却看不见,以为按了没用。
+    expect(COMBAT_SRC, "锁位时按钮不显示脱离进度").toMatch(
+      /const charging = order === "retreat" && active && status === "active"\s*\n?\s*&& \(rangeBand === "long" \|\| pacts\.lockedBand !== null\)/,
+    );
+    // 锁位契约的说明必须写出这一条,否则玩家还是不敢取。
+    for (const lang of ["EN", "ZH"] as const) {
+      const seg = STRINGS_SRC.slice(STRINGS_SRC.indexOf(`const ${lang}: StringTable = {`));
+      for (const id of ["lockClose", "lockLong"]) {
+        const v = seg.match(new RegExp(`"pact\\.${id}\\.desc": "([^"]*)"`))?.[1] ?? "";
+        expect(v, `${lang} 的 ${id} 没说清还能不能脱离`).toMatch(/7/);
+      }
+    }
   });
 
   /** 实测抓到的:撤离时真实船体 138,写进存档的却是 263。

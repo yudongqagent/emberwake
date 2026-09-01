@@ -1707,7 +1707,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     //
     // 只在舵手指令这一格解锁之后才可能发生:没给你指令的时候,也不该要求你用它。
     if (unlocked("stance")) {
-      const charging = stanceOrderRef.current === "retreat" && rangeBandRef.current === "long";
+      // 阵位被契约锁死时,**仍然可以下令脱离**。
+      //
+      // 2026-09-01(/loop 第 98 轮)。「咬死」把阵位锁在近距,而脱离要求身处远距
+      // ——两条一叠,取了那个契约就等于**整趟出击再也没有战斗以外的出口**,
+      // 只剩打赢或打死。而契约上写的代价只有"舵手指令失效",一个字没提这个。
+      //
+      // 这正是第 63 轮那个静默死局的形状,只不过这次是第 75 轮我自己加的撤离
+      // 撞上了一条早就在的契约。锁位卖的是"不能为了伤害优势换位置",不该顺手
+      // 把命也一起收走——脱离本来就要在火力下顶 7 秒,代价已经付过了。
+      const bandLocked = pactsRef.current.lockedBand !== null;
+      const charging = stanceOrderRef.current === "retreat"
+        && (rangeBandRef.current === "long" || bandLocked);
       if (charging) {
         const next = Math.min(1, withdrawProgressRef.current + dt / WITHDRAW_SECONDS);
         withdrawProgressRef.current = next;
@@ -3230,7 +3241,10 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
               const active = stanceOrder === order;
               // 撤离键自己就是脱离进度条:满了这一仗就结束。文案跟着走,
               // 免得"撤离"这两个字继续承诺一件按钮做不到的事。
-              const charging = order === "retreat" && active && rangeBand === "long" && status === "active";
+              // 阵位被契约锁死时也在充能(见心跳里的 bandLocked),所以按钮上的
+              // 进度条件必须跟着放宽——否则玩家看不到自己正在脱离,以为按了没用。
+              const charging = order === "retreat" && active && status === "active"
+                && (rangeBand === "long" || pacts.lockedBand !== null);
               return (
                 <button
                   key={order}
