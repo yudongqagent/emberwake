@@ -1674,7 +1674,16 @@ export function resolveCombatDefeat() {
  * was this really" — Destroyer-class, Standard rarity, a flat mid-teens level, and
  * neutral rolls, close enough for a ship that's never piloted (only ever gifted
  * or, eventually, fielded in a fleet battle — see the type's own doc comment). */
-export function captureShip(enemyName: string): ShipInstance {
+/** 缴获的船有多强,得看你是在哪儿缴的。
+ *
+ * 2026-09-01(/loop 第 96 轮)。原来 level 写死 12、舰级写死驱逐舰,不管你是在
+ * 新手村还是在合唱深域缴的。而团战里盟友的出力是按等级算的,声望送来的盟友拿的
+ * 是 `level: ship.level`(跟着玩家走)——于是**你亲手缴回来的船,永远比声望白送的
+ * 那些弱**,而且越到后期差得越远。
+ *
+ * 接舷是这个游戏里最难做的一个动作:要在近距连续保持 10 秒,还得**故意不打死**
+ * 一个已经掉到 40% 以下的目标。它的产出不该是全局最弱的那一档。 */
+export function captureShip(enemyName: string, level: number): ShipInstance {
   const captured: ShipInstance = {
     id: randomId("captured"),
     hullClass: "destroyer",
@@ -1682,7 +1691,7 @@ export function captureShip(enemyName: string): ShipInstance {
     aptitude: null,
     scanned: false,
     name: enemyName,
-    level: 12,
+    level: Math.max(1, Math.round(level)),
     xp: 0,
     equipped: [],
     currentHp: 1,
@@ -1708,7 +1717,14 @@ export function giftCapturedShip(shipId: string) {
     capturedShips: state.value.capturedShips.filter((s) => s.id !== shipId),
     alliedShips: [...state.value.alliedShips, ship],
   };
-  grant({ salvage: 150, sourcePoints: 80 });
+  // 赠船的回报跟着船走,不是一个定值。
+  //
+  // 原来是固定 150 废料 / 80 源点。量了一遍它相当于同期几场仗:
+  //     威胁1  一场仗中位 140 废料 → 150 相当于 **1.1 场**
+  //     威胁6  一场仗中位 800 废料 → 150 相当于 **0.2 场**
+  // 也就是说这个游戏里最难做的动作,到后期的回报是一场普通仗的五分之一。
+  // 按等级给,让它在任何阶段都稳定在一场半到两场的量级。
+  grant({ salvage: 30 * ship.level, sourcePoints: 15 * ship.level });
   persist();
 }
 

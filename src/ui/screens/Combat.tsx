@@ -1691,7 +1691,9 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         setBoardProgress(next);
         if (next >= 1) {
           finishCombat("captured", enemiesRef.current);
-          const captured = captureShip(target!.name);
+          // 缴获的船按**当前这场仗**的量级记,而不是写死 12 级——
+          // 声望送来的盟友拿的就是 ship.level,亲手缴的不该反而更弱。
+          const captured = captureShip(target!.name, ship.level);
           pushLog(t("combat.log.captured", { name: captured.name }));
         }
       }
