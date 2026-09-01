@@ -883,6 +883,39 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
     if (status !== "active") return;
     const target = enemies[targetIdx];
     if (!target || target.hull <= 0 || target.phased) return;
+    // 2026-08-31(/loop 第 63 轮):下了接舷令就**对那艘船停火**。
+    //
+    // 接舷的提示写着"拉近后打弱它,别直接打沉",而武器是自动开火的——玩家没有
+    // 任何停火手段。算一下这一场的实数就知道它有多不可能:
+    //
+    //     副官快艇 260 血 × 0.4(CAPTURE_HULL_THRESHOLD) = 104 血以下才可接舷
+    //     实测单发 −47、循环 0.5 秒 ≈ 94 DPS  →  从 104 血打死只要 **1.1 秒**
+    //     而接舷要**连续 10 秒**(BOARD_SECONDS)
+    //
+    // 窗口比要求短了近九倍。阈值早前从 0.25 放宽到 0.4 时,注释里已经认出了这个
+    // 形状("目标常常在窗口被注意到之前就直接打沉了"),但放宽只是把窗口拉长,
+    // 没有把控制权给玩家。
+    //
+    // 搜到的原则:自动系统必须让位于玩家的明确意图。接舷令就是那个意图。
+    //
+    // 只对**缴获目标**停火,别的敌舰照打:否则下了令就等于挨打不还手。而"停火十秒"
+    // 本身就是这个决定的代价——那才是设计想要的取舍,不是一个够不着的时间窗。
+    // 停火只在目标**已经进了缴获窗口**之后。提示怎么说就怎么做:先"打弱它",
+    // 进了窗口再"别直接打沉"。
+    //
+    // 第一版写成"下了令就停火",实测立刻撞墙:进场时目标 121/260(46%),高于 40%
+    // 的阈值,而一下令枪就停了——它永远弱不下来,接舷条永远不动,屏幕上也没有
+    // 任何解释。那是把一个够不着的时间窗换成了一个静默的死结,不算修好。
+    const prize = enemies[0];
+    const inWindow = !!prize && prize.hull > 0 && prize.hull <= prize.maxHull * CAPTURE_HULL_THRESHOLD;
+    if (boardingOrder && encounter.capturable && targetIdx === 0 && inWindow) {
+      const other = enemies.findIndex((e, i) => i !== 0 && e.hull > 0);
+      // 还有护卫就自动改打护卫;只剩那艘要缴获的,就彻底停火。
+      if (other >= 0) {
+        setTargetIdx(other);
+      }
+      return;
+    }
     for (const mod of autoFireWeapons) {
       if ((cooldowns[mod.id] ?? 0) <= 0) {
         // Only one shot per pass: fireModuleImpl reads one-shot buffs (overcharge,
@@ -895,7 +928,7 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cooldowns, status, enemies, targetIdx]);
+  }, [cooldowns, status, enemies, targetIdx, boardingOrder]);
 
   // Issue #4 (2026-08 playtest): spawnBurst takes "r,g,b" (used as rgb(...) in the
   // particle fillStyle), but every weapon's signature color is authored as hex — one
