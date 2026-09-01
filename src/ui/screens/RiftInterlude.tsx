@@ -1,5 +1,7 @@
 import type { ResourceType } from "../../data/types";
 import { riftWaveHaul, riftEnemyCount } from "../../data/rift";
+import { riftDropRarityFloor } from "../../engine/modules";
+import { MARKET_MAX_RARITY } from "../../data/modules";
 import { ResourceIcon, resourceLabel } from "../components/Icons";
 import { flagship } from "../../state/store";
 import { effectiveMaxHull } from "../../state/store";
@@ -29,6 +31,8 @@ export function RiftInterlude({
   const hullFrac = ship ? ship.currentHp / effectiveMaxHull(ship) : 1;
   const nextDepth = depth + 1;
   const nextHaul = riftWaveHaul(nextDepth);
+  const nowTier = riftDropRarityFloor(depth);
+  const nextTier = riftDropRarityFloor(nextDepth);
   const entries = Object.entries(haul).filter(([, v]) => (v ?? 0) > 0) as [ResourceType, number][];
 
   return (
@@ -78,6 +82,36 @@ export function RiftInterlude({
           </div>
         </div>
       )}
+
+      {/* 这一层原来没有:整个模式真正的奖品是**打捞的档次**,而它在抉择点上一个字
+          都不显示。
+
+          2026-08-31(/loop 第 55 轮)。舰桥上写的是"收获远超常规空间的任何战斗",
+          而实测每一波的资源只有常规最肥一场的:
+
+              深度 1  8%    深度 3  14%    深度 6  34%    深度 10  114%
+
+          也就是说玩家读到一句夸下海口的承诺,潜下来,拿到十分之一,然后再也不来了
+          ——**而他从来没被告知这里真正的东西是 mk4/mk5**。商店封顶 mk3,普通战斗
+          掉落也封顶 mk3,而裂隙深度 4 就给 mk4、7 给 mk5;买不到的东西一直就在
+          够得到的深度上,只是 riftDropRarityFloor 在这一轮之前没有任何界面引用过。
+
+          "再下一层吗"本来就该是一次知情的赌:摆出现在撤能拿什么、再撑一层能拿
+          什么。这是这个模式存在的全部意义。 */}
+      <div
+        className="panel"
+        style={{ padding: "0.7rem 1.15rem", minWidth: "min(340px, 92vw)", display: "flex", flexDirection: "column", gap: "0.3rem" }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.8rem", fontSize: "0.82rem" }}>
+          <span style={{ color: "var(--text-mid)" }}>{t("rift.dropNow", { tier: riftDropRarityFloor(depth).toUpperCase() })}</span>
+          <span style={{ color: nextTier !== nowTier ? "var(--violet)" : "var(--text-dim)", fontWeight: nextTier !== nowTier ? 700 : 400 }}>
+            {t("rift.dropNext", { depth: nextDepth, tier: nextTier.toUpperCase() })}
+          </span>
+        </div>
+        <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>
+          {t("rift.dropCeiling", { tier: MARKET_MAX_RARITY.toUpperCase() })}
+        </div>
+      </div>
 
       {/* Provisional haul — labelled as at-risk, because it is. */}
       <div className="panel accent scanline" style={{ padding: "1rem 1.15rem", minWidth: "min(340px, 92vw)", ["--accent" as any]: "var(--violet)" }}>
