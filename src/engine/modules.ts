@@ -199,8 +199,52 @@ export function benchmarkFor(
     .map((id) => (id ? lookup(id) : undefined))
     .filter((m): m is ModuleInstance => !!m && moduleDefById(m.defId).type === def.type && m.id !== mod.id);
   if (sameType.length === 0) return null;
-  const rank = (m: ModuleInstance) => primaryStat(m)?.value ?? computeModuleEvasion(m);
-  return sameType.reduce((best, m) => (rank(m) > rank(best) ? m : best));
+  return sameType.reduce((best, m) => (moduleRank(m) > moduleRank(best) ? m : best));
+}
+
+/** 一件模组在同类里排多高。
+ *
+ * 原来是 benchmarkFor 里的一个内联箭头函数;第 115 轮提出来,是因为"库存里有没有
+ * 更强的"必须用**同一把尺子**——两把尺子迟早会给出互相矛盾的建议。 */
+/** 品质掷点的上下限——qualityMultiplier 的两端。 */
+const QUALITY_MIN = 0.88, QUALITY_MAX = 1.12;
+
+export function moduleRank(m: ModuleInstance): number {
+  return primaryStat(m)?.value ?? computeModuleEvasion(m);
+}
+
+/** 库存里有没有同类型、比这一件更强的模组。
+ *
+ * 2026-09-01(/loop 第 115 轮)。游戏刻意**不**自动替换已装备的模组——那是有取舍
+ * 的决定,不该由系统替玩家做(见 SortieInterlude 的注释)。但"不替你做"不等于
+ * "不告诉你":实测我自己的存档,**四件 mk5 装甲躺在库存里,身上装着 mk1/mk2**,
+ * 还有一件 mk5 工程件闲着而槽里是 mk3。界面上没有任何一处提过这件事——要发现它,
+ * 玩家得逐个槽点开 SWAP 一件件比。
+ *
+ * 尺子和抽卡/工坊那两处的"vs. your best of this type"是同一把(moduleRank)。 */
+export function idleUpgradeFor(
+  mod: ModuleInstance,
+  inventory: ModuleInstance[],
+): ModuleInstance | null {
+  const type = moduleDefById(mod.defId).type;
+  const mine = moduleRank(mod);
+  // 差多少才值得提?用游戏自己的随机幅度当门槛。
+  //
+  // qualityMultiplier 是 0.88 + roll×0.24,所以同一个 def 的两个实例能差 1.27 倍。
+  // 只有"它掷到最差也强过你手上这件掷到最好"才算真的更强——低于这个差距,玩家
+  // 换过去可能反而更弱,提示就成了噪音。第 106 轮量内容压制时踩过同一个坑:
+  // 第一版只比裸数值,扫出来的"压制"里差 0.7% 的也算,那不是压制是四舍五入。
+  //
+  // 实测:不设门槛时我的存档亮了 9 条,其中好几条只差 +1;设了之后只剩真正的
+  // mk1/mk2 装甲 vs 库存里的 mk5(+41 ~ +53)。
+  const better = inventory.filter(
+    (m) =>
+      m.id !== mod.id &&
+      moduleDefById(m.defId).type === type &&
+      moduleRank(m) * QUALITY_MIN > mine * QUALITY_MAX,
+  );
+  if (better.length === 0) return null;
+  return better.reduce((best, m) => (moduleRank(m) > moduleRank(best) ? m : best));
 }
 
 /** 一个模组把它的效果打出多重。

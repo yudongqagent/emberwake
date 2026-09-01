@@ -7,7 +7,7 @@ import { effectiveShipPowerDraw } from "../../state/store";
 import { moduleDefById, fabricatorCost, MODULE_RARITY_ORDER } from "../../data/modules";
 import { moduleEffectById } from "../../data/moduleEffects";
 import { setProgress, SET_TWO, SET_FOUR } from "../../data/setBonuses";
-import { computeModuleDamage, computeModuleBlock, rerollTrait, rerollCandidates, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel, effectPotency } from "../../engine/modules";
+import { computeModuleDamage, computeModuleBlock, rerollTrait, rerollCandidates, qualityMultiplier, isModuleMaxed, moduleUpgradeCost, moduleMaxLevel, effectPotency, idleUpgradeFor, moduleRank } from "../../engine/modules";
 import { pickOne } from "../../engine/rng";
 import { ModuleRarityTag } from "../components/RarityTag";
 import { ModuleStats } from "../components/ModuleStats";
@@ -143,6 +143,41 @@ export function Modules() {
                     );
                   })()}
                   <UpgradeRow mod={mod} />
+                  {/* 库存里有同类更强的就说一声。
+                    *
+                    * 2026-09-01(/loop 第 115 轮)。游戏刻意不替玩家自动换掉已装备的
+                    * 模组(那是有取舍的决定),但"不替你做"不等于"不告诉你"。实测我
+                    * 自己的存档:四件 mk5 装甲躺在库存里,身上装着 mk1/mk2;要发现
+                    * 它,玩家得逐个槽点开 SWAP 一件件比。
+                    *
+                    * 尺子用 moduleRank——和抽卡卡面、制造工坊那两处的
+                    * "vs. your best of this type" 是同一把。 */}
+                  {(() => {
+                    const equippedIds = new Set(ship.equipped.filter(Boolean) as string[]);
+                    const idle = state.value.modules.filter((m) => !equippedIds.has(m.id));
+                    const better = idleUpgradeFor(mod, idle);
+                    if (!better) return null;
+                    // 用**百分比**而不是绝对差值:三种主属性(伤害/格挡/闪避)量级
+                    // 差得很远——引擎的闪避基数只有个位数,绝对差写出来是「+1」,
+                    // 读起来像可以忽略,实际是 +29%。实测就是这么发现的。
+                    const delta = Math.round((moduleRank(better) / moduleRank(mod) - 1) * 100);
+                    return (
+                      <button
+                        className="btn"
+                        style={{
+                          width: "100%", marginBottom: "0.4rem", justifyContent: "flex-start",
+                          fontSize: "0.66rem", textTransform: "none", letterSpacing: "normal",
+                          borderColor: "var(--green)", color: "var(--green)",
+                        }}
+                        onClick={() => setPickerSlot(slot.index)}
+                      >
+                        {t("modules.idleUpgrade", {
+                          name: localizedModuleInstanceName(better),
+                          delta: `+${delta}%`,
+                        })}
+                      </button>
+                    );
+                  })()}
                   <div style={{ display: "flex", gap: "0.4rem" }}>
                     <button className="btn" onClick={() => setPickerSlot(slot.index)}>{t("modules.swap")}</button>
                     <button className="btn danger" onClick={() => equipModule(ship.id, slot.index, null)}>{t("modules.remove")}</button>
