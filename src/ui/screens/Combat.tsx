@@ -3353,6 +3353,18 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
             <div key={i} style={{ opacity: i === 0 ? 1 : 0.55, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l}</div>
           ))}
         </div>
+        {/* 同一份日志,给读屏的那一份。
+            2026-09-01(第 86 轮):战斗里除了这条日志,**其它全在画布上**——伤害飘字、
+            血条、敌人徽章、特效,读屏一个都拿不到。而日志本身既没有 role 也没有
+            aria-live,所以什么都不会被念出来。
+            上面那个可见的 ticker 是刻意做成"最新在上、只留两行"的(见它自己的注释),
+            而 role="log" 的语义要求**新内容追加在末尾**。所以不动可见的那份,
+            另给一份视觉隐藏、按时间正序的——一份数据,两种呈现。 */}
+        <div className="sr-only" role="log" aria-live="polite" aria-relevant="additions">
+          {log.map((l, i) => (
+            <div key={i}>{l}</div>
+          ))}
+        </div>
       </div>
 
       {(status === "victory" || status === "captured") && (

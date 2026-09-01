@@ -494,6 +494,20 @@ h1, h2, h3 {
  * 用 box-shadow 而不是 outline:box-shadow 画在元素自己的绘制盒里,**不会被
  * clip-path 裁掉**;再配一层内发光,保证在亮底和暗底上都读得出来。
  * 只在 :focus-visible 上给,所以鼠标点击不会平白多出一圈。 */
+/* 视觉上隐藏,但读屏仍然能读到。用裁剪而不是 display:none / visibility:hidden
+ * ——后两者会把内容从无障碍树里整个拿掉,那就等于没写。 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 :focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 2px;

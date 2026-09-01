@@ -75,6 +75,30 @@ describe("键盘也要够得着", () => {
     expect(TOKENS, ".btn 仍然带 clip-path——这正是不能用 outline 的原因").toMatch(/\.btn \{[\s\S]*?clip-path: polygon/);
   });
 
+  /** 战斗里除了那条日志,其它全在画布上——伤害飘字、血条、敌人徽章、特效,
+   * 读屏一个都拿不到。而日志本身原来既没有 role 也没有 aria-live,所以什么都
+   * 不会被念出来。搜到的做法就是这一条:序列化的游戏日志用 role="log"。 */
+  it("战斗日志有读屏能听见的那一份", () => {
+    expect(COMBAT_SRC, "日志不是实时区域,读屏什么都听不到").toMatch(
+      /role="log" aria-live="polite" aria-relevant="additions"/,
+    );
+    // 可见的那份是"最新在上、只留两行"(刻意的);role="log" 要求新内容在末尾,
+    // 所以给读屏的那份必须是**正序全量**,不能复用 reverse().slice(-2)。
+    const i = COMBAT_SRC.indexOf('role="log"');
+    const after = COMBAT_SRC.slice(i, i + 260);
+    expect(after, "给读屏的那份也被截断/倒序了").toMatch(/\{log\.map\(\(l, i\) => \(/);
+    expect(after, "给读屏的那份被倒序了").not.toMatch(/reverse\(\)/);
+  });
+
+  it("视觉隐藏用裁剪,不能用 display:none —— 那会把它从无障碍树里拿掉", () => {
+    const i = TOKENS.indexOf(".sr-only");
+    expect(i, "没有 .sr-only").toBeGreaterThan(0);
+    const rule = TOKENS.slice(i, i + 260);
+    expect(rule).toMatch(/clip: rect\(0, 0, 0, 0\)/);
+    expect(rule, "用了 display:none,读屏就读不到了").not.toMatch(/display:\s*none/);
+    expect(rule, "用了 visibility:hidden,读屏就读不到了").not.toMatch(/visibility:\s*hidden/);
+  });
+
   /** 只在键盘焦点时出现,鼠标点击不该平白多一圈。 */
   it("只给键盘焦点,不给鼠标点击", () => {
     expect(TOKENS, "用了 :focus 而不是 :focus-visible,鼠标点完也会亮").not.toMatch(/[^-]:focus \{/);
