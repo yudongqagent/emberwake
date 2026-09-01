@@ -383,9 +383,29 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
   // 一个新控件冒出来而没人说一句,玩家不会注意到界面上多了个按钮。第一次解锁时
   // 提示一次,然后记进存档不再重复。
   const [newUnlock, setNewUnlock] = useState<string | null>(null);
+  // 2026-08-31(/loop 第 61 轮):抗冲的提示要等到**真的有东西在蓄力**才弹。
+  //
+  // 搜到的原则是"最好的战斗是在战斗里教会你的""让第一场遭遇战自然要求你用到那个
+  // 动作"。而原来的写法是:控件一解锁,就在**当时正在打的那一场**弹提示,不管那
+  // 场仗里有没有会蓄力的敌人。从头开一局实测,我正好撞上了——等级兜底在一场
+  // 掠夺者混战里解锁了抗冲,于是屏幕上写着"有大家伙在蓄力的时候按下去",而那场
+  // 仗里没有任何东西会蓄力。
+  //
+  // 剧情路径上这不会发生(抗冲挂在第一场剧情战之后,紧接着就是那门会蓄力的炮台)。
+  // 但等级兜底是给跳过主线的开放世界玩家准备的,他们恰恰最需要这句话说在点子上。
+  //
+  // 其它三个控件照旧开场就提示:它们不依赖某种特定的敌人。
+  const [bracePending, setBracePending] = useState(false);
+  // combatTick 是冻结的闭包——按这个文件的 ref 约定镜像一份。
+  const bracePendingRef = useRef(bracePending);
+  bracePendingRef.current = bracePending;
   useEffect(() => {
     for (const u of COMBAT_UNLOCKS) {
       if (unlocked(u.id) && !state.value.flags[`unlockSeen.${u.id}`]) {
+        if (u.id === "brace") {
+          setBracePending(true);
+          return;
+        }
         markUnlockSeen(u.id);
         setNewUnlock(u.id);
         return;
@@ -1642,6 +1662,13 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
           setEnemies((prev) => prev.map((e, idx) => (idx === i ? { ...e, siegeRemaining: SIEGE_WINDUP_SEC } : e)));
           pushLog(t("combat.log.siegeCharging", { enemy: enemy.name }));
           playSfx("alarm");
+          // 这就是那句话该出现的时刻:有东西在蓄力,而你手上正好有抗冲。
+          if (bracePendingRef.current) {
+            bracePendingRef.current = false;
+            setBracePending(false);
+            markUnlockSeen("brace");
+            setNewUnlock("brace");
+          }
         }
         return;
       }
