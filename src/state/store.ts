@@ -956,6 +956,8 @@ export function equipModule(shipId: string, slotIndex: number, moduleId: string 
     return { ...s, equipped };
   });
   state.value = { ...state.value, ships };
+  // 卸下船体模组会让上限**下降**,而当前船体没人管——见 clampHullToMax。
+  clampHullToMax();
     // 第 80 轮:出击之间的每一个"落定"的动作都得有声音——见 audioFeedback.test.ts。
   playSfx("click");
   persist();
@@ -1322,6 +1324,34 @@ export function crewPassiveScale(defId: string): number {
  *
  * 刻意不乘契约倍率(pacts.blockMult):契约只活一次出击,而这是船的常驻属性——
  * 和 effectiveMaxHull 不含契约是同一个口径。 */
+/** 把当前船体夹回上限之内。
+ *
+ * 2026-09-01(/loop 第 92 轮)。effectiveMaxHull 里有一项是**装备给的**:
+ * `min(0.6, 0.15 × 船体模组层数)` —— 最多 +60%。而换装的时候没有任何人管
+ * currentHp,于是这条路是通的:
+ *
+ *   装上几件船体模组 → 上限涨 → 修满 → 卸下来 → 上限跌回去,而当前值没动
+ *
+ * 结果就是 currentHp **超过**上限。实测(第 91 轮验证格挡时顺手看到的):
+ * 舰桥上写着「7203 / 5541」——血条读数超过 100%。
+ *
+ * 真正的伤害不在那个读数,而在**它是悄悄消失的**:进战斗那一刻
+ * `playerHull = min(maxHull, ...)` 会把超出的部分削掉,玩家带着 7203 点船体
+ * 出发,开打时只有 5541,中间没有任何提示。搜到的说法把这种叫 silent loss,
+ * 并且建议要么当场夹住、要么明确告诉玩家。
+ *
+ * 这里选"当场夹住":卸下那一刻血条就往下走,玩家看得见因果,而不是"一切正常,
+ * 直到开打"。夹在 store 这一层而不是各个界面里——和 spend() 那条注释同一个道理。 */
+export function clampHullToMax() {
+  const ships = state.value.ships.map((s) => {
+    const max = effectiveMaxHull(s);
+    return s.currentHp > max ? { ...s, currentHp: max } : s;
+  });
+  if (ships.some((s, i) => s !== state.value.ships[i])) {
+    state.value = { ...state.value, ships };
+  }
+}
+
 export function effectiveShipBlock(ship: ShipInstance): number {
   return Math.round(
     ship.equipped.reduce((sum, id) => {
@@ -1715,3 +1745,7 @@ export function repairFlagship() {
   playSfx("dock");
   persist();
 }
+
+// 启动时先夹一次:已经处在"当前船体高于上限"状态的老存档(换装那条路造成的,
+// 见 clampHullToMax)在这里被拉回来,而不是等到进战斗时悄悄削掉。
+clampHullToMax();
