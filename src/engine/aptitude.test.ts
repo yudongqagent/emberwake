@@ -4,6 +4,9 @@ import { APTITUDE_GROWTH, RARITY_MULTIPLIER, RARITY_ORDER } from "../data/hullCl
 import { qualityMultiplier } from "./modules";
 import type { Aptitude, ShipInstance } from "../data/types";
 import BRIDGE_SRC from "../ui/screens/Bridge.tsx?raw";
+import STORE_SRC from "../state/store.ts?raw";
+import { scanShipAction, replaceState, flagship } from "../state/store";
+import { createInitialState } from "./save";
 import STRINGS_SRC from "../i18n/strings.ts?raw";
 
 /** 资质得真的做点什么,而且不能做到把稀有度阶梯压塌。
@@ -99,5 +102,43 @@ describe("资质", () => {
   it("界面上写了倍率,不是只有一个字母", () => {
     expect(BRIDGE_SRC, "舰桥只显示 S/A/B/C/D,不说它做什么").toMatch(/APTITUDE_GROWTH\[ship\.aptitude\]/);
     expect(BRIDGE_SRC).toMatch(/aptitudeTitle/);
+  });
+});
+
+/** 第 73 轮补:上一次的修复落在了没人调用的函数上。
+ *
+ * scanShip 是"资质在建船时定死、扫描只揭示"这条规则的正主,但**没有任何人调用它**
+ * ——舰队面板的扫描按钮走的是 store 的 scanShipAction,而那个函数自己重写了一遍,
+ * 用 pickAptitude() 在扫描时重掷,还会覆盖掉建船时定好的值。
+ *
+ * 第 50 轮我实测看到"资质 C ×0.8"就认为修好了;那是旧路径掷出来的 C。
+ * 验的是显示,不是机制。 */
+/** 扫描源码前先剥掉注释:说明里必然要引用那行旧代码,而守卫查的是**还在不在跑**,
+ * 不是"这个词出现过没有"。第一版没剥,当场被自己的注释绊倒(和第 68 轮同一个错)。 */
+const STORE_CODE = STORE_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+describe("扫描走的必须是同一条规则", () => {
+  it("scanShipAction 调 scanShip,不自己重掷", () => {
+    expect(STORE_CODE, "扫描动作没有走共用的 scanShip").toMatch(/scanShip\(s\)/);
+    expect(
+      /aptitude: pickAptitude\(\)/.test(STORE_CODE),
+      "store 又在扫描时自己重掷资质了",
+    ).toBe(false);
+  });
+
+  it("store 里不再抄一份权重表", () => {
+    expect(
+      /function pickAptitude\(\)/.test(STORE_CODE),
+      "store 又抄了一份 APTITUDE_WEIGHTS——两个真相来源",
+    ).toBe(false);
+  });
+
+  it("扫描一条已经定好资质的船,资质不变", () => {
+    replaceState(createInitialState());
+    const before = flagship.value!.aptitude;
+    expect(before, "新船没有资质").not.toBeNull();
+    scanShipAction(flagship.value!.id);
+    expect(flagship.value!.scanned).toBe(true);
+    expect(flagship.value!.aptitude, "扫描把资质重掷了").toBe(before);
   });
 });

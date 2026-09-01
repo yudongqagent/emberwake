@@ -25,7 +25,7 @@ import { localizedSystemName, localizedPoiName } from "../i18n/data";
 import { localizedScene } from "../i18n/story";
 import { t } from "../i18n/strings";
 import { CREW_DEFS, crewDefById } from "../data/crew";
-import { applyXp, computeMaxHull, ascendShip, reforgeShip, computeBaseEvasion, computeBaseCritChance, computeSpeed } from "../engine/ships";
+import { applyXp, computeMaxHull, ascendShip, reforgeShip, scanShip, computeBaseEvasion, computeBaseCritChance, computeSpeed } from "../engine/ships";
 import { drawModule, riftDropRarityFloor, levelUpModule, moduleUpgradeCost, isModuleMaxed, benchmarkFor, computeModuleBlock, computeModuleEvasion, computeModuleThrust } from "../engine/modules";
 import { MAX_BLOCK_FRACTION, effectiveEvasion } from "../engine/combat";
 import type { DraftOption } from "../data/draft";
@@ -876,25 +876,28 @@ export function recruitGenericCrew(defId: string) {
   persist();
 }
 
+/** 扫描一条船。
+ *
+ * 2026-08-31(/loop 第 73 轮)。这里原来**自己重写了一遍**扫描:
+ *
+ *     return { ...s, scanned: true, aptitude: pickAptitude() };
+ *
+ * 而 engine/ships.ts 里的 scanShip 才是那条规则的正主——第 50 轮把它改成了
+ * "资质在建船时定死,扫描只负责读出来",理由是:资质一旦真的有作用,"扫描时才掷"
+ * 就变成一个陷阱(不扫按 B=1.0 算,扫了有 45% 概率掷出 C 或 D 把自己的船变差)。
+ *
+ * 那次修复落在 scanShip 上,而**没有任何人调用 scanShip**——舰队面板的扫描按钮
+ * 走的是这里。于是那条修复从来没有到达游戏实际跑的路径:它照旧在扫描时重掷,
+ * 还会覆盖掉 createWhisper 已经定好的资质。
+ *
+ * 第 50 轮我实测看到"资质 C ×0.8"就认为修好了——那是**旧路径**掷出来的 C。
+ * 验的是显示,不是机制。 */
 export function scanShipAction(shipId: string) {
-  const ships = state.value.ships.map((s) => {
-    if (s.id !== shipId || s.scanned) return s;
-    return { ...s, scanned: true, aptitude: pickAptitude() };
-  });
+  const ships = state.value.ships.map((s) => (s.id === shipId ? scanShip(s) : s));
   state.value = { ...state.value, ships };
   persist();
 }
 
-function pickAptitude(): "S" | "A" | "B" | "C" | "D" {
-  const weights: Record<string, number> = { S: 3, A: 12, B: 40, C: 30, D: 15 };
-  const total = Object.values(weights).reduce((a, b) => a + b, 0);
-  let roll = Math.random() * total;
-  for (const [k, w] of Object.entries(weights)) {
-    roll -= w;
-    if (roll <= 0) return k as any;
-  }
-  return "B";
-}
 
 /** Player direction 2026-08-24: "Every module should be unique. We don't want
  * repeat modules on a ship." Two copies of the same design was never an
