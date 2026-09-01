@@ -27,9 +27,12 @@ import type { ResourceType } from "../data/types";
 
 /** 每种资源当前真实的花费点数量。改了代码就要回来改这里——顺带改说明。 */
 const SPEND_SITES: Record<ResourceType, number> = {
-  salvage: 2,        // 修船 · 兑换合金
+  // 2026-08-31(第 65 轮):两条兑换原本各写一遍 spend(),现在合成了一处共用逻辑
+  // (批量跟着持有量走,见 StationPanel 的说明),所以花费点各少一个。用途没变——
+  // 废料仍然是"修船 · 兑换合金",合金仍然是"兑换废料 · 招募船员 · 模组升级"。
+  salvage: 1,        // 修船 · 兑换合金(兑换与合金共用一处)
   sourcePoints: 2,   // 制造工坊抽取 · 刷新报价
-  alloy: 3,          // 兑换废料 · 招募船员 · 模组升级
+  alloy: 2,          // 兑换废料(与废料共用一处) · 招募船员 · 模组升级
   originEssence: 2,  // 进阶 · 改铸
   insight: 1,        // 词条重掷
 };

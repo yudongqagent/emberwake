@@ -177,22 +177,40 @@ function TradeTab() {
       <div style={{ color: "var(--text-mid)", fontSize: "0.85rem" }}>
         {t("station.tradeHint")}
       </div>
-      <Row>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
-          <ResourceIcon type="salvage" size={16} /> 30 <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="alloy" size={16} /> {alloyOut}
-        </div>
-        <button className="btn" disabled={res.salvage < 30} onClick={() => { spend({ salvage: 30 }); grant({ alloy: alloyOut }); }}>
-          {t("station.exchange")}
-        </button>
-      </Row>
-      <Row>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
-          <ResourceIcon type="alloy" size={16} /> 10 <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type="salvage" size={16} /> {salvageOut}
-        </div>
-        <button className="btn" disabled={res.alloy < 10} onClick={() => { spend({ alloy: 10 }); grant({ salvage: salvageOut }); }}>
-          {t("station.exchange")}
-        </button>
-      </Row>
+      {/* 一次换一手,而"一手"跟着你手里有多少走。
+
+          2026-08-31(/loop 第 65 轮)。原来这两行是写死的"30 废料 → 10 合金",一次
+          一点击。而第 48 轮量过的账是:全战役废料收入 14,005(修船只吃掉约 4,000),
+          合金收入 5,886、而升满七件模组要 5,131——**废料换合金是全游戏最有用的一笔
+          交易**,偏偏被钉死在每次 30。把富余的废料换完要点 **467 次**。
+
+          搜到的原话:"设计者必须判断一个固定加值会不会被百分比成长淹没"。这就是
+          被淹没的那种。
+
+          汇率一点没动(那是设计),动的是批量:每次换手里的一成,不足一手就换一手。
+          按钮上直接写清这一下会花多少、拿到多少——早期就是 30 换 10,后期自己长大。 */}
+      {([
+        ["salvage", "alloy", 30, alloyOut, res.salvage] as const,
+        ["alloy", "salvage", 10, salvageOut, res.alloy] as const,
+      ]).map(([from, to, unitCost, unitGain, held]) => {
+        const units = Math.max(1, Math.floor((held * 0.1) / unitCost));
+        const cost = unitCost * units;
+        const gain = unitGain * units;
+        return (
+          <Row key={from}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.88rem" }}>
+              <ResourceIcon type={from} size={16} /> {cost} <TradeIcon size={14} color="var(--text-dim)" /> <ResourceIcon type={to} size={16} /> {gain}
+            </div>
+            <button
+              className="btn"
+              disabled={held < cost}
+              onClick={() => { spend({ [from]: cost }); grant({ [to]: gain }); }}
+            >
+              {t("station.exchange")}
+            </button>
+          </Row>
+        );
+      })}
     </div>
   );
 }
