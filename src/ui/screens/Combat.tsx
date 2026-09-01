@@ -1417,12 +1417,25 @@ export function Combat({ encounterId, poiId, victoryFlag, onResolve, rift, extra
         }
       } else {
       const prevBand = rangeBandRef.current;
+      // 舵手指令还没解锁的时候,敌方**不拉扯距离**。
+      //
+      // 2026-08-31(/loop 第 60 轮)。第 51 轮把敌方拉扯从 1/18 提到 1/8,让"保持
+      // 也有代价"这句第一次成立——但那也意味着它在教学关里就成立了。从头开一局
+      // 实测:第一场真正的仗(求救信号,掠夺者,偏好近距)打了 10.4 秒,玩家被从
+      // 中距拖到近距,而他的开局武器是**远距**枪,在近距吃 ×0.75。
+      //
+      // 而舵手指令要 act1.static.cleared / 4 级才给(data/combatUnlocks.ts)。也就是
+      // 新玩家在拿到那排按钮之前,就已经在被一个他看不见也管不了的机制扣伤害。
+      //
+      // combatUnlocks 那套的原则是"控件在它开始有用的那一刻出现";反过来也得成立
+      // ——**没给你工具的事,就不该先发生在你身上**。
+      const enemyPullRate = unlocked("stance") ? ENEMY_RANGE_RATE : 0;
       const next = advanceRangeBand(
         { band: rangeBandRef.current, progress: rangeProgressRef.current },
         stanceOrderRef.current,
         preferredRange,
         playerRate,
-        ENEMY_RANGE_RATE,
+        enemyPullRate,
         dt,
       );
       rangeBandRef.current = next.band;
