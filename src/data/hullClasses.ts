@@ -171,7 +171,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseHull: 2600,
     basePower: 81,
     baseSpeed: 14,
-    unlockFlag: "act6.civilizationDisqualified.cleared",
+    unlockFlag: "act6.gospelCivilization.cleared",
     essenceCost: 620,
     minLevel: 18,
   },
@@ -186,7 +186,7 @@ export const HULL_CLASSES: HullClassDef[] = [
     baseHull: 3300,
     basePower: 81,
     baseSpeed: 13,
-    unlockFlag: "act6.civilizationDisqualified.cleared",
+    unlockFlag: "act6.gospelCivilization.cleared",
     essenceCost: 620,
     minLevel: 18,
   },
@@ -214,6 +214,21 @@ export const RARITY_MULTIPLIER: Record<ShipRarity, number> = {
   ascendant: 4.01,
 };
 
+/** 第六阶的解锁点原来是 act6.civilizationDisqualified.cleared——那是**打完终局
+ * 之后**才产生的 flag。也就是说游戏最核心的那句承诺("一级一级地重铸")的最后
+ * 一级,玩家在战役里**从来没开过**:它是通关奖杯,不是一条船。
+ *
+ * 2026-08-31(/loop 第 56 轮)量出来的后果:玩家实际是开着第 5 阶打终局。
+ *
+ *     第5阶 主权级   船体 5,402   终局最重一击 1,404 = **26%**   4 下打死
+ *     第6阶 圣颂级   船体 7,592              1,484 =  20%    6 下
+ *
+ * 26% 已经越过 difficultyRamp.test.ts 那条"最重一击不得超过预期船体 25%"的线
+ * ——而那条守卫看不见,因为它的 expectedHull 假设玩家开着和星区**同阶**的船。
+ * 假设本身是假的。
+ *
+ * 改成挂在终局战之前的最后一步(act6.gospelCivilization.cleared):最后重铸一次,
+ * 然后去面对执礼者。这也让上面那条假设第一次变成真的。 */
 /** minLevel 是**地板**,不是墙。
  *
  * 2026-08-31(/loop 第 54 轮)。原来是 4 / 10 / 18 / 28 / 40 / 55。按每个 POI 打一遍
