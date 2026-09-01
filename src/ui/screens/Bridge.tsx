@@ -1,4 +1,4 @@
-import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull, setVoluntaryLoad, reputationOf, sigilRank, buySigilRank } from "../../state/store";
+import { state, flagship, currentSystem, currentGalaxy, getNextObjective, travelToSystem, effectiveMaxHull, setVoluntaryLoad, reputationOf, sigilRank, buySigilRank, emberLoad } from "../../state/store";
 import { SIGIL_NODES, sigilUpgradeCost } from "../../data/sigils";
 import { emberLoadRewardMultiplier } from "../../data/emberLoad";
 import { DIPLOMATIC_FACTIONS, repTier, repEffects } from "../../data/reputation";
@@ -21,7 +21,20 @@ function EmberLoadPanel() {
   const ship = flagship.value;
   const fromAscension = ship?.ascendedFrom.length ?? 0;
   const voluntary = state.value.voluntaryLoad;
-  const total = fromAscension + voluntary;
+  // 2026-08-31(/loop 第 57 轮):这里原来是 `fromAscension + voluntary`,**漏掉了
+  // regionThreatLoad()**——而战斗用的是 store.ts 的 emberLoad(),那一项在里面。
+  //
+  // 差多少:第七星区、6 次进阶、25 级时,面板写 6,战斗实际用 9。奖励倍率也是按
+  // 错的总数算的,于是这块面板存在的唯一理由("把这场赌注在下注之前讲清楚")
+  // 正好落空。
+  //
+  // 第 50 轮实测其实已经撞到过:那次我的船 0 次进阶、0 主动负荷,面板会写 +0%,
+  // 而实际经验被乘了 1.421——那 42% 就是被漏掉的星区威胁负荷。当时没认出来。
+  //
+  // 现在直接用 emberLoad() 本身,并且把星区那一份单独列出来:玩家得看得见
+  // "这份压力是从哪来的",否则一个跟着自己飞到哪就变的数字只会让人更糊涂。
+  const total = emberLoad();
+  const fromRegion = Math.max(0, total - fromAscension - voluntary);
   const reward = Math.round((emberLoadRewardMultiplier(total) - 1) * 100);
   return (
     <div className="panel" style={{ padding: "0.9rem 1rem" }}>
@@ -40,6 +53,11 @@ function EmberLoadPanel() {
         <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
           {t("load.fromAscension", { n: fromAscension })}
         </span>
+        {fromRegion > 0 && (
+          <span style={{ fontSize: "0.72rem", color: "var(--amber)" }}>
+            {t("load.fromRegion", { n: fromRegion })}
+          </span>
+        )}
         <div style={{ display: "flex", gap: "0.3rem", marginLeft: "auto" }}>
           <button
             className="btn ghost"

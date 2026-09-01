@@ -76,8 +76,15 @@ describe("船体阶梯要在战役之内开得上", () => {
   it("最后一战里,玩家开得上的最好的船挨得住", () => {
     const fin = finalCombat();
     const topOrder = Math.max(...HULL_CLASSES.map((h) => h.order));
-    // 负荷 = 进阶次数,走到第六阶就是 6(见 emberLoad.ts 的 loadFromAscension)。
-    const scaled = applyEmberLoad(fin.def, topOrder);
+    // 2026-08-31(第 57 轮修正):上一版这里用的是 `topOrder`(= 6),把负荷算少了。
+    // 真实负荷是 store.ts 的 emberLoad():进阶次数 + 主动负荷 + regionThreatLoad(),
+    // 而最后那一项在最深的星区有一条 ceil(威胁-1 × 0.4) 的地板。
+    // 第七星区、6 次进阶、25 级 → 6 + 0 + 3 = **9**。守卫按真实值算,不然它守的
+    // 是一个比实际轻的世界。
+    const finalThreat = Math.max(...GALAXIES.map((g) => g.threat));
+    const regionFloor = Math.ceil((finalThreat - 1) * 0.4);
+    const realLoad = topOrder + regionFloor;
+    const scaled = applyEmberLoad(fin.def, realLoad);
     const worst = Math.max(...scaled.enemies.map((e) => e.damage));
     const landed = resolveAttack(worst, 0, 0, 1, 0.99, 0).damageDealt;
     for (const h of HULL_CLASSES.filter((x) => x.order === topOrder)) {
